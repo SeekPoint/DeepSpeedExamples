@@ -13,11 +13,13 @@ training/data_efficiency/gpt_finetuning/finetune/*.json
 *.so
 
 # Distribution / packaging
+.idea
 .Python
 build/
 develop-eggs/
 dist/
 downloads/
+applications/DeepSpeed-Chat/data
 eggs/
 .eggs/
 lib/
