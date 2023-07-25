@@ -3,6 +3,12 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+.idea/
+training/cifar/data/
+training/gan/runs/
+training/HelloDeepSpeed/experiments
+training/bing_bert/log
+training/data_efficiency/gpt_finetuning/finetune/*.json
 # C extensions
 *.so
 
