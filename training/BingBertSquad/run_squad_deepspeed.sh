@@ -21,7 +21,7 @@ echo "dropout is ${DROPOUT}"
 # Force deepspeed to run with only local node
 NUM_NODES=1
 HOSTFILE=/dev/null
-
+NGPU_PER_NODE=1
 NGPU=$((NGPU_PER_NODE*NUM_NODES))
 EFFECTIVE_BATCH_SIZE=24
 MAX_GPU_BATCH_SIZE=3

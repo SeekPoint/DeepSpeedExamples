@@ -3,7 +3,7 @@ import torchvision
 import torchvision.transforms as transforms
 import argparse
 import deepspeed
-
+from pydebug import debuginfo
 
 def add_argument():
 
@@ -95,9 +95,11 @@ def add_argument():
     args = parser.parse_args()
 
     return args
-
-
+assert 0
+debuginfo(prj='cifar10ds',info='ds init start')
 deepspeed.init_distributed()
+debuginfo(prj='cifar10ds',info='ds init start')
+assert 0
 
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].
@@ -159,7 +161,7 @@ def imshow(img):
 
 # get some random training images
 dataiter = iter(trainloader)
-images, labels = dataiter.next()
+images, labels = dataiter.__next__()
 
 # show images
 imshow(torchvision.utils.make_grid(images))
@@ -309,7 +311,7 @@ print('Finished Training')
 # Okay, first step. Let us display an image from the test set to get familiar.
 
 dataiter = iter(testloader)
-images, labels = dataiter.next()
+images, labels = dataiter.__next__()
 
 # print images
 imshow(torchvision.utils.make_grid(images))

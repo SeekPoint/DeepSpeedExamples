@@ -110,7 +110,7 @@ def imshow(img):
 
 # get some random training images
 dataiter = iter(trainloader)
-images, labels = dataiter.next()
+images, labels = dataiter.__next__()
 
 # show images
 imshow(torchvision.utils.make_grid(images))
@@ -219,7 +219,7 @@ torch.save(net.state_dict(), PATH)
 # Okay, first step. Let us display an image from the test set to get familiar.
 
 dataiter = iter(testloader)
-images, labels = dataiter.next()
+images, labels = dataiter.__next__() #PyTorch 1.7 及更高版本时.next() 方法被弃用被 .__next__() 方法取代
 
 # print images
 imshow(torchvision.utils.make_grid(images))

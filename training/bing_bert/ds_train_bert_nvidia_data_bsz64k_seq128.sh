@@ -10,7 +10,7 @@ mkdir -p $OUTPUT_DIR
 
 NCCL_TREE_THRESHOLD=0 deepspeed ${base_dir}/deepspeed_train.py \
 --cf ${base_dir}/bert_large_lamb_nvidia_data.json \
---max_seq_length 128 \
+--max_seq_length 32 \
 --output_dir $OUTPUT_DIR \
 --deepspeed \
 --deepspeed_transformer_kernel \

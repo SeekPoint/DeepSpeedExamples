@@ -16,11 +16,14 @@
 """BERT finetuning runner."""
 
 from __future__ import absolute_import, division, print_function
+import sys
+sys.path.append("./")
 
 import argparse
 import csv
 import logging
 import os
+os.path.abspath(os.getcwd())
 import random
 import sys
 import deepspeed
@@ -40,7 +43,6 @@ from pytorch_pretrained_bert.modeling import WEIGHTS_NAME, CONFIG_NAME
 from pytorch_pretrained_bert.tokenization import BertTokenizer
 from pytorch_pretrained_bert.optimization import BertAdam, warmup_linear
 from turing.loss import FocalLoss
-
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt='%m/%d/%Y %H:%M:%S',
                     level=logging.INFO)
@@ -811,6 +813,9 @@ def main():
         print("BertBaseConfigPreLnLayerDrop")
         from nvidia.modelingpreln_layerdrop import BertForSequenceClassification, BertConfig
     elif args.preln:
+        import sys
+        sys.path.append("./")
+
         from nvidia.modelingpreln import BertForSequenceClassification, BertConfig, BertLayer
     else:
         from nvidia.modeling import BertForSequenceClassification, BertConfig, BertLayer

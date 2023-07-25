@@ -30,7 +30,7 @@ else
 fi
 
 echo "Fine Tuning $CHECKPOINT_PATH"
-run_cmd="python3.6 -m torch.distributed.launch \
+run_cmd="python -m torch.distributed.launch \
        --nproc_per_node=${NGPU} \
        --master_port=${MASTER_PORT} \
        run_glue_classifier_bert_base.py \
