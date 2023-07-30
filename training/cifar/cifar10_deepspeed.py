@@ -95,11 +95,9 @@ def add_argument():
     args = parser.parse_args()
 
     return args
-assert 0
 debuginfo(prj='cifar10ds',info='ds init start')
 deepspeed.init_distributed()
 debuginfo(prj='cifar10ds',info='ds init start')
-assert 0
 
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].
