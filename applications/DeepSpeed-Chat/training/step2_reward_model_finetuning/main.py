@@ -44,8 +44,8 @@ def parse_args():
                         default='2,4,4',
                         help='Comma-separated list of proportions for training'
                         'phase 1, 2, and 3 data. For example the split `2,4,4`'
-                        'will use 60%% of data for phase 1, 20%% for phase 2'
-                        'and 20%% for phase 3.')
+                        'will use 60% of data for phase 1, 20% for phase 2'
+                        'and 20% for phase 3.')
     parser.add_argument(
         '--data_output_path',
         type=str,
@@ -193,6 +193,7 @@ def main():
         deepspeed.init_distributed()
 
     args.global_rank = torch.distributed.get_rank()
+    print("args.global_rank :", args.global_rank)
 
     ds_config = get_train_ds_config(offload=args.offload,
                                     stage=args.zero_stage,
@@ -201,15 +202,18 @@ def main():
                                     tb_name="step2_model")
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
+    print("args.per_device_train_batch_size :", args.per_device_train_batch_size)
     ds_config[
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
         ) * args.gradient_accumulation_steps
+    print("ds_config['train_batch_size'] :", ds_config['train_batch_size'])
 
     # If passed along, set the training seed now.
     set_random_seed(args.seed)
     torch.distributed.barrier()
 
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
+    print("tokenizer---1 :", tokenizer)
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
     tokenizer.padding_side = 'right'
@@ -219,27 +223,39 @@ def main():
                                    args.num_padding_at_beginning,
                                    disable_dropout=args.disable_dropout)
 
+    print("rm_model---1 :", rm_model)
+
     if args.lora_dim > 0:
         rm_model = convert_linear_layer_to_lora(rm_model,
                                                 args.lora_module_name,
                                                 args.lora_dim)
+        print("rm_model---2 :", rm_model)
+
         if args.only_optimize_lora:
             rm_model = only_optimize_lora_parameters(rm_model)
+            print("rm_model---3 :", rm_model)
 
     train_phase = 2
     train_dataset, eval_dataset = create_prompt_dataset(
         args.local_rank, args.data_path, args.data_split,
         args.data_output_path, train_phase, args.seed, tokenizer,
         args.max_seq_len)
+    print("train_dataset :", train_dataset)
+    print("eval_dataset :", eval_dataset)
 
     # DataLoaders creation:
     data_collator = DataCollatorReward()
+    print("data_collator :", data_collator)
+
     if args.local_rank == -1:
         train_sampler = RandomSampler(train_dataset)
         eval_sampler = SequentialSampler(eval_dataset)
     else:
         train_sampler = DistributedSampler(train_dataset)
         eval_sampler = DistributedSampler(eval_dataset)
+
+    print("train_sampler :", train_sampler)
+    print("eval_sampler :", eval_sampler)
     train_dataloader = DataLoader(train_dataset,
                                   collate_fn=data_collator,
                                   sampler=train_sampler,
@@ -249,6 +265,9 @@ def main():
                                  collate_fn=data_collator,
                                  sampler=eval_sampler,
                                  batch_size=args.per_device_eval_batch_size)
+    print("train_dataloader :", train_dataloader)
+    print("eval_sampler :", eval_sampler)
+    print("eval_dataloader :", eval_dataloader)
 
     def evaluation_reward(model, eval_dataloader):
         model.eval()
@@ -274,19 +293,26 @@ def main():
             scores = get_all_reduce_mean(scores).item()
         except:
             pass
+        print("scores:", scores)
+        print("acc:", acc)
         return scores, acc
 
     # Split weights in two groups, one with weight decay and the other not.
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(
         rm_model, args.weight_decay)
+    print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
 
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
+    print("AdamOptimizer :", AdamOptimizer)
+
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
+    print("optimizer :", optimizer)
 
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
+    print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
 
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
@@ -294,6 +320,7 @@ def main():
         num_warmup_steps=args.num_warmup_steps,
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,
     )
+    print("lr_scheduler---2 :", lr_scheduler)
 
     rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=rm_model,
@@ -302,6 +329,9 @@ def main():
         config=ds_config,
         lr_scheduler=lr_scheduler,
         dist_init_required=True)
+    print("rm_model---4 :", rm_model)
+    print("optimizer---4 :", optimizer)
+    print("lr_scheduler---4 :", lr_scheduler)
 
     if args.gradient_checkpointing:
         rm_model.gradient_checkpointing_enable()
@@ -322,11 +352,16 @@ def main():
             f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
             args.global_rank)
         rm_model.train()
+        print(" :", )
+
         mean_loss = 0
         for step, batch in enumerate(train_dataloader):
             batch = to_device(batch, device)
             outputs = rm_model(**batch, use_cache=False)
             loss = outputs["loss"]
+            print("batch :", batch)
+            print("outputs :", outputs)
+            print("loss :", loss)
             rm_model.backward(loss)
             rm_model.step()
             mean_loss += loss.item()
@@ -346,6 +381,7 @@ def main():
     if args.output_dir is not None:
         print_rank_0('saving model ...', args.global_rank)
         rm_model = convert_lora_to_linear_layer(rm_model)
+        print("rm_model---5 :", rm_model)
 
         if args.global_rank == 0:
             save_hf_format(rm_model, tokenizer, args)

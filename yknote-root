@@ -1,0 +1,13 @@
+root@MZ32-00:/home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat# python3 train.py --step 1 --deployment-type single_gpu
+---=== Running Step 1 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/training_scripts/single_gpu/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/actor-models/125m
+
+
+
+
+root@MZ32-00:/home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat# python3 train.py --step 1 --deployment-type single_node
+---=== Running Step 1 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/actor-models/125m
+

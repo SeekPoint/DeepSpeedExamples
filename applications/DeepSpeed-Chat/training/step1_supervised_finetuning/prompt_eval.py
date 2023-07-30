@@ -98,6 +98,8 @@ def generate(model,
     result = tokenizer.batch_decode(generate_ids,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
+    print("generate_ids---1:", generate_ids)
+    print("result---1:", result)
     return result
 
 
@@ -118,6 +120,9 @@ def generate_constrastive_search(model,
     result = tokenizer.batch_decode(generate_ids,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
+    print("generate_ids---2:", generate_ids)
+    print("result---2:", result)
+
     return result
 
 
@@ -205,6 +210,11 @@ def main():
     model_fintuned = create_hf_model(AutoModelForCausalLM,
                                      args.model_name_or_path_finetune,
                                      tokenizer, None)
+
+    print("device :", device)
+    print("tokenizer :", tokenizer)
+    print("model_baseline :", model_baseline)
+    print("model_fintuned :", model_fintuned)
 
     model_baseline.to(device)
     model_fintuned.to(device)

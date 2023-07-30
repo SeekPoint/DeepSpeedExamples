@@ -1,0 +1,67 @@
+
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ python3 train.py --step 1 --deployment-type single_gpu
+---=== Running Step 1 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/training_scripts/single_gpu/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/actor-models/125m
+---=== Finished Step 1 in 0:03:40 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ python3 train.py --step 2 --deployment-type single_gpu
+---=== Running Step 2 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step2_reward_model_finetuning/training_scripts/single_gpu/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/reward-models/125m
+---=== Finished Step 2 in 0:09:56 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ python3 train.py --step 3 --deployment-type single_gpu
+---=== Running Step 3 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step3_rlhf_finetuning/training_scripts/single_gpu/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/actor-models/125m /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/reward-models/125m '' '' /home/amd00/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat/output/step3-models/125m
+---=== Finished Step 3 in 0:41:59 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
+
+
+
+
+
+
+
+
+
+
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$ python3 train.py --step 1 --deployment-type single_node
+---=== Running Step 1 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/actor-models/125m
+---=== Finished Step 1 in 0:02:57 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:
+
+
+
+
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$ python3 train.py --step 2 --deployment-type single_node
+---=== Running Step 2 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/training/step2_reward_model_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/reward-models/125m
+
+
+
+---=== Finished Step 2 in 0:11:54 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$
+
+single node step2 takes many memory!
+  29068 amd00     20   0   43.1g  22.1g 714016 R 100.3  17.7   4:48.98 python3.10
+  29069 amd00     20   0   33.4g  13.8g 675572 S 100.3  11.1   4:21.11 python3.10
+
+
+
+
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$ python3 train.py --step 3 --deployment-type single_node
+---=== Running Step 3 ===---
+Running:
+bash /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/training/step3_rlhf_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/actor-models/125m /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/reward-models/125m '' '' /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/step3-models/125m
+---=== Finished Step 3 in 0:22:33 ===---
+(gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$

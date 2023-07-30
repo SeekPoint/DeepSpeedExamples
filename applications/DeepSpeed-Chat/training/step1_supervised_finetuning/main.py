@@ -24,6 +24,9 @@ from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+print("1===", os.path.pardir)
+print("2===", os.path.dirname(__file__))
+print("3===", os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from utils.data.data_utils import create_prompt_dataset
 from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
 from utils.ds_utils import get_train_ds_config
@@ -46,8 +49,8 @@ def parse_args():
                         default='2,4,4',
                         help='Comma-separated list of proportions for training'
                         'phase 1, 2, and 3 data. For example the split `6,2,2`'
-                        'will use 60%% of data for phase 1, 20%% for phase 2'
-                        'and 20%% for phase 3.')
+                        'will use 60% of data for phase 1, 20% for phase 2'
+                        'and 20% for phase 3.')
     parser.add_argument(
         '--sft_only_data_path',
         nargs='*',
@@ -56,7 +59,7 @@ def parse_args():
     parser.add_argument(
         '--data_output_path',
         type=str,
-        default='/tmp/data_files/',
+        default='./data_files/',
         help=
         'Where to store the data-related files such as shuffle index. This needs to be on a local storage of a node (not on a shared storage)'
     )
@@ -70,13 +73,13 @@ def parse_args():
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
-        default=16,
+        default=2,
         help="Batch size (per device) for the training dataloader.",
     )
     parser.add_argument(
         "--per_device_eval_batch_size",
         type=int,
-        default=16,
+        default=2,
         help="Batch size (per device) for the evaluation dataloader.",
     )
     parser.add_argument(
@@ -152,7 +155,7 @@ def parse_args():
     ## LoRA for efficient training setting
     parser.add_argument("--lora_dim",
                         type=int,
-                        default=0,
+                        default=1,
                         help="If > 0, use LoRA for efficient training.")
     parser.add_argument("--lora_module_name",
                         type=str,
@@ -197,6 +200,7 @@ def main():
         deepspeed.init_distributed()
 
     args.global_rank = torch.distributed.get_rank()
+    print("args.global_rank is:", args.global_rank)
 
     ds_config = get_train_ds_config(offload=args.offload,
                                     stage=args.zero_stage,
@@ -209,12 +213,15 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
         ) * args.gradient_accumulation_steps
 
+    print("ds_config['train_batch_size']is:", ds_config['train_batch_size'])
+    print("args.per_device_train_batch_size is:", args.per_device_train_batch_size)
     # If passed along, set the training seed now.
     set_random_seed(args.seed)
 
     torch.distributed.barrier()
 
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
+    print("tokenizer :", tokenizer)
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
     tokenizer.padding_side = 'right'
@@ -223,6 +230,8 @@ def main():
                             tokenizer,
                             ds_config,
                             disable_dropout=args.disable_dropout)
+
+    print("model---1 :", model)
 
     if args.lora_dim > 0:
         model = convert_linear_layer_to_lora(model, args.lora_module_name,
@@ -242,6 +251,10 @@ def main():
         tokenizer,
         args.max_seq_len,
         sft_only_data_path=args.sft_only_data_path)
+
+    print("train_dataset :", train_dataset)
+    print("eval_dataset :", eval_dataset)
+
     # DataLoaders creation:
     if args.local_rank == -1:
         train_sampler = RandomSampler(train_dataset)
@@ -249,6 +262,9 @@ def main():
     else:
         train_sampler = DistributedSampler(train_dataset)
         eval_sampler = DistributedSampler(eval_dataset)
+
+    print("train_sampler :", train_sampler)
+    print("eval_sampler :", eval_sampler)
     train_dataloader = DataLoader(train_dataset,
                                   collate_fn=default_data_collator,
                                   sampler=train_sampler,
@@ -257,6 +273,9 @@ def main():
                                  collate_fn=default_data_collator,
                                  sampler=eval_sampler,
                                  batch_size=args.per_device_eval_batch_size)
+
+    print("train_dataloader :", train_dataloader)
+    print("eval_dataloader :", eval_dataloader)
 
     def evaluation(model, eval_dataloader):
         model.eval()
@@ -282,14 +301,20 @@ def main():
     # Split weights in two groups, one with weight decay and the other not.
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(
         model, args.weight_decay)
+    print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
 
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
+    print("AdamOptimizer :", AdamOptimizer)
+
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
+    print("optimizer :", optimizer)
 
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
+    print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
+
     lr_scheduler = get_scheduler(
         name=args.lr_scheduler_type,
         optimizer=optimizer,
@@ -297,6 +322,7 @@ def main():
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,
     )
 
+    print("lr_scheduler :", lr_scheduler)
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
@@ -304,6 +330,10 @@ def main():
         config=ds_config,
         lr_scheduler=lr_scheduler,
         dist_init_required=True)
+
+    print("model---3 :", model)
+    print("optimizer---3 :", optimizer)
+    print("lr_scheduler---3 :", lr_scheduler)
 
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
@@ -343,6 +373,7 @@ def main():
     if args.output_dir is not None:
         print_rank_0('saving the final model ...', args.global_rank)
         model = convert_lora_to_linear_layer(model)
+        print("model---4 :", model)
 
         if args.global_rank == 0:
             save_hf_format(model, tokenizer, args)

@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+applications/DeepSpeed-Chat/training/step1_supervised_finetuning/data_files/
 *.py[cod]
 *$py.class
 
