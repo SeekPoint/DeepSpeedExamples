@@ -101,7 +101,9 @@ debuginfo(prj='cifar10ds',info='ds init start')
 
 from calltrace import CallTrace
 
-save_paths= ['/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages']
+save_paths= ['/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/deepspeed',
+             '/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/torch',
+             '/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/mpi4py']
 
 a = CallTrace(isprint=False)
 
@@ -109,7 +111,6 @@ a.startRecord(onlycall=False)
 
 deepspeed.init_distributed()
 
-a.endRecord(flagDU=True)
 a.endRecord(filename=f'deepspeed.init_distributed_{deepspeed.__version__}.log',
             flagDU=True,
             in_paths=save_paths)
