@@ -21,30 +21,6 @@ index 1a418b4..4fa5a9b 100755
 
 
 
-(yk_py39) ub2004@ub2004-B85M-A0:~/yk_fork/DeepSpeedExamples/training/pipeline_parallelism$ python train.py --deepspeed_config=ds_config.json -p 2 --steps=200 --pipeline_parallel_size 1
-[2023-07-24 13:11:17,867] [INFO] [real_accelerator.py:110:get_accelerator] Setting ds_accelerator to cuda (auto detect)
-usage: train.py [-h] [--local_rank LOCAL_RANK] [-s STEPS] [-p PIPELINE_PARALLEL_SIZE] [--backend BACKEND] [--seed SEED] [--deepspeed] [--deepspeed_config DEEPSPEED_CONFIG] [--deepscale]
-                [--deepscale_config DEEPSCALE_CONFIG] [--deepspeed_mpi]
-train.py: error: unrecognized arguments: --pipeline_parallel_size 1
-(yk_py39) ub2004@ub2004-B85M-A0:~/yk_fork/DeepSpeedExamples/training/pipeline_parallelism$ vim train.py
-(yk_py39) ub2004@ub2004-B85M-A0:~/yk_fork/DeepSpeedExamples/training/pipeline_parallelism$ python train.py --deepspeed_config=ds_config.json -p 2 --steps=200
-[2023-07-24 13:12:36,635] [INFO] [real_accelerator.py:110:get_accelerator] Setting ds_accelerator to cuda (auto detect)
-Namespace(local_rank=-1, steps=200, pipeline_parallel_size=2, backend='nccl', seed=1138, deepspeed=False, deepspeed_config='ds_config.json', deepscale=False, deepscale_config=None, deepspeed_mpi=False)
-[2023-07-24 13:12:37,549] [WARNING] [comm.py:152:init_deepspeed_backend] NCCL backend in DeepSpeed not yet implemented
-[2023-07-24 13:12:37,549] [INFO] [comm.py:594:init_distributed] cdb=None
-[2023-07-24 13:12:37,549] [INFO] [comm.py:609:init_distributed] Not using the DeepSpeed or dist launchers, attempting to detect MPI environment...
-[2023-07-24 13:12:37,593] [INFO] [comm.py:659:mpi_discovery] Discovered MPI settings of world_rank=0, local_rank=0, world_size=1, master_addr=192.168.1.7, master_port=29500
-[2023-07-24 13:12:37,593] [INFO] [comm.py:625:init_distributed] Initializing TorchBackend in DeepSpeed with backend nccl
-SEED_LAYERS=False BASE_SEED=1234 SEED_FN=None
-Traceback (most recent call last):
-  File "/home/ub2004/yk_fork/DeepSpeedExamples/training/pipeline_parallelism/train.py", line 160, in <module>
-    train_pipe(args)
-  File "/home/ub2004/yk_fork/DeepSpeedExamples/training/pipeline_parallelism/train.py", line 131, in train_pipe
-    net = PipelineModule(layers=join_layers(net),
-  File "/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/deepspeed/runtime/pipe/module.py", line 171, in __init__
-    raise RuntimeError(
-RuntimeError: num_stages (2) must divide distributed world size (1)
-(yk_py39) ub2004@ub2004-B85M-A0:~/yk_fork/DeepSpeedExamples/training/pipeline_parallelism$ vim train.py
 (yk_py39) ub2004@ub2004-B85M-A0:~/yk_fork/DeepSpeedExamples/training/pipeline_parallelism$ python train.py --deepspeed_config=ds_config.json -p 2 --steps=200
 [2023-07-24 13:13:36,786] [INFO] [real_accelerator.py:110:get_accelerator] Setting ds_accelerator to cuda (auto detect)
 Namespace(local_rank=-1, steps=200, pipeline_parallel_size=2, backend='nccl', seed=1138, deepspeed=False, deepspeed_config='ds_config.json', deepscale=False, deepscale_config=None, deepspeed_mpi=False)

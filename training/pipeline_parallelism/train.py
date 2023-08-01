@@ -153,6 +153,8 @@ if __name__ == '__main__':
     args.local_rank = int(os.environ['LOCAL_RANK'])
     torch.cuda.set_device(args.local_rank)
 
+    args.pipeline_parallel_size = 1
+
     if args.pipeline_parallel_size == 0:
         train_base(args)
     else:

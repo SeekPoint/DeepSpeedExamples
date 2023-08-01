@@ -31,6 +31,7 @@ from transformers.models.roberta.modeling_roberta import (
     RobertaPreTrainedModel,
 )
 
+os.environ['CUDA_VISIBLE_DEVICES'] ='0'
 
 def is_rank_0() -> bool:
     return int(os.environ.get("RANK", "0")) == 0
@@ -263,7 +264,7 @@ def create_data_iterator(
             be able to continuously generate samples
 
     """
-    wikitext_dataset = datasets.load_dataset("wikitext",
+    wikitext_dataset = datasets.load_dataset("/home/amd00/hf_model/wikitext",
                                              "wikitext-2-v1",
                                              split="train")
     wikitext_dataset = wikitext_dataset.filter(
@@ -608,8 +609,8 @@ def train(
         dropout: float = 0.1,
         # Training Parameters
         batch_size: int = 8,
-        num_iterations: int = 10000,
-        checkpoint_every: int = 1000,
+        num_iterations: int = 50,
+        checkpoint_every: int = 10,
         log_every: int = 10,
         local_rank: int = -1,
 ) -> pathlib.Path:
@@ -667,8 +668,9 @@ def train(
         pathlib.Path: The final experiment directory
 
     """
-    device = (torch.device("cuda", local_rank) if (local_rank > -1)
-              and torch.cuda.is_available() else torch.device("cpu"))
+    device = torch.device("cuda", 0) 
+    #device = (torch.device("cuda", 0) if (local_rank > -1)
+    #          and torch.cuda.is_available() else torch.device("cpu"))
     ################################
     ###### Create Exp. Dir #########
     ################################
