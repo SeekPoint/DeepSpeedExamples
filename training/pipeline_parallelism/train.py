@@ -79,8 +79,12 @@ def train_base(args):
         model=net,
         model_parameters=[p for p in net.parameters() if p.requires_grad],
         training_data=trainset)
+    
+    from calltrace import g_ct # 不要放在函数外！！注意导入时已经开始startrecord
 
     dataloader = RepeatingLoader(dataloader)
+    ct.endRecord()
+    
     data_iter = iter(dataloader)
 
     rank = dist.get_rank()

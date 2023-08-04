@@ -51,7 +51,9 @@ def log_dist(message: str,
     my_rank = int(os.environ.get("RANK", "0"))
     if my_rank in ranks:
         if level == logging.INFO:
-            logger.info(f'[Rank {my_rank}] {message}')
+            #[2023-08-03 02:12:24,986] [INFO] [logging.py:96:log_dist] [Rank 0] rank=0 time (ms) | compute_norm: 0.15 | overflow_check: 0.56 | unscale_and_clip: 0.05 | basic_step: 0.10 | update_fp16: 0.20
+            #logger.info(f'[Rank {my_rank}] {message}')
+            pass
         if level == logging.ERROR:
             logger.error(f'[Rank {my_rank}] {message}')
         if level == logging.DEBUG:
@@ -668,6 +670,14 @@ def train(
         pathlib.Path: The final experiment directory
 
     """
+    from calltrace import CallTrace
+
+    flag_onlycnt = False 
+
+    l_ct_1 = CallTrace('No1') #局部生成的, 这个例子只有一个进程,适合学习
+
+    l_ct_1.startRecord(onlycnt = flag_onlycnt)
+
     device = torch.device("cuda", 0) 
     #device = (torch.device("cuda", 0) if (local_rank > -1)
     #          and torch.cuda.is_available() else torch.device("cpu"))
@@ -797,13 +807,26 @@ def train(
             }
         }
     }
+    
+    l_ct_1.endRecord()
+    
+    ds_ct = CallTrace('ds_init') 
+    ds_ct.startRecord(onlycnt = flag_onlycnt)
+
     model, _, _, _ = deepspeed.initialize(model=model,
                                           model_parameters=model.parameters(),
                                           config=ds_config)
+    
+    ds_ct.endRecord()
+
     log_dist("DeepSpeed engine created", ranks=[0], level=logging.INFO)
     ################################
     #### Load Model checkpoint #####
     ################################
+    
+    l_ct_2 = CallTrace('No2') 
+    l_ct_2.startRecord(onlycnt = flag_onlycnt)
+
     start_step = 1
     if load_checkpoint_dir is not None:
         _, client_state = model.load_checkpoint(load_dir=load_checkpoint_dir)
@@ -819,7 +842,14 @@ def train(
         level=logging.INFO)
     model.train()
     losses = []
+
+    l_ct_2.endRecord()
+
     for step, batch in enumerate(data_iterator, start=start_step):
+        if step == start_step:
+            l_ct_loop = CallTrace('loop')
+            l_ct_loop.startRecord(onlycnt = flag_onlycnt)
+
         if step >= num_iterations:
             break
         # Move the tensors to device
@@ -844,6 +874,12 @@ def train(
             log_dist("Saved model to {0}".format(exp_dir),
                      ranks=[0],
                      level=logging.INFO)
+        
+        if step == start_step:
+            l_ct_loop.endRecord()
+
+    l_ct_save = CallTrace('save')
+    l_ct_save.startRecord(onlycnt = flag_onlycnt)
     # Save the last checkpoint if not saved yet
     if step % checkpoint_every != 0:
         model.save_checkpoint(save_dir=exp_dir,
@@ -851,7 +887,8 @@ def train(
         log_dist("Saved model to {0}".format(exp_dir),
                  ranks=[0],
                  level=logging.INFO)
-
+    l_ct_save.endRecord()
+    
     return exp_dir
 
 

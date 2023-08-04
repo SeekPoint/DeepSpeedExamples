@@ -2,8 +2,13 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import argparse
-import deepspeed
 from pydebug import debuginfo
+print('1')
+import deepspeed
+print('4')
+#除了主文件，不建议在其他文件中导入ct（大量的import），而是在具体的函数中使用（也要避开import）！！！
+from calltrace import g_ct
+print('5')
 
 def add_argument():
 
@@ -99,22 +104,9 @@ def add_argument():
 
 debuginfo(prj='cifar10ds',info='ds init start')
 
-from calltrace import CallTrace
-
-save_paths= ['/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/deepspeed',
-             '/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/torch',
-             '/home/ub2004/anaconda3/envs/yk_py39/lib/python3.9/site-packages/mpi4py']
-
-#a = CallTrace(isprint=False)
-
-#a.startRecord(onlycall=False)
-
 deepspeed.init_distributed()
+g_ct.setMileStone("deepspeed.init_distributed")
 
-#a.endRecord(filename=f'deepspeed.init_distributed_{deepspeed.__version__}.log',
-#            flagDU=True,
-#            in_paths=save_paths)
-#assert 0
 debuginfo(prj='cifar10ds',info='ds init start')
 
 ########################################################################
@@ -128,20 +120,28 @@ transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
+g_ct.setMileStone("transforms.Compose")
 
 if torch.distributed.get_rank() != 0:
     # might be downloading cifar data, let rank 0 download first
     torch.distributed.barrier()
 
+g_ct.setMileStone("")
+
+g_ct.setPaused()
 trainset = torchvision.datasets.CIFAR10(root='./data',
                                         train=True,
                                         download=True,
                                         transform=transform)
+ct.restart()
 
 if torch.distributed.get_rank() == 0:
     # cifar data is downloaded, indicate other ranks can proceed
     torch.distributed.barrier()
 
+g_ct.setMileStone("")
+
+g_ct.setPaused()
 trainloader = torch.utils.data.DataLoader(trainset,
                                           batch_size=16,
                                           shuffle=True,
@@ -174,10 +174,17 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
 
+ct.restart()
+
+
 
 # get some random training images
 dataiter = iter(trainloader)
 images, labels = dataiter.__next__()
+
+g_ct.setMileStone("")
+
+g_ct.setPaused()
 
 # show images
 imshow(torchvision.utils.make_grid(images))
@@ -239,8 +246,13 @@ class Net(nn.Module):
         return x
 
 
+ct.restart()
+
 net = Net()
 
+g_ct.setMileStone("")
+
+g_ct.setPaused()
 
 def create_moe_param_groups(model):
     from deepspeed.moe.utils import split_params_into_different_moe_groups_for_optimizer
@@ -257,6 +269,8 @@ parameters = filter(lambda p: p.requires_grad, net.parameters())
 if args.moe_param_group:
     parameters = create_moe_param_groups(net)
 
+ct.restart()
+
 # Initialize DeepSpeed to use the following features
 # 1) Distributed model
 # 2) Distributed data loader
@@ -264,8 +278,12 @@ if args.moe_param_group:
 model_engine, optimizer, trainloader, __ = deepspeed.initialize(
     args=args, model=net, model_parameters=parameters, training_data=trainset)
 
+g_ct.setMileStone("")
+
 fp16 = model_engine.fp16_enabled()
 print(f'fp16={fp16}')
+
+g_ct.setMileStone("")
 
 #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #net.to(device)
@@ -273,12 +291,12 @@ print(f'fp16={fp16}')
 # 3. Define a Loss function and optimizer
 # ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 # Let's use a Classification Cross-Entropy loss and SGD with momentum.
-
+g_ct.setPaused()
 import torch.optim as optim
 
 criterion = nn.CrossEntropyLoss()
 #optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
-
+ct.restart()
 ########################################################################
 # 4. Train the network
 # ^^^^^^^^^^^^^^^^^^^^
@@ -286,11 +304,18 @@ criterion = nn.CrossEntropyLoss()
 # This is when things start to get interesting.
 # We simply have to loop over our data iterator, and feed the inputs to the
 # network and optimize.
-
+g_ct.setMileStone("")
 for epoch in range(2):  # loop over the dataset multiple times
 
     running_loss = 0.0
+
+    g_ct.setMileStone("")
     for i, data in enumerate(trainloader):
+
+        #记录第一个循环，忽略之后的，和后面的restart配对
+        if i > 0:
+            g_ct.setPaused()
+            
         # get the inputs; data is a list of [inputs, labels]
         inputs, labels = data[0].to(model_engine.local_rank), data[1].to(
             model_engine.local_rank)
@@ -310,6 +335,15 @@ for epoch in range(2):  # loop over the dataset multiple times
             print('[%d, %5d] loss: %.3f' %
                   (epoch + 1, i + 1, running_loss / args.log_interval))
             running_loss = 0.0
+        
+        #记录第一个循环，忽略之后的，和上面的setpaused配对
+        if i > 0:
+            ct.restart()
+        
+    g_ct.setMileStone(f"epoch {epoch} done")
+
+g_ct.setMileStone("")
+ct.endRecord()
 
 print('Finished Training')
 
