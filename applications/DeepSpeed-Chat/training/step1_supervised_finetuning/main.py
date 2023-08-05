@@ -175,7 +175,13 @@ def parse_args():
     parser.add_argument('--print_loss',
                         action='store_true',
                         help='Prints loss at each step.')
+    
+    from calltrace import CallTrace
+    ct_ds_addconfig = CallTrace(tag = 'ds_addconfig')
+    ct_ds_addconfig.startrecord()
     parser = deepspeed.add_config_arguments(parser)
+    ct_ds_addconfig.endRecord()
+
     args = parser.parse_args()
 
     # Validate settings
@@ -306,9 +312,14 @@ def main():
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
     print("AdamOptimizer :", AdamOptimizer)
 
+    from calltrace import CallTrace
+    ct_ds_AdamOptimizer = CallTrace(tag = 'ds_AdamOptimizer')
+    ct_ds_AdamOptimizer.startrecord()
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
+    ct_ds_AdamOptimizer.endRecord()
+
     print("optimizer :", optimizer)
 
     num_update_steps_per_epoch = math.ceil(
@@ -323,6 +334,11 @@ def main():
     )
 
     print("lr_scheduler :", lr_scheduler)
+
+    from calltrace import CallTrace
+
+    ct_ds_init = CallTrace(tag = 'ds_init')
+    ct_ds_init.startrecord()
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
@@ -330,6 +346,7 @@ def main():
         config=ds_config,
         lr_scheduler=lr_scheduler,
         dist_init_required=True)
+    ct_ds_init.endRecord()
 
     print("model---3 :", model)
     print("optimizer---3 :", optimizer)

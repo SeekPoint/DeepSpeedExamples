@@ -674,9 +674,9 @@ def train(
 
     flag_onlycnt = False 
 
-    l_ct_1 = CallTrace('No1') #局部生成的, 这个例子只有一个进程,适合学习
+    ct_1 = CallTrace('No1') #局部生成的, 这个例子只有一个进程,适合学习
 
-    l_ct_1.startRecord(onlycnt = flag_onlycnt)
+    ct_1.startRecord(onlycnt = flag_onlycnt)
 
     device = torch.device("cuda", 0) 
     #device = (torch.device("cuda", 0) if (local_rank > -1)
@@ -808,7 +808,7 @@ def train(
         }
     }
     
-    l_ct_1.endRecord()
+    ct_1.endRecord()
     
     ds_ct = CallTrace('ds_init') 
     ds_ct.startRecord(onlycnt = flag_onlycnt)
@@ -824,8 +824,8 @@ def train(
     #### Load Model checkpoint #####
     ################################
     
-    l_ct_2 = CallTrace('No2') 
-    l_ct_2.startRecord(onlycnt = flag_onlycnt)
+    ct_2 = CallTrace('No2') 
+    ct_2.startRecord(onlycnt = flag_onlycnt)
 
     start_step = 1
     if load_checkpoint_dir is not None:
@@ -843,7 +843,7 @@ def train(
     model.train()
     losses = []
 
-    l_ct_2.endRecord()
+    ct_2.endRecord()
 
     for step, batch in enumerate(data_iterator, start=start_step):
         if step == start_step:
@@ -878,8 +878,8 @@ def train(
         if step == start_step:
             l_ct_loop.endRecord()
 
-    l_ct_save = CallTrace('save')
-    l_ct_save.startRecord(onlycnt = flag_onlycnt)
+    ct_save = CallTrace('save')
+    ct_save.startRecord(onlycnt = flag_onlycnt)
     # Save the last checkpoint if not saved yet
     if step % checkpoint_every != 0:
         model.save_checkpoint(save_dir=exp_dir,
@@ -887,7 +887,7 @@ def train(
         log_dist("Saved model to {0}".format(exp_dir),
                  ranks=[0],
                  level=logging.INFO)
-    l_ct_save.endRecord()
+    ct_save.endRecord()
     
     return exp_dir
 
