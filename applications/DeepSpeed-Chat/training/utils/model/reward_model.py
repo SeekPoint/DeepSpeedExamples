@@ -5,7 +5,6 @@
 import torch
 from torch import nn
 
-
 ## Note that the following code is modified from
 ## https://github.com/CarperAI/trlx/blob/main/examples/summarize_rlhf/reward_model/reward_model.py
 class RewardModel(nn.Module):
@@ -52,7 +51,28 @@ class RewardModel(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache)
 
+        '''
+        https://zhuanlan.zhihu.com/p/624589622
+        详解大模型RLHF过程（配代码解读）
+        
+        奖励（reward）模型训练
+        首先要声明的是，在强化学习阶段，用到的reward model和critic model都使用同一个模型初始化，
+        因此在训练reward模型的过程中，也是在训练critic model。
+        其次对符号进行说明，大模型中间隐藏层的参数维度为(B,L,D)，B为batch size大小，L为句子长度，D为embedding维度。
+        在接下来的代码讲解中，我也会标明代码中各个变量的维度，以更好的理解其意义。
+        
+        在进行RLHF时，需要一个奖励模型来评估语言大模型（actor model）回答的是好是坏，
+        这个奖励模型通常比被评估的语言大模型小一些（deepspeed的示例中，语言大模型66B，奖励模型只有350M）。
+        奖励模型的输入是prompt+answer的形式，让模型学会对prompt+answer进行打分。
+        奖励模型最后一层隐藏层的输出维度为(B,L,D)，通过一个D✖️1的全连接层将维度变为(B, L)，在L这个维度上，
+        第i个位置的数据表示：从第i个位置到最后一个位置输出所能获得的奖励分值的累加和（和DQN里边的Q值一个意义），这种形式的输出满足了critic model的输出要求。
+        对应代码如下：
+        '''
+
+        # huggingface模型返回值是个list，第0位是模型最后输出的hideen state
         hidden_states = transformer_outputs[0]
+
+        # v_head为Dx1的全连接网络对最后一维压缩
         rewards = self.v_head(hidden_states).squeeze(-1)
         chosen_mean_scores = []
         rejected_mean_scores = []
@@ -93,12 +113,22 @@ class RewardModel(nn.Module):
                 end_ind = max(c_ind, r_ind)
                 divergence_ind = check_divergence[0]
             assert divergence_ind > 0
+            '''
+            对于一个奖励模型来说，目标是给一个句子进行打分，按理说每个句子对应一个分值就行了，但是目前对于长度为L的句子，奖励模型输出了L个值。
+            我们用L维度上的最后一个位置的值当作为本句话的奖励得分。
+            奖励模型训练优化采用pair wiss loss，即同时输入模型关于同一个问题的两个回答，让模型学会这两个句子哪个分高哪个分低。
+            之所以如此训练是因为，在给奖励模型进行数据标注的过程中，给同一个问题的不同回答量化的打具体分值比较难，但是对他们进行排序相对简单，
+            代码如下：
+            '''
+            # 同一个batch里边的句子需要等长，短句后边会被padding
+            # [divergence_ind:end_ind]索引了padding前一个位置的输出分值
+            # chosen_reward是同一个句子pair里分数高的句子，r_truncated_reward是句子pair里分数低的句子
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
             chosen_mean_scores.append(
                 chosen_reward[c_ind - 1])  #use the end score for reference
             rejected_mean_scores.append(rejected_reward[r_ind - 1])
-
+            #pair wise loss代码如下，如果给pair里边好的句子打分高（c_truncated_reward），坏的句子（r_truncated_reward）打分低，loss就会小：
             loss += -torch.nn.functional.logsigmoid(c_truncated_reward -
                                                     r_truncated_reward).mean()
 
@@ -110,7 +140,11 @@ class RewardModel(nn.Module):
             "chosen_mean_scores": chosen_mean_scores,
             "rejected_mean_scores": rejected_mean_scores,
         }
-
+    '''
+    在训练强化学习的过程中，会用到reward model（critic model，再次提醒，critic model和reward model是同一个模型的两个副本）的推理过程，
+    通过调用forward_value实现，具体代码如下，返回的值中有两种值，values表示每个位置i，从第i个位置到最后一个位置的奖励累加值，
+    供强化学习过程中critic model使用；“chosen_end_scores”指的是对每个prompt+answer的打分，供reward model使用。
+    '''
     def forward_value(self,
                       input_ids=None,
                       attention_mask=None,
