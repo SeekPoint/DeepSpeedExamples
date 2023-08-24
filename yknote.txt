@@ -1,0 +1,109 @@
+0.3 版块相关问题
+【1.2.2.2 阶段数据集处理过程】中，为什么phase3要专门对prompt token进行flip（翻转）操作？
+  这个额外操作很好解释，主要是便于进行前侧padding的操作。具体来说，phase3取用prompt的目的在于，将prompt输入至actor模型中，actor将根据prompt自回归地生成后续内容，以此进行经验采集。以基座为opt-125m的actor模型为例，该模型所能支持的最大序列长度（max_seq_len）为512，而phase3还将预设有最大prompt长度（max_prompt_len），通常为max_seq_len的一半，即256，余下的另一半长度将被用于生成。那么当输入的prompt不满足最大prompt长度max_prompt_len时，将需要对该prompt进行padding操作（将在后续phase3的data_collator代码中有所体现），而padding操作通常又是直接于序列后侧加入pad token，padding后的输入将变成[prompt, padding]的形式，自回归生成任务将接续pad_token进行生成——这是不合理的，因此需要先将prompt输入进行flip翻转，翻转后进行padding操作，然后再flip翻转回来，padding后的输入就成为了[padding, prompt]的形式，对于自回归任务来说，接续prompt的内容进行生成才是合理的。
+  通过下述伪代码例子应该能更好地理解这个操作的用意。
+max_prompt_len = 5
+pad_token_id = 0
+
+prompt_token_ids = [233, 11, 22]
+# padding位于后侧 ×
+prompt_token_ids.padding() = [233, 11, 22, 0, 0]
+
+prompt_token_ids.flip(0) = [22, 11, 233]
+prompt_token_ids.flip(0).padding() = [22, 11, 233, 0, 0]
+# padding位于前侧 √
+prompt_token_ids.flip(0).padding().flip(0) = [0, 0, 233, 11, 22]
+————————————————
+InstructGPT高效实践——【DeepSpeed-Chat】源码详解(1/3)：基本概念、数据集管理
+https://blog.csdn.net/Remixa/article/details/130576255
+
+
+
+
+InstructGPT高效实践——【DeepSpeed-Chat】源码详解(2/3)：Supervised Finetuning、Reward Model Finetuning
+https://blog.csdn.net/Remixa/article/details/130655635
+————————————————
+本篇为上中下三篇章的【中篇】，接续自【上篇】。主要针对三阶段训练中第一阶段、第二阶段较为重要的部分源码进行详解。
+尽管官方的上手文档均是以sh文件为例进行演示，且源码中确实也提供了便捷的sh文件供直接使用，但我仍建议通过各阶段的main.py文件
+（applications/DeepSpeed-Chat/training/step*/main.py）来运行训练，
+大致原因有二：其一是因为官方预设的sh文件调用了applications/DeepSpeed-Chat/train.py，其中对模型选型等参数进行了严格的限制，
+虽然提高了代码安全性，但对于以学习为目的的探索来说失去了一定的灵活性（见下方代码块），
+直接通过main.py进行传参即可实现绕过限制、使用更轻量的模型进行训练；
+其二是因为main.py中的传参相对更接近底层，更有助于深入理解代码。
+因此各阶段的解析我都将在其main.py文件的基础上进行。
+
+
+1.4 实例测试
+“实例测试”与“指标评估”并不是完全相同的概念，实例测试是选择具体的数据实例输入进模型中，人工观察其输出结果，而非使用具体指标对结果进行评估。实例测试实际上更体现了正向传播到解码、再到返回具体文本的过程。例如我对模型输入了一句prompt文本，那么整个实例测试流将会返回给我一份answer文本，我将以主观视角来感知这个answer的优劣程度，而不是采用具体的指标来进行评估。
+待完善…
+
+1.5 相关拓展
+1.5.1 多轮对话性能
+倘若想要使得模型通过具备更好的多轮对话的性能，除了需要考虑其“潜力”（就目前技术来说，模型支持的最大序列长度即为“潜力”，不可否认未来是否会出现新的长文本拓展技术）外，其多轮对话性能表现仍主要与本阶段的训练数据有关，还需要为本阶段加入更多的多轮对话数据，因此需要明确的是，用于本阶段的训练数据并不只局限于单轮对话，同样可以使用多轮对话内容进行训练，多轮对话无非只是具有更长的prompt而已，单轮对话与多轮对话的数据样例可见下表。
+
+单轮或多轮	样例
+单轮prompt	"Human: Please tell me about Microsoft in a few sentence? Assistant: "
+多轮prompt	“Human: I’m buying a new video game console for the first time since in a decade, but I forget their setups. What do I need in addition to a Playstation 5 in order to play the console? Assistant: You need to buy a Playstation 5 first. Then you’ll also need a TV with HDMI input. It’s possible that HDMI to HDMI cables will also work, but it’s more likely that you’ll need a physical HDMI cord. You also might want to buy an extra power adapter, since the ones that come with new Playstation 5’s are quite short. Are you looking to play on a PC or any other system? That might affect what other hardware you need to buy. Human: Playstation 5’s cables aren’t short, but that’s good information. Can any television with an HDMI input play PS5? Assistant:”
+单轮chosen_sentence	“Human: Please tell me about Microsoft in a few sentence? Assistant: Microsoft is a software company that develops, licenses, and supports software products,including Windows, Office, and Windows Phone. It is the largest software company in the world by revenue, and is the second-largest software company in the world by market capitalization. Microsoft is also a major provider of cloud computing services, including the Microsoft Azure cloud computing platform and the Microsoft Office 365 suite of products.”
+多轮chosen_setence	“Human: I’m buying a new video game console for the first time since in a decade, but I forget their setups. What do I need in addition to a Playstation 5 in order to play the console? Assistant: You need to buy a Playstation 5 first. Then you’ll also need a TV with HDMI input. It’s possible that HDMI to HDMI cables will also work, but it’s more likely that you’ll need a physical HDMI cord. You also might want to buy an extra power adapter, since the ones that come with new Playstation 5’s are quite short. Are you looking to play on a PC or any other system? That might affect what other hardware you need to buy. Human: Playstation 5’s cables aren’t short, but that’s good information. Can any television with an HDMI input play PS5? Assistant: So you’ve got a Playstation 5 and a TV that you’re going to connect together with an HDMI cable, and you want to know if that’s going to work? It’s definitely possible for the two to work together, and you might need an additional power adapter if your TV only came with a shorter adapter. However, it may be difficult to determine if it will work for sure. This is one area where troubleshooting and making educated guesses may be necessary. You should still be able to easily use your console, but it may be necessary to troubleshoot first.”
+1.5.2 本阶段训练更倾向过拟合
+DeepSpeed-Chat团队称，根据InstructGPT的建议，本阶段的训练结果应适当倾向于过拟合（可以考虑更多的epoch），以此获得更好的对话能力。DeepSpeed-Chat团队还发现这个设计尤其对诸如opt-1.3B这类较小的模型微调特别有效。
+
+From InstructGPT work, it is recommended to train the model for overfitting (aka longer epochs) for better human-preferred answers. Through our exploration, we have found this to be particularly helpful for smaller model finetuning, such as OPT-1.3B.
+
+1.6 版块相关问题
+暂无
+
+
+
+2 phase-2: Reward Model Finetuning
+2.1 训练数据样例
+数据格式名称	说明	样例
+chosen_sentence	人类偏好的完整对话，由prompt衔接偏好应答chosen得到，适用于phase1和phase2。	“Human: Please tell me about Microsoft in a few sentence? Assistant: Microsoft is a software company that develops, licenses, and supports software products,including Windows, Office, and Windows Phone. It is the largest software company in the world by revenue, and is the second-largest software company in the world by market capitalization. Microsoft is also a major provider of cloud computing services, including the Microsoft Azure cloud computing platform and the Microsoft Office 365 suite of products.”
+reject_sentence	人类排斥的完整对话，由prompt衔接排斥应答rejected得到，适用于phase2。	“Human: Please tell me about Microsoft in a few sentence? Assistant: I’m not sure what you mean.”
+模型将基于排序损失对形如上述样例的数据对进行训练，最后将得到具备类人评分能力的RM(Reward Model)。
+更多的数据格式可见【上篇】的“1.2.1 数据格式基本概念”。
+————————————————
+
+
+
+2.4 实例测试
+“实例测试”与“指标评估”并不是完全相同的概念，实例测试是选择具体的数据实例输入进模型中，人工观察其输出结果，而非使用具体指标对结果进行评估。
+待完善…
+
+2.5 相关拓展
+2.5.1 对话奖励聚合设计
+在DeepSpeed-Chat的实现中，RM模型对一个对话的预测评分实际上取的是该对话文本最后一个token的reward，当然此处并不是只能采用这种方式对对话进行评分，这是一个开放性的策略设计，只是DeepSpeed-Chat团队采取了这样的实现，用户当然也可以自己制定评分的处理策略，比如answer部分的平均reward、序列reward再接全连接层得到聚合rewad等等。
+
+In our implementation, we use either the end token of the sequence or the first padding token as the aggregated score and compare them. Others may also use the average score for the entire answer as an alternative.
+
+2.6 板块相关问题
+暂无
+
+
+
+3.3.5.4 EMA
+待完善…
+
+3.4 实例测试
+“实例测试”与“指标评估”并不是完全相同的概念，实例测试是选择具体的数据实例输入进模型中，人工观察其输出结果，而非使用具体指标对结果进行评估。
+待完善…
+
+3.5 相关拓展
+3.5.1 phase3的参数设置
+RLHF的训练涉及到强化学习，训练过程对超参数的设置极其敏感，DeepSpeed-Chat团队在尝试了多种参数设置后，最终默认设置了per_device_train_batch_size(即prompt_batch_size) = per_device_mini_batch_size(即ppo_batch_size)，且生成1个prompt_batch就立刻开始训练——这样一来，实际上在进行的就是On-Policy强化学习，采集一次、学习一次，数据利用率并不高。
+此外，DeepSpeed-Chat团队还发现为无监督训练的损失设置系数（unsup_coef）也非常困难，训练过程会变得更加震荡，不过团队也没有花费太多精力在调整这个系数参数上。
+当然这些都并不是最佳的超参数配置，DeepSpeed-Chat团队仍鼓励用户多做尝试并分享出自己的调参经验。
+
+We have found that it is very unstable to use different generation training batch sizes (–per_device_train_batch_size) and PPO training batch sizes (–per_device_mini_batch_size), more than one PPO training epoch (–ppo_epochs), or more than one generation batch size (–generation_batch_numbers). These all point to the same problem: we are not able to update the actor model multiple times after generating experimental data. Therefore, in all of our successful runs, we have set per_device_train_batch_size = per_device_mini_batch_size and ppo_epochs = generation_batch_numbers = 1. This is unexpected for a standard RL training pipeline, and we have tried different methods to overcome this, but all have failed. One of the most likely reasons for this instability is that we found the log_probs and old_log_probs used in the actor_loss_fn function can quickly diverge even within two consecutive iterations, which causes the corresponding ratio to be huge. Setting a strict upper bound can alleviate this problem, but it cannot fully resolve the convergence issue.
+We have also found that adding unsupervised training is not easy. We tried using the coefficient (–unsup_coef=27.8) provided by InstructGPT, but it caused instability in the RLHF training. According to InstructGPT, unsupervised training mainly affects the model quality on standard benchmarks instead of the RLHF performance. We did not put much effort into tuning this parameter.
+
+3.5.2 PPO-ptx训练的迭代数对齐
+在phase3中，如果启用了无监督训练（PPO-ptx），那么无监督训练将是与PPO训练同步进行的，故两者的数据集处理几乎都是同步的，不仅是batch_size相同，以至于两者的batch数（step数）也都会被强制持平：通常情况下无监督数据量更大，按理同batch_size的情况下可迭代的次数也将多得多，但在PPO-ptx训练中，无监督训练的迭代数将会被裁至与PPO训练所用数据的迭代数持平——例如PPO所用训练数据满足迭代10次、无监督训练也只能进行10次迭代，多余的无监督数据将被弃用。
+
+3.5.3 LMFlow的RAFT
+待完善…
+
+3.6 版块相关问题
+暂无
+

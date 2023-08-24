@@ -238,8 +238,14 @@ def main():
                             disable_dropout=args.disable_dropout)
 
     print("model---1 :", model)
-
+    # 判断是否启用LoRA模式
     if args.lora_dim > 0:
+        '''
+        yk--此处代码不同
+        如果启用，则对名称中含有“decoder.layers.”且为线性层的结构部分引入LoRA旁路（实现先降维后升维的2个线性层），
+        这类结构基本都是attention、信息交互用的inner线性层，
+        这类结构的Weight参数将被冻结，转而优化LoRA旁路的参数。
+        '''
         model = convert_linear_layer_to_lora(model, args.lora_module_name,
                                              args.lora_dim)
         if args.only_optimize_lora:
@@ -283,22 +289,64 @@ def main():
     print("train_dataloader :", train_dataloader)
     print("eval_dataloader :", eval_dataloader)
 
+    '''
+    1.3.3 phase1的指标评估
+DeepSpeed-Chat选择了困惑度perplexity作为phase1训练期间的评估指标。需要注意的是，perplexity不是绝对的评估准则，
+甚至有可能perplexity评估结果与实际情况并不一致（即，perplexity已经处于较低水平，但模型的实际生成能力却仍然堪忧），
+这点DeepSpeed-Chat团队也有做出过说明。
+
+Supervised fine-tuning (SFT) has indeed made significant progress in the field of large language models (LLMs). 
+However, unexpected behaviors such as repeating content generation and inconsistency between perplexity (PPL) scores 
+and generation capabilities can still occur.
+
+但无论如何，源码中phase1定义的evaluation是基于perplexity来进行的，
+我们仍有必要具体了解其实现过程。
+
+困惑度perplexity是一种度量语言模型性能的指标，它衡量了训练好的模型对测试数据的拟合程度，
+对于输出句子的每个token，都可以得到其输出的置信概率值，将这些值相乘并取其几何平均数的倒数即可计算得到困惑度perplexity，
+使用公式表达更为简洁：
+公式....
+其中，输出的句子共有T TT个token，第t tt个token的置信概率值为p t p_tp 
+而CausalLM模型的训练过程通常采用对数似然损失来进行优化，其输出的损失公式如下：
+公式....
+其中，输出的句子共有T TT个token，第t tt个token的置信概率值为p t p_tp 
+因此perplexity与CausalLM的loss之间实际存在如下关系：
+公式....
+perplexity=exp(loss)
+
+相关源码的perplexity计算也是基于上述公式得到的：先是将验证数据输入至模型，得到模型loss输出，然后通过perplexity与loss之间的指数关系计算得到perplexity。
+
+    '''
     def evaluation(model, eval_dataloader):
+        """
+                以困惑度perplexity为评估指标进行验证
+        """
         model.eval()
         losses = 0
         for step, batch in enumerate(eval_dataloader):
+            """
+                       batch: 由input_ids、attention_mask、labels共3个部分组成的dict。
+                       其中每个部分的shape均为(bs, max_seq_len)
+            """
             batch = to_device(batch, device)
             with torch.no_grad():
                 outputs = model(**batch)
 
+            """Causal LM 的损失函数为交叉熵损失"""
             loss = outputs.loss
             losses += loss.float()
         losses = losses / (step + 1)
         try:
+            """困惑度perplexity通常可以通过exp(CELoss)计算得到"""
             perplexity = torch.exp(losses)
         except OverflowError:
             perplexity = float("inf")
         try:
+            """
+                    	- get_all_reduce_mean中调用了torch.distributed.all_reduce(perplexity, op=torch.distributed.ReduceOp.SUM)
+                    	- 对所有进程、或者说GPU（因为通常情况下就是单个进程控制单个GPU）中的perplexity进行求和
+                    	- 然后再除以全局进程数torch.distributed.get_world_size()得到平均的perplexity结果
+            """
             perplexity = get_all_reduce_mean(perplexity).item()
         except:
             pass

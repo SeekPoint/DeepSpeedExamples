@@ -217,6 +217,10 @@ def main():
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
     tokenizer.padding_side = 'right'
+    """
+    rm_model调用了create_critic_model进行载入
+    默认情况下rm_model是不启用dropout的
+    """
     rm_model = create_critic_model(args.model_name_or_path,
                                    tokenizer,
                                    ds_config,
@@ -244,6 +248,14 @@ def main():
     print("eval_dataset :", eval_dataset)
 
     # DataLoaders creation:
+    """
+    2.3.2 DataCollator及RM所需输入形式
+    phase2使用的数据整理器data_collator为DataCollatorReward()，
+    本阶段取出的单个样本example实际上是一个chosen-rejected数据对（见下方代码块），
+    即1个大小为batch_size的batch取出了batch_size个数据对，
+    data_collator将把数据对拆成chosen_sentence和reject_sentence（example一分为二），
+    因此实际上1个batch真正输入模型的数据量大小应当为“batch_size * 2”。
+    phase2使用的data_collator为DataCollatorReward()"""
     data_collator = DataCollatorReward()
     print("data_collator :", data_collator)
 
@@ -269,26 +281,55 @@ def main():
     print("eval_sampler :", eval_sampler)
     print("eval_dataloader :", eval_dataloader)
 
+    '''
+    2.3.4 phase2的指标评估
+      DeepSpeed-Chat在phase2中使用的评估指标为排序正确的accuracy，主要过程为：
+    
+    将数对chosen-rejected数据对（过程中被data_collator拆分为chosen_sentence和reject_sentence）输入RM中进行推理，得到各个sentence的分值；
+    将同属一个prompt的chosen_sentence得分与reject_sentence得分进行比较，当chosen_sentence得分大于reject_sentence得分时，即为“正确预测”，否则为“错误预测”；
+    统计正确预测的结果，计算accuracy作为评估指标。
+    此外评估过程中还将统计平均的chosen_sentence分值“scores”供参考。
+    '''
     def evaluation_reward(model, eval_dataloader):
         model.eval()
+        # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数
         correct_predictions = 0
+
+        # 统计预测总数
         total_predictions = 0
         scores = 0
         for step, batch in enumerate(eval_dataloader):
             batch = to_device(batch, device)
             with torch.no_grad():
+                """
+                outputs: {'loss':tensor(), 
+                            'chosen_mean_scores':tensor(bs,), 
+                            'rejected_mean_scores':tensor(bs,)}
+                """
                 outputs = model(**batch)
 
+            # chosen.shape: (bs,)
             chosen = outputs["chosen_mean_scores"]
+
+            #rejected.shape: (bs,)
             rejected = outputs["rejected_mean_scores"]
+
+            #赋分正确"即为chosen分值大于rejected分值
             correct_predictions += (chosen > rejected).sum()
             total_predictions += chosen.shape[0]
+
+            #累加每个step的平均chosen分值
             scores += outputs["chosen_mean_scores"].mean().float()
             if step == 99:  # For faster evaluation and debugging
                 break
+
+        # 计算acc指标
         acc = correct_predictions / total_predictions
+
+        #计算当前step的平均chosen分值
         scores = scores / (step + 1)
         try:
+            # 多进程结果求和求平均
             acc = get_all_reduce_mean(acc).item()
             scores = get_all_reduce_mean(scores).item()
         except:

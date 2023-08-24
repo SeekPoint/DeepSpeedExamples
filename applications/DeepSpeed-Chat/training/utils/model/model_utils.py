@@ -14,7 +14,19 @@ from transformers.deepspeed import HfDeepSpeedConfig
 
 from .reward_model import RewardModel
 
+"""
 
+1.3.1 基座模型结构
+从基座模型的载入类可以大致知晓模型的结构，可见下方代码块。
+此处使用了transformers.AutoModelForCausalLM.from_pretrained()来进行模型构建，
+因此第一阶段的SFT（ref）模型将会是一个因果语言模型/自回归语言模型（CausalLM），
+其所需要训练的任务自然就是自回归语言建模，即
+
+
+
+模型调用create_hf_model方法进行构建,
+参数指定有AutoModelForCausalLM
+"""
 def create_hf_model(model_class,
                     model_name_or_path,
                     tokenizer,
@@ -56,8 +68,14 @@ def create_critic_model(model_name_or_path,
                         disable_dropout=False):
     # OPT model family always put a padding token at the beginning of the sequence,
     # we did not see this in other models but not sure if it is a general rule
+    """此处的模型读取方法用的是“AutoModel”，因此此处critic_model只有主干部分"""
     critic_model = create_hf_model(AutoModel, model_name_or_path, tokenizer,
                                    ds_config, rlhf_training, disable_dropout)
+
+    """
+       critic_model传入RewardModel，将额外得到线性层输出头，
+       因此此处的critic_model结构为“v_head + 主干部分”
+    """
     critic_model = RewardModel(
         critic_model,
         tokenizer,

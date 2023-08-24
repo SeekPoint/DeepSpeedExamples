@@ -41,27 +41,57 @@ class DeepSpeedRLHFEngine():
 
     def __init__(self, actor_model_name_or_path, critic_model_name_or_path,
                  tokenizer, args, num_total_iters):
+        """
+        加载模型并进行DS封装
+        1. actor与ref（以及actor_ema）通常都初始化自phase1训练所得的模型；
+        2. critic与reward通常都初始化自phase2训练所得的模型。
+        根据它们的入参就能知道。
+        """
         self.args = args
         self.num_total_iters = num_total_iters
         self.tokenizer = tokenizer
 
+        # 此处的actor是模型经过DeepSpeed封装后得到的DeepSpeedHybridEngine对象
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
+
+        #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.ref = self._init_ref(
             actor_model_name_or_path=actor_model_name_or_path)
         self.actor_ema = None
+
+        #如果开启了ema，则初始化并封装ema
         if self.args.enable_ema:
+            #此处的ema是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
             self.actor_ema = self._init_ema(
                 actor_model_name_or_path=actor_model_name_or_path)
 
+        # 此处的critic是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.critic = self._init_critic(
             critic_model_name_or_path=critic_model_name_or_path)
+
+        # 此处的reward是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.reward = self._init_reward(
             critic_model_name_or_path=critic_model_name_or_path)
         if self.args.critic_gradient_checkpointing:
             self.critic.gradient_checkpointing_enable()
 
     def _init_actor(self, actor_model_name_or_path):
+        """
+        初始化actor并使用DeepSpeedHybridEngine封装
+        :param actor_model_name_or_path: phase1训练好的actor模型路径
+        :return: 经DeepSpeedHybridEngine封装的actor
+
+
+        DS Config
+        根据传参构建ds config，
+        与其他相关模型不同的地方在于，如果传参指定启用了enable_hybrid_engine，
+        那么HybridEngine将作用于actor，对actor进行封装，
+        因为HybridEngine可以使得模型可以在训练与推理两种模式中进行自动切换，
+        同时享有训练与推理的优化，
+        这对于既需要进行推理生成、又需要进行训练的actor来说是有增益作用的。
+        """
+
         stime = log_init("Actor")
 
         # DS Config
@@ -85,7 +115,7 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
-        # Model
+        # Model 使用CausalLM结构载入模型及权重，实例化actor
         actor_model = create_hf_model(
             model_class=AutoModelForCausalLM,
             model_name_or_path=actor_model_name_or_path,
@@ -93,7 +123,7 @@ class DeepSpeedRLHFEngine():
             ds_config=ds_config,
             disable_dropout=self.args.disable_actor_dropout)
 
-        # LoRA
+        # LoRA  如果开启LoRA训练则添加LoRA旁路
         if self.args.actor_lora_dim > 0:
             actor_model = convert_linear_layer_to_lora(
                 actor_model, self.args.actor_lora_module_name,
@@ -101,7 +131,7 @@ class DeepSpeedRLHFEngine():
             if self.args.only_optimize_lora:
                 actor_model = only_optimize_lora_parameters(actor_model)
 
-        # Optimizer
+        # Optimizer 实例化优化器：分组权重衰减等
         AdamOptimizer = DeepSpeedCPUAdam if self.args.offload else FusedAdam
         optim_params = get_optimizer_grouped_parameters(
             actor_model, self.args.actor_weight_decay)
@@ -109,7 +139,7 @@ class DeepSpeedRLHFEngine():
                               lr=self.args.actor_learning_rate,
                               betas=(0.9, 0.95))
 
-        # LR Scheduler
+        # LR Scheduler 实例化学习率调度器
         lr_scheduler = get_scheduler(
             name=self.args.lr_scheduler_type,
             optimizer=optim,
@@ -118,6 +148,11 @@ class DeepSpeedRLHFEngine():
         )
 
         # DeepSpeed Engine
+        # DeepSpeedEngine封装
+        # 若ds_config中定义了启用HybridEngine，
+        # 则返回的actor_engine不仅是个DeepSpeedEngine实例，
+        # 确切地说还是个DeepSpeedHybridEngine实例，集成有HybridEngine的优化
+
         #TODO: move enable_hybrid_engine and pin_parameters to ds_config
         actor_engine, *_ = deepspeed.initialize(model=actor_model,
                                                 optimizer=optim,
@@ -127,6 +162,11 @@ class DeepSpeedRLHFEngine():
         log_init("Actor", stime=stime)
 
         return actor_engine
+
+    """
+    其余ref、actor_ema、critic、reward的初始化几乎同理，
+    只是ds_config设置不同，但最终都将返回经DeepSpeedEngine封装的对象。
+    """
 
     def _init_ref(self, actor_model_name_or_path):
         stime = log_init("Ref")

@@ -55,6 +55,9 @@ def parse_args():
     )
     parser.add_argument(
         "--actor-model",
+        # actor模型只能选用“facebook/opt”系列的1.3b~66b
+        # 但即使是1.3b也仍对设备显存有一定的要求
+        # 对于使用较弱设备进行学习的用户不是很友好
         type=lambda x: x.replace("facebook/opt-", ""),
         default="125m",
         choices=("125m", "350m", "1.3b", "6.7b", "13b", "66b"),

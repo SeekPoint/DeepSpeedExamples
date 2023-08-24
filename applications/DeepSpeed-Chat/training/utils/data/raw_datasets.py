@@ -9,38 +9,91 @@ import re
 
 # The template prompt dataset class that all new dataset porting needs to
 # follow in order to have a unified API and unified data format.
-class PromptRawDataset(object):
+'''
+自定义的数据集可以继承自上述的“PromptRawDataset”类，
+例如class CustomDataset(PromptRawDataset)，
+然后重写其中的self.dataset_name及self.dataset_clean_name，
+此处的“dataset_name”即为传参指定数据集时所要填写的名称，
+例如self.dataset_name=custom，在设置传参--data_path=‘custom’时，
+将会读取到CustomDataset的数据用于进行训练。
+另外其中的get_train_data()等实例函数也需要进行重写，
+主要是实现将原始数据处理成注释所提及格式。
 
+'''
+class PromptRawDataset(object):
     def __init__(self, output_path, seed, local_rank, dataset_name):
+        """
+        初始化
+        :param output_path: 输出缓存路径。
+        :param seed: 随机种子。
+        :param local_rank: 当前进程序号。
+        :param dataset_name: 数据集名称，后续指定所需读取的数据集时将以名称为准。
+        """
         self.output_path = output_path
         self.seed = seed
         self.local_rank = local_rank
         if not dataset_name == 'local/jsonfile':
+            # load_dataset源自datasets库，该方法支持读取csv/json/text等多种文件格式的数据
             self.raw_datasets = load_dataset(dataset_name)
 
     def get_train_data(self):
+        """
+              获取训练集
+              :return: dataset数据格式
+        """
         return
 
     def get_eval_data(self):
+        """
+                获取验证集
+                :return: dataset数据格式
+        """
         return
 
     # The prompt should be in the format of: " Human: " + actual_prompt_sentence + " Assistant:"
     def get_prompt(self, sample):
+        """
+                从dataset的sample（单个样本）中获取prompt。
+                :param sample: dataset的元素
+                :return: prompt。prompt的格式必须为 "Human: {} Assistant:".format(actual_prompt_sentence)
+        """
         return
 
     # The chosen response should be in the format of: " " + actual_response_sentence
     def get_chosen(self, sample):
+        """
+                从dataset的sample（单个样本）中获取chosen。chosen实际上是“chosen response”，指的是“精选的回复”，即人类所偏好的、高分的回复。
+                :param sample: dataset的元素
+                :return: chosen。chosen的格式必须为" {}".format(actual_response_sentence)
+    """
         return
 
     # The rejected response should be in the format of: " " + actual_response_sentence
     # If the dataset does not have rejected response, return None
     def get_rejected(self, sample):
+        """
+                从dataset的sample（单个样本）中获取rejected。rejected实际上是“rejected response”，指的是“排斥的回复”，即人类所厌恶的、低分的回复。
+                :param sample: dataset的元素
+                :return: rejected。如果数据集中不存在则返回为None；如果存在，则其格式必须为 " {}".format(actual_response_sentence)
+        """
         return
 
     def get_prompt_and_chosen(self, sample):
+        """
+                从dataset的sample（单个样本）中获取prompt与chosen。
+                :param sample: dataset的元素
+                :return: prompt与chosen的衔接。同样需要满足上述格式要求，即衔接结果为
+                "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
+        """
         return
 
     def get_prompt_and_rejected(self, sample):
+        """
+                从dataset的sample（单个样本）中获取prompt与rejected。
+                :param sample: dataset的元素
+                :return: prompt与rejected的衔接。同样需要满足上述格式要求，即衔接结果为
+                "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
+        """
         return
 
 

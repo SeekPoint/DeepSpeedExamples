@@ -414,6 +414,11 @@ def main():
         args=args, tokenizer=tokenizer, train_phase=3)
 
     # RLHF engine is responsible for creating models, loading checkpoints, ds-initialize models/optims/lr-schedulers
+    """
+    使用DeepSpeedRLHFEngine类直接初始化模型
+    当然其内部仍旧调用了“create_hf_model”方法来读取模型，
+    但其中实现了更为精细的DeepSpeed控制
+    """
     rlhf_engine = DeepSpeedRLHFEngine(
         actor_model_name_or_path=args.actor_model_name_or_path,
         critic_model_name_or_path=args.critic_model_name_or_path,
@@ -427,6 +432,7 @@ def main():
     trainer = ppo_trainer(rlhf_engine, args)
 
     # first number is how many experience-batch to generate, second number is the training batch size, which is the micro-batch size used
+    #经验数据以及无监督数据都将被MiniDataset所管理
     exp_mini_dataset = MiniDataset(args.generation_batch_numbers,
                                    args.per_device_mini_train_batch_size)
     unsup_mini_dataset = MiniDataset(args.generation_batch_numbers,
@@ -453,7 +459,7 @@ def main():
             # if length > args.max_prompt_seq_len:
             #     prompts = prompts[:, length - args.max_prompt_seq_len:]
             #     raise ValueError("Prompt length is too long")
-
+            # out为经验数据
             out = trainer.generate_experience(batch_prompt['prompt'],
                                               batch_prompt['prompt_att_mask'],
                                               step)
@@ -467,25 +473,51 @@ def main():
                 if args.actor_gradient_checkpointing:
                     rlhf_engine.actor.gradient_checkpointing_enable()
 
+                '''
+                3.3.5 PPO训练过程
+                3.3.5.1 基本流程
+                对于采集到的一批经验数据，使用MiniDataset处理成多批ppo_batch数据，供相关模型进行多次训练迭代，更具体的训练细节见后续内容。
+                
+                而DeepSpeed-Chat中所设置的ppo_epochs，从强化学习的角度来说，实际上代表的是一批经验数据的复用次数：
+                
+                假如ppo_epochs设置为1，训练时，引入的这批经验数据在经过1次全遍历后，将被直接弃置，随之进行下一轮prompt_epoch，届时将重新采集新的一批经验数据；
+                假如ppo_epochs设置为n，训练时，引入的这批经验数据将被遍历n次才被弃置，即相当于这批经验数据被复用了n次用于off-policy训练。
+                
+                '''
                 for ppo_ep in range(args.ppo_epochs):
+                    #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
                             zip(exp_dataset, unsup_dataset)):
+                        """
+                        ppo_step循环：
+                        从MiniDataset返回的数据中，
+                        取1个ppo_batch的经验数据和无监督数据来训练。
+                        """
+
+                        #经验数据训练，返回actor_loss和critic_loss
                         actor_loss, critic_loss = trainer.train_rlhf(exp_data)
+
+                        #累加本ppo_step的指标，后续将除以内层迭代次数计算均值
                         actor_loss_sum += actor_loss.item()
                         critic_loss_sum += critic_loss.item()
                         average_reward += exp_data["rewards"].mean()
 
+                        #无监督数据训练
                         if unsupervised_training_enabled:
+                            # 返回无监督损失
                             unsup_loss = trainer.train_unsupervised(
                                 unsup_data, args.unsup_coef)
+
+                            #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
 
-                        inner_iter += 1
+                        inner_iter += 1  #PPO训练迭代次数（ppo_step）+1
                         if args.enable_ema:
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
 
+                    # 打乱数据供off - policy复用
                     random.shuffle(exp_dataset)
                     random.shuffle(unsup_dataset)
 
