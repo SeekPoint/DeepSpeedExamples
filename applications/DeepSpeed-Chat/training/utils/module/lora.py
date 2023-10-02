@@ -10,7 +10,9 @@ from deepspeed.compression.helper import recursive_getattr, recursive_setattr
 import deepspeed
 
 '''
-经过LoRA改造后，原始基座模型（此处的基座模型为“facebook/opt-125m”）的结构如下所示，可见模型中除了输出头部分的线性层基本都被改成了LoRA结构，因此模型在进行正向传播时也将流经LinearLayer_LoRA(nn.Module)中所定义的forward()方法（见上方代码块forward()部分）。
+经过LoRA改造后，原始基座模型（此处的基座模型为“facebook/opt-125m”）的结构如下所示，
+可见模型中除了输出头部分的线性层基本都被改成了LoRA结构，
+因此模型在进行正向传播时也将流经LinearLayer_LoRA(nn.Module)中所定义的forward()方法（见上方代码块forward()部分）。
 
 OPTForCausalLM(
   (model): OPTModel(
@@ -134,7 +136,9 @@ class LinearLayer_LoRA(nn.Module):
     常规部分的正向传播由transformers所定义，
     而LoRA部分的正向传播则由LinearLayer_LoRA(nn.Module)的forward()所定义（可见下方代码块），
     即“LoRA层的两条分支结果进行加和”。
-    在代码中体现为F.linear(input, self.weight, self.bias) + (self.lora_dropout(input) @ self.lora_right_weight @ self.lora_left_weight) * self.lora_scaling，
+    在代码中体现为
+    F.linear(input, self.weight, self.bias) + 
+    (self.lora_dropout(input) @ self.lora_right_weight @ self.lora_left_weight) * self.lora_scaling，
     加号左侧为原结构支路，加号右侧为新增支路，self.lora_right_weight和self.lora_left_weight分别为两个新引入线性层的参数。
     
     '''

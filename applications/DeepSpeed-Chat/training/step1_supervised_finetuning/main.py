@@ -291,30 +291,33 @@ def main():
 
     '''
     1.3.3 phase1的指标评估
-DeepSpeed-Chat选择了困惑度perplexity作为phase1训练期间的评估指标。需要注意的是，perplexity不是绝对的评估准则，
-甚至有可能perplexity评估结果与实际情况并不一致（即，perplexity已经处于较低水平，但模型的实际生成能力却仍然堪忧），
-这点DeepSpeed-Chat团队也有做出过说明。
+    DeepSpeed-Chat选择了困惑度perplexity作为phase1训练期间的评估指标。
+    需要注意的是，perplexity不是绝对的评估准则，
+    甚至有可能perplexity评估结果与实际情况并不一致（即，perplexity已经处于较低水平，但模型的实际生成能力却仍然堪忧），
+    这点DeepSpeed-Chat团队也有做出过说明。
+    
+    Supervised fine-tuning (SFT) has indeed made significant progress in the field of large language models (LLMs). 
+    However, unexpected behaviors such as repeating content generation and inconsistency between perplexity (PPL) scores 
+    and generation capabilities can still occur.
+    
+    但无论如何，源码中phase1定义的evaluation是基于perplexity来进行的，我们仍有必要具体了解其实现过程。
+    
+    困惑度perplexity是一种度量语言模型性能的指标，它衡量了训练好的模型对测试数据的拟合程度，
+    对于输出句子的每个token，都可以得到其输出的置信概率值，将这些值相乘并取其几何平均数的倒数即可计算得到困惑度perplexity，
+    使用公式表达更为简洁：
+        005.png
+    其中，输出的句子共有T个token，第t个token的置信概率值为p_t
+    
+    而CausalLM模型的训练过程通常采用对数似然损失来进行优化，其输出的损失公式如下：
+        006.png
+    其中，输出的句子共有T个token，第t个token的置信概率值为p_t
+    
+    因此perplexity与CausalLM的loss之间实际存在如下关系：
 
-Supervised fine-tuning (SFT) has indeed made significant progress in the field of large language models (LLMs). 
-However, unexpected behaviors such as repeating content generation and inconsistency between perplexity (PPL) scores 
-and generation capabilities can still occur.
-
-但无论如何，源码中phase1定义的evaluation是基于perplexity来进行的，
-我们仍有必要具体了解其实现过程。
-
-困惑度perplexity是一种度量语言模型性能的指标，它衡量了训练好的模型对测试数据的拟合程度，
-对于输出句子的每个token，都可以得到其输出的置信概率值，将这些值相乘并取其几何平均数的倒数即可计算得到困惑度perplexity，
-使用公式表达更为简洁：
-公式....
-其中，输出的句子共有T TT个token，第t tt个token的置信概率值为p t p_tp 
-而CausalLM模型的训练过程通常采用对数似然损失来进行优化，其输出的损失公式如下：
-公式....
-其中，输出的句子共有T TT个token，第t tt个token的置信概率值为p t p_tp 
-因此perplexity与CausalLM的loss之间实际存在如下关系：
-公式....
-perplexity=exp(loss)
-
-相关源码的perplexity计算也是基于上述公式得到的：先是将验证数据输入至模型，得到模型loss输出，然后通过perplexity与loss之间的指数关系计算得到perplexity。
+        perplexity=exp(loss)
+    
+    相关源码的perplexity计算也是基于上述公式得到的：
+    先是将验证数据输入至模型，得到模型loss输出，然后通过perplexity与loss之间的指数关系计算得到perplexity。
 
     '''
     def evaluation(model, eval_dataloader):

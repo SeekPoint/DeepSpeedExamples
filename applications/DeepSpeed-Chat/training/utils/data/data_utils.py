@@ -437,8 +437,6 @@ def create_prompt_dataset(local_rank,
 		
 	}
 后续输入模型后，直接将数据切分出前半部分和后半部分进行并列，即可获得对应的chosen-rejected数据对。
-
-
 '''
 class DataCollatorReward:
 
@@ -448,14 +446,16 @@ class DataCollatorReward:
                 入参 data 的具体样式可见下个代码块
         """
         batch = {}
-        """f为data中的1个tuple，tuple的第0个元素和第2个元素
-                分别为chosen_sentence和reject_sentence的input_ids
+        """
+        f为data中的1个tuple，tuple的第0个元素和第2个元素
+        分别为chosen_sentence和reject_sentence的input_ids
         """
         batch["input_ids"] = torch.cat([f[0]
                                         for f in data] + [f[2] for f in data],
                                        dim=0)
-        """f为data中的1个tuple，tuple的第1个元素和第3个元素
-                分别为chosen_sentence和reject_sentence的attention_mask
+        """
+        f为data中的1个tuple，tuple的第1个元素和第3个元素
+        分别为chosen_sentence和reject_sentence的attention_mask
         """
         batch["attention_mask"] = torch.cat([f[1] for f in data] +
                                             [f[3] for f in data],

@@ -123,7 +123,7 @@ and always split a dataset into all 3 steps.
     - alt表示假设分支，其后方“[]”中的内容表示“条件”；
     - loop表示循环；
     - 淡蓝色区域即为高亮部分。
-001.png
+yknote截图 001.png
 总的来说，在训练的主流程代码main.py中，供DataLoader调用的Dataset（PromptDataset）将通过函数“create_prompt_dataset()”进行获取，
 其中将涉及到预存机制：如果已经存在预存数据，则直接通过torch.load()进行载入得到Dataset；
 如果未存在预存数据，则需要进行一系列预处理和预存的操作。

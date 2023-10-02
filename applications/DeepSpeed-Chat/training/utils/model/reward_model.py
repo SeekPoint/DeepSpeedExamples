@@ -69,33 +69,34 @@ class RewardModel(nn.Module):
     其所提取的特征（最后层的各位置输出特征hidden_states）将被传入线性层，输出得到1个数值，
     该数值即为分值，因此max_seq_len维度的每个位置均会得到1个分值
 
-RM的模型结构基本如下所示（此处的基座模型为“facebook/opt-125m”），由主干网络rwtransformer及输出头v_head组成：
+    RM的模型结构基本如下所示（此处的基座模型为“facebook/opt-125m”），
+    由主干网络rwtransformer及输出头v_head组成：
 
-RewardModel(
-  (v_head): Linear(in_features=768, out_features=1, bias=False)
-  (rwtranrsformer): OPTModel(
-    (decoder): OPTDecoder(
-      (embed_tokens): Embedding(50272, 768, padding_idx=1)
-      (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-      (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-      (layers): ModuleList(
-        (0-11): 12 x OPTDecoderLayer(
-          (self_attn): OPTAttention(
-            (k_proj): Linear(in_features=768, out_features=768, bias=True)
-            (v_proj): Linear(in_features=768, out_features=768, bias=True)
-            (q_proj): Linear(in_features=768, out_features=768, bias=True)
-            (out_proj): Linear(in_features=768, out_features=768, bias=True)
-          )
-          (activation_fn): ReLU()
-          (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
+    RewardModel(
+      (v_head): Linear(in_features=768, out_features=1, bias=False)
+      (rwtranrsformer): OPTModel(
+        (decoder): OPTDecoder(
+          (embed_tokens): Embedding(50272, 768, padding_idx=1)
+          (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
           (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (layers): ModuleList(
+            (0-11): 12 x OPTDecoderLayer(
+              (self_attn): OPTAttention(
+                (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                (out_proj): Linear(in_features=768, out_features=768, bias=True)
+              )
+              (activation_fn): ReLU()
+              (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (fc1): Linear(in_features=768, out_features=3072, bias=True)
+              (fc2): Linear(in_features=3072, out_features=768, bias=True)
+              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+            )
+          )
         )
       )
     )
-  )
-)
 
     """
     def __init__(self, base_model, tokenizer, num_padding_at_beginning=0):
@@ -243,6 +244,7 @@ RewardModel(
             # 同一个batch里边的句子需要等长，短句后边会被padding
             # [divergence_ind:end_ind]索引了padding前一个位置的输出分值
             # chosen_reward是同一个句子pair里分数高的句子，r_truncated_reward是句子pair里分数低的句子
+
             # 以chosen_sentence和reject_sentence最先不同的地方为起始、生成结束的地方为终止，取两者在这个片段的对应分值
             # 这部分其实就是上个代码块提及的“对齐部分”
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
@@ -266,6 +268,7 @@ RewardModel(
             "chosen_mean_scores": chosen_mean_scores,
             "rejected_mean_scores": rejected_mean_scores,
         }
+
     '''
     在训练强化学习的过程中，会用到reward model（critic model，再次提醒，critic model和reward model是同一个模型的两个副本）的推理过程，
     通过调用forward_value实现，具体代码如下，返回的值中有两种值，values表示每个位置i，从第i个位置到最后一个位置的奖励累加值，

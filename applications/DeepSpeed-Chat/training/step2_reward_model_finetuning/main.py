@@ -255,7 +255,8 @@ def main():
     即1个大小为batch_size的batch取出了batch_size个数据对，
     data_collator将把数据对拆成chosen_sentence和reject_sentence（example一分为二），
     因此实际上1个batch真正输入模型的数据量大小应当为“batch_size * 2”。
-    phase2使用的data_collator为DataCollatorReward()"""
+    """
+    # phase2使用的data_collator为DataCollatorReward()
     data_collator = DataCollatorReward()
     print("data_collator :", data_collator)
 
@@ -283,13 +284,18 @@ def main():
 
     '''
     2.3.4 phase2的指标评估
-      DeepSpeed-Chat在phase2中使用的评估指标为排序正确的accuracy，主要过程为：
+    DeepSpeed-Chat在phase2中使用的评估指标为排序正确的accuracy，主要过程为：
     
-    将数对chosen-rejected数据对（过程中被data_collator拆分为chosen_sentence和reject_sentence）输入RM中进行推理，得到各个sentence的分值；
-    将同属一个prompt的chosen_sentence得分与reject_sentence得分进行比较，当chosen_sentence得分大于reject_sentence得分时，即为“正确预测”，否则为“错误预测”；
-    统计正确预测的结果，计算accuracy作为评估指标。
-    此外评估过程中还将统计平均的chosen_sentence分值“scores”供参考。
-    '''
+        1将数对chosen-rejected数据对（过程中被data_collator拆分为chosen_sentence和reject_sentence）输入RM中进行推理，
+        得到各个sentence的分值；
+        
+        2将同属一个prompt的chosen_sentence得分与reject_sentence得分进行比较，
+        当chosen_sentence得分大于reject_sentence得分时，即为“正确预测”，否则为“错误预测”；
+        
+        3统计正确预测的结果，计算accuracy作为评估指标。
+        
+        4此外评估过程中还将统计平均的chosen_sentence分值“scores”供参考。
+        '''
     def evaluation_reward(model, eval_dataloader):
         model.eval()
         # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数

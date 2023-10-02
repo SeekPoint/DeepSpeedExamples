@@ -22,7 +22,7 @@ from .reward_model import RewardModel
 因此第一阶段的SFT（ref）模型将会是一个因果语言模型/自回归语言模型（CausalLM），
 其所需要训练的任务自然就是自回归语言建模，即
 
-
+003.png
 
 模型调用create_hf_model方法进行构建,
 参数指定有AutoModelForCausalLM
