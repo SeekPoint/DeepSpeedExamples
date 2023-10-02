@@ -271,6 +271,7 @@ class DeepSpeedPPOTrainer():
 
             #然后利用reward model和ciric model对输出的prompt+answer进行打分
             # （PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
+            # 奖励模型返回的是个字典，key为chosen_end_scores位置存储数据维度为(B,)，表示对于prompt+answer的打分
             '''
             价值函数的forward_value()更具体的细节可见后续详解。
             reward_score取的是answer最后一个token的value
@@ -285,6 +286,7 @@ class DeepSpeedPPOTrainer():
 
             # critic model返回的数据维度为(B,L)，L维度上第i个位置代表从i位置到最后的累积奖励
             # 舍去最后一个位置是因为句子“终止符”无意义
+
             # critic_model.forward_value(return_value_only=True)将返回shape为(seq_bs, max_seq_len)的序列各token的value
             # 将seq喂入critic，获得critic的value，上图蓝色步骤（3）
             values = self.critic_model.forward_value(

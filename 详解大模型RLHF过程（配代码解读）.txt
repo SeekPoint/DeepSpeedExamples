@@ -1,0 +1,637 @@
+详解大模型RLHF过程（配代码解读）
+https://zhuanlan.zhihu.com/p/624589622
+战士金
+清华大学 航空宇航科学与技术硕士
+
+一直都特别好奇大模型的强化学习微调是怎么做的，网上虽然相关文章不少，但找到的文章都是浅尝辄止说到用PPO训练，再细致深入的就没有讲了。。。
+只能自己看一看代码，以前搞过一点用PPO做游戏，感觉和语言模型PPO的用法不太一样。
+在游戏场景，每个step给环境一个action之后，agent拿到的state都是会变化的，通常也会设计奖励函数使得每个step都会有reward；
+但是在用强化学习微调语言模型这里，prompt是state，只输入一次，然后输出一串action（回答的单词），得到一个reward，
+模型并没有在每个action之后得到新的state
+（感谢评论区大佬的点拨，对于answer的第二个词，可以把prompt+answer的一个词当作新的state，
+而不只是把prompt当作state，状态转移蕴含在transformer内部）
+
+本篇文章并不会介绍太多PPO的原理，相关文章已经很多了，比如李宏毅介绍PPO的课程。
+大模型里边的PPO涉及到了critic model的概念，在李宏毅教程里只提了一下并没有细讲，如果想了解可以看一下这个文章，
+相当于利用一个critic model预测从t时刻到最后一个时刻的累加奖励值（强化学习里边的第t个时刻对标answer句子里边的第t个单词），
+而不是通过实际累加得到从t时刻到最后一个时刻的累加奖励值，这样可以降低奖励的方差。
+下文也结合代码介绍critic model输出的具体含义。
+同时RLHF是什么也会再详细介绍，相关文章已经很多了。
+
+本篇文章涉及的代码均来自微软的deepspeed对RLHF的实现，可配合huggingface官方的博客一起食用。
+本文只对算法的一些有特点的关键点进行阐述，并不对整体实现进行介绍。先上一张经典的论文图。
+本文重点结合代码讲解奖励模型训练和强化学习训练部分。
+027.webp
+
+奖励（reward）模型训练
+首先要声明的是，在强化学习阶段，用到的reward model和critic model都使用同一个模型初始化，
+因此在训练reward模型的过程中，也是在训练critic model。
+其次对符号进行说明，大模型中间隐藏层的参数维度为(B,L,D)，B为batch size大小，L为句子长度，D为embedding维度。
+在接下来的代码讲解中，我也会标明代码中各个变量的维度，以更好的理解其意义。
+
+在进行RLHF时，需要一个奖励模型来评估语言大模型（actor model）回答的是好是坏，
+这个奖励模型通常比被评估的语言大模型小一些（deepspeed的示例中，语言大模型66B，奖励模型只有350M）。
+奖励模型的输入是prompt+answer的形式，让模型学会对prompt+answer进行打分。
+奖励模型最后一层隐藏层的输出维度为(B,L,D)，通过一个D✖️1的全连接层将维度变为(B, L)，在L这个维度上，第i个位置的数据表示：
+从第i个位置到最后一个位置输出所能获得的奖励分值的累加和（和DQN里边的Q值一个意义），这种形式的输出满足了critic model的输出要求。
+对应代码如下：
+
+    #huggingface模型返回值是个list，第0位是模型最后输出的hideen state
+    hidden_states = transformer_outputs[0]
+    # v_head为Dx1的全连接网络对最后一维压缩
+    rewards = self.v_head(hidden_states).squeeze(-1)
+
+对于一个奖励模型来说，目标是给一个句子进行打分，按理说每个句子对应一个分值就行了，但是目前对于长度为L的句子，奖励模型输出了L个值。
+我们用L维度上的最后一个位置的值当作为本句话的奖励得分。
+奖励模型训练优化采用pair wiss loss，即同时输入模型关于同一个问题的两个回答，让模型学会这两个句子哪个分高哪个分低。
+之所以如此训练是因为，在给奖励模型进行数据标注的过程中，给同一个问题的不同回答量化的打具体分值比较难，但是对他们进行排序相对简单，
+代码如下：
+
+    # 同一个batch里边的句子需要等长，短句后边会被padding
+    # [divergence_ind:end_ind]索引了padding前一个位置的输出分值
+    # chosen_reward是同一个句子pair里分数高的句子，r_truncated_reward是句子pair里分数低的句子
+    c_truncated_reward = chosen_reward[divergence_ind:end_ind]
+    r_truncated_reward = rejected_reward[divergence_ind:end_ind]
+
+pair wise loss代码如下，如果给pair里边好的句子打分高（c_truncated_reward），坏的句子（r_truncated_reward）打分低，loss就会小：
+
+    loss += -torch.log(torch.sigmoid(c_truncated_reward - r_truncated_reward)).mean()
+
+在训练强化学习的过程中，会用到reward model（critic model，
+再次提醒，critic model和reward model是同一个模型的两个副本）的推理过程，
+通过调用forward_value实现，具体代码如下，返回的值中有两种值，values表示每个位置i，
+从第i个位置到最后一个位置的奖励累加值，供强化学习过程中critic model使用；
+“chosen_end_scores”指的是对每个prompt+answer的打分，供reward model使用。
+
+    def forward_value(...):
+        ...
+        if return_value_only:
+            #(B,L)
+            return values
+        else:
+            ...
+            return {
+                "values": values,
+                # （B,）
+                "chosen_end_scores": torch.stack(chosen_end_scores),
+            }
+
+强化学习微调
+强化学习微调阶段，会用到4个模型，actor model， ref_model，reward model和critic model（好费显存啊！！！）。
+其中actor model和ref_model是RLHF第一个阶段有监督微调模型的两个副本，reward model和critic model是本文第一部分训练出来的模型的两个副本。
+整体流程见这篇文档，整体流程图如下所示（没画出critic model）：
+028.webp
+
+首先说明actor model的训练模式和推理模式的区别（ 后边会用到）。
+训练模式是用teacher force的方式（不明白的同学知乎搜一下），将整句话输入到模型中，
+并通过mask机制在保证不泄漏未来的单词情况下预测下一个单词。
+推理模式是真正的自回归，预测出下一个单词之后，当作下一步输入再预测下下个单词，原理如下图所示：
+029.webp
+
+首先用actor model在推理模式下根据prompt生成一个answer（prompt对应强化学习里边的state，answer对应一些列的action），代码如下：
+
+    # 保证不触发反向传播
+    with torch.no_grad():
+        seq = self.actor_model.module.generate(prompts,
+        max_length=max_min_length,
+        min_length=max_min_length)
+
+然后利用reward model和ciric model对输出的prompt+answer进行打分
+（PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
+
+    # 奖励模型返回的是个字典，key为chosen_end_scores位置存储数据维度为(B,)，表示对于prompt+answer的打分
+    reward_score = self.reward_model.forward_value(
+                    seq, attention_mask,
+                    prompt_length=self.prompt_length)['chosen_end_scores'].detach(
+                    )
+    #critic model返回的数据维度为(B,L)，L维度上第i个位置代表从i位置到最后的累积奖励
+    #舍去最后一个位置是因为句子“终止符”无意义
+    values = self.critic_model.forward_value(
+                    seq, attention_mask, return_value_only=True).detach()[:, :-1]
+
+actor model是我们想通过强化学习微调的大模型，但是强化学习过程很容易把模型训练“坏”，
+因此需要另外一个不会参数更新的 ref_model来当作标的，别让actor mode跑偏太远。
+我们在训练模式下，将prompt+answer分别输入到actor mode和ref model，用KL散度来衡量 ref model和actor mode输出的差别。
+同时将KL散度（衡量数据分布差距大小）纳入损失函数（KL散度本质是纳入到奖励值里边的，奖励值被纳入到了损失函数），
+进而来约束 ref_model和actor mode的输出分布别差距太大。
+具体代码如下：
+
+    # 得到两个模型的输出
+    output = self.actor_model(seq, attention_mask=attention_mask)
+    output_ref = self.ref_model(seq, attention_mask=attention_mask)
+    logits = output.logits
+    logits_ref = output_ref.logits
+    ...
+    return {
+    ...
+    # 分别得到两个模型在真实单词上的预测概率
+    'logprobs': gather_log_probs(logits[:, :-1, :], seq[:, 1:]),
+    'ref_logprobs': gather_log_probs(logits_ref[:, :-1, :], seq[:,1:]),
+    ...
+    }
+    ...
+    # 计算kl散度，log_probs里边存的数字经过log变化了，因此减法就对应除法
+    kl_divergence_estimate = -self.kl_ctl * (log_probs - ref_log_probs)
+
+PPO训练时候的奖励值综合考虑KL散度和reward模型的输出，只考虑answer部分的KL散度，
+将reward model的输出加到KL散度L维度的最后一个位置上，得到最终的奖励值，
+代码如下：
+
+    rewards = kl_divergence_estimate
+    # 只考虑answer部分的奖励，不考虑prompt
+    start = prompts.shape[1] - 1
+    # 不考虑padding部分
+    ends = start + action_mask[:, start:].sum(1)
+    reward_clip = torch.clamp(reward_score, -self.clip_reward_value,
+                             self.clip_reward_value)
+    batch_size = log_probs.shape[0]
+    # 在L维度上，每个位置都有KL散度，但是只在最后一个位置加上奖励值
+    for j in range(batch_size):
+        rewards[j, start:ends[j]][-1] += reward_clip[j]
+
+接下来的内容就是PPO的训练过程的比较核心的内容了，目标是计算PPO更新公示里边的advantage，
+具体公式如下，V就是critic model的输出。如果原理不懂建议先到这个链接看看。我直接在代码中给注释了。
+030.webp
+图片出处：https://huggingface.co/blog/deep-rl-a2c
+
+    def get_advantages_and_returns(self, values, rewards, start):
+        # values（B，L） critic model输出
+        # rewards（B，L）reward 包含kl散度
+        # start answer开始的位置
+        # Adopted from https://github.com/CarperAI/trlx/blob/main/trlx/models/modeling_ppo.py#L134
+        lastgaelam = 0
+        advantages_reversed = []
+        length = rewards.size()[-1]
+        # 计算每个时刻（序列位置）的critic model预测误差
+        for t in reversed(range(start, length)):
+            nextvalues = values[:, t + 1] if t < length - 1 else 0.0
+            # critic model预测的是t到到最后一个时刻的奖励和，所以变化量delta可以用如下公式表示
+            delta = (rewards[:, t] + self.gamma * nextvalues) - values[:, t]
+            # self.gamma=1，self.lam=0.95是衰减因子，表示之前计算的delta对现在影响越来越小
+            lastgaelam = delta + self.gamma * self.lam * lastgaelam
+            advantages_reversed.append(lastgaelam)
+        advantages = torch.stack(advantages_reversed[::-1], dim=1)
+        # 后续用来更新critic model用
+        returns = advantages + values[:, start:]
+        return advantages.detach(), returns
+
+以上过程，我们已经拿到了PPO训练所需要的advantage以及actor model的输出，我先现在可以对actor model进行训练啦。
+具体代码如下。
+logprobs和old_logprobs这两个参数分别是“老actor（n个epoch才会更新一次）”和新actor（每个batch都会更新它）”在正确单词上出处的概率，
+这块时PPO import sampling相关的知识，就不在这重复介绍了，不明白的同学补习一下哈。
+借用一下李宏毅老师的PPO公式： 031.webp
+
+    def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
+        ## policy gradient loss
+        #logprobs, old_logprobs都是经过log变化的单词概率，这里带着log做减法就相当于在做概率除法
+        log_ratio = (logprobs - old_logprobs) * mask
+        # 指数操作去掉log
+        ratio = torch.exp(log_ratio)
+        pg_loss1 = -advantages * ratio
+        pg_loss2 = -advantages * torch.clamp(ratio, 1.0 - self.cliprange,
+                                                1.0 + self.cliprange)
+        pg_loss = torch.sum(torch.max(pg_loss1, pg_loss2) * mask) / mask.sum()
+        return pg_loss
+
+同样的，我们也要对critic model进行训练，更新，loss就是mse loss。
+
+    def critic_loss_fn(self, values, old_values, returns, mask):
+        ## value loss
+        # 用“老critic model”的输出约束“新critic model”不要步子太大，裁剪一下
+        values_clipped = torch.clamp(
+            values,
+            old_values - self.cliprange_value,
+            old_values + self.cliprange_value,
+        )
+        vf_loss1 = (values - returns)**2
+        vf_loss2 = (values_clipped - returns)**2
+        vf_loss = 0.5 * torch.sum(
+            torch.max(vf_loss1, vf_loss2) * mask) / mask.sum()
+        return vf_loss
+至此，我们的RLHF训练流程就结束了。
+第二部分开头我们说过，共涉及actor model， ref_model，reward model和critic model这四个模型，
+其实更新参数的模型只有actor model和critic model。
+
+编辑于 2023-09-25 18:14・IP 属地北京
+
+
+
+58 条评论
+默认
+最新
+谭三爷
+谭三爷
+如果我正确地理解了您的问题。
+
+
+
+1. 语言模型有状态转移的。被微调的就是actor网络，输入状态（prompt）输出动作（下一个token），只不过这里的状态转移是确定的：s'=(s, a)。
+
+2. PPO一直都包含着critic。我不知道您为什么说李宏毅的PPT里没有。在您给出的链接Tip 2: Assign Suitable Credit的最后一页，可见"Estimated by critic (later)"。
+
+04-27 · IP 属地四川
+​回复
+​7
+战士金
+战士金
+作者
+​
+
+1. 我好像是明白了，对于answer的第二个词来说，prompt+answer的第一个词是它的state，而不单单只有prompt。状态转移隐藏在transformer内部。
+2.确实有，您看的真是仔细。我之前跑的那套ppo代码没有critic model这个东西，就一直觉得没有。
+04-27 · IP 属地北京
+​回复
+​喜欢
+沉睡啦
+沉睡啦
+题外话，知乎网页版的这个目录功能真是反人类啊
+
+08-14 · IP 属地浙江
+​回复
+​5
+mingspyt
+mingspyt
+写的非常好，很有启发性。不过下面的注释应该有个错误导致看了源码才看懂，
+def get_advantages_and_returns(self, values, rewards, start):
+# values（B，L） critic model输出
+# rewards（B，）reward model输出。《——
+这里的rewards shape是（B，L），是kl loss最后一个位置加上reward的结果，具体是下面代码的返回值：
+
+with torch.no_grad():
+old_rewards = self.compute_rewards(prompts, …
+07-27 · IP 属地北京
+​回复
+​4
+Yiliiiii
+Yiliiiii
+附议！！！
+
+09-15 · IP 属地美国
+​回复
+​喜欢
+暧暧内含光
+暧暧内含光
+确实，老哥说得对
+
+08-01 · IP 属地法国
+​回复
+​喜欢
+百分之八十女孩
+百分之八十女孩
+您好，对于compute_rewards里面您注释的“在L维度上，每个位置都有KL散度，但是只在最后一个位置加上奖励值”我不太理解，可以麻烦您解释一下吗？
+
+06-29 · IP 属地浙江
+​回复
+​3
+没有科技
+没有科技
+我的理解是这样的：reward model训练的时候只会对prompt+answer整体进行打分，不能够对不完整的句子进行打分，所以只会在最后一个位置加上reward分数
+08-18 · IP 属地浙江
+​回复
+​1
+猴猴
+猴猴
+没有科技
+最后一个位置加上有什么作用
+09-29 · IP 属地北京
+​回复
+​喜欢
+梓翔
+梓翔
+pairwise
+
+07-13 · IP 属地北京
+​回复
+​2
+Anderson
+Anderson
+原始的PPO算法是actor 和 critic loss加总到一起，2个模型同时优化 github.com/nikhilbarhat
+
+# final loss of clipped objective PPO
+loss = -torch.min(surr1, surr2) + 0.5 * self.MseLoss(state_values, rewards) - 0.01 * dist_entropy
+
+
+
+看deepspeed是2个模型各自分开优化
+
+
+
+def train(self):
+self.actor_model.train()
+self.critic_model.train()
+
+07-31 · IP 属地北京
+​回复
+​1
+暧暧内含光
+暧暧内含光
+感觉 Deepspeed 的实现有点问题。看了下 Huggingface 的 RLHF 的实现，critic model 是在 actor model 的基础上加了个 value head，剩余部分共享参数
+所以能把两个 loss 加起来，一起训练。我看 PPO2 论文里也有提到 critic & actor 共享参数
+
+Deepspeed 的文档说他们的训练很不稳定，我觉得可能和这有关
+08-03 · IP 属地法国
+​回复
+​2
+XDDD
+XDDD
+model.train()是指把模型设置为train mode[捂脸]，会enable dropout之类的操作。（当然deepseedchat的确是分开优化的，在def train_rlhf(self, inputs)这里面分别model.step()的
+
+08-07 · IP 属地澳大利亚
+​回复
+​喜欢
+欧夔
+欧夔
+想问下计算kl散度的时候 gather_log_probs(logits[:, :-1, :], seq[:, 1:])是什么意思呢？这里每看懂
+
+09-20 · IP 属地上海
+​回复
+​1
+啊大海啊你真大
+啊大海啊你真大
+为什么把kl散度和rewards相加作为新的奖励new_rewards
+09-05 · IP 属地浙江
+​回复
+​1
+朝阳群众
+朝阳群众
+pair wiss loss应该是pair wise loss吧？
+09-12 · IP 属地北京
+​回复
+​喜欢
+Eiiii
+Eiiii
+请问在RLHF的过程中，怎么确定训练已经达到了使用当前奖励模型优化的上限呢
+
+09-11 · IP 属地浙江
+​回复
+​喜欢
+Mocker
+Mocker
+文中有提到，老actor几个epoch更新一次，新actor每个batch都会更新，那可以理解为内存里是有两个actor模型，整个PPO过程其实涉及了5个模型？
+
+09-11 · IP 属地北京
+​回复
+​喜欢
+brotherb
+brotherb
+为什么reward model算loss的时候，不直接用最后一个位置的打分，而是用所有输出位置的打分？
+
+09-07 · IP 属地北京
+​回复
+​喜欢
+暧暧内含光
+暧暧内含光
+请问为什么计算 critic loss 的时候要用 values - returns 呢
+相当于要最小化 values - old_values - advantages
+没有想明白为什么要这么优化
+
+
+08-01 · IP 属地法国
+​回复
+​喜欢
+Emperorizzis
+Emperorizzis
+是这样的，由于时序队列t看不到t+1，所以Vt很可能无法准确估计t步的实际价值， values - old_values - advantages实际是让critic model在t步能更准确的估计t对未来的影响。
+
+注意：old_values和advantages是无梯度的，所以是让values逼近old_values+advantages，而不是最小化advantages（看到其他楼有说最小化advantages，实际不是这样的）
+
+08-17 · IP 属地北京
+​回复
+​1
+wolii
+wolii
+王力杰
+这里我仍然感觉有些违反直觉，看代码这里的 returns=adv+v，训练的时候又用 values - returns，那这里不就是让状态价值去逼近动作价值函数了吗？
+08-15 · IP 属地广东
+​回复
+​喜欢
+展开其他 1 条回复​
+Aeltn
+Aeltn
+请问既然训练了reward model，为什么在计算每个token的时候不用reward model的结果，而是用了KL并仅在最后加上句子reward，每个token下直接用reward model的结果不好么？
+
+07-27 · IP 属地北京
+​回复
+​喜欢
+暧暧内含光
+暧暧内含光
+我觉得是因为在训练 reward model 的时候，只喂给它完整的 (prompt + answer)。所以当句子没有结束时，它预测的 reward 不准确
+
+08-01 · IP 属地法国
+​回复
+​1
+Aeltn
+Aeltn
+暧暧内含光
+reward model的loss是根据对应位置token之间的difference计算吧，应该有一定的奖励表示能力。我觉得可能是ppo在算的时候主要考虑r的累加，这个累加可以用其他形式替换，不知道是不是出于这样考虑
+
+08-01 · IP 属地北京
+​回复
+​喜欢
+南柯
+南柯
+
+在critic model训练那块，returns-values 不就是advantages吗？为什么要最小化advantages来对模型训练呢，为什么不用values-old_values来训练？[发呆]
+
+07-11 · IP 属地中国香港
+​回复
+​喜欢
+暧暧内含光
+暧暧内含光
+returns = old_values + advantages；计算 critic loss 的时候，相当于是 MSE(values -old_values - advantages)
+不过我也没看懂为什么要这么训练 [发呆]
+
+08-01 · IP 属地法国
+​回复
+​喜欢
+百分之八十女孩
+百分之八十女孩
+请问rewards[j, start:ends[j]][-1] += reward_clip[j]等价于rewards[j, ends[j]-1]+= reward_clip[j]吗
+
+06-25 · IP 属地浙江
+​回复
+​喜欢
+XDDD
+XDDD
+Anderson
+我的理解应该是等价的，[ j, ends[j]-1 ]就是指定了j行answer结束的ends[j]-1这个个位置（吧
+
+08-04 · IP 属地澳大利亚
+​回复
+​喜欢
+Anderson
+Anderson
+这个明显不对，前面表示仅[1, 2, 3,..., 5] 最后一维➕常数reward_clip, 后面表示的前面[:-1] 除最后一维 ➕ 常数
+
+07-31 · IP 属地北京
+​回复
+​喜欢
+失败才是主旋律
+失败才是主旋律
+原文“我们在训练模式下，将prompt+answer分别输入到actor mode和ref model，用KL散度来衡量 ref model和actor mode输出的差别。”
+这里作者是写错了吧，让我看得有点懵，应该是将prompt分别输入到actor mode和ref model吧？
+
+06-06 · IP 属地北京
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+是将prompt+answer一块输入的。这块"预测"的目的不是得到下一个词，而仅仅是拿到模型最后输出的logits，用来计算散度。
+06-06 · IP 属地北京
+​回复
+​2
+shihanmax
+shihanmax
+失败才是主旋律
+padding？
+
+06-19 · IP 属地浙江
+​回复
+​喜欢
+查看全部 6 条回复​
+美洲大蠊很顽强
+美洲大蠊很顽强
+seq = self.actor_model.module.generate(prompts,
+max_length=max_min_length,
+min_length=max_min_length)
+
+在experience中，设置max_length=min_length=max_min_length，这样做，会导致模型输出重复或不可靠的内容，请问作者，在做实验的时候，有遇到这个情况吗？
+
+06-06 · IP 属地中国香港
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+[飙泪笑]没数据，暂时没做过实验
+06-06 · IP 属地北京
+​回复
+​喜欢
+美洲大蠊很顽强
+美洲大蠊很顽强
+rewards的shape应该是个2维的
+
+def get_advantages_and_returns(self, values, rewards, start):
+# values（B，L） critic model输出
+# rewards（B，）reward model输出 ----> rewards(B, L -1)
+
+06-06 · IP 属地中国香港
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+回头我再看一下
+06-06 · IP 属地北京
+​回复
+​喜欢
+杰瑞和他的猫
+杰瑞和他的猫
+​
+基于中文金融知识的LLaMA微调模型-聚宝盆(Cornucopia)：
+
+github.com/xuyingjie521
+
+05-23 · IP 属地北京
+​回复
+​喜欢
+蜡笔小熊猫
+蜡笔小熊猫
+
+你好，deepspeed的reward model示例在哪里可以给下链接吗
+05-11 · IP 属地广东
+​回复
+​喜欢
+蜡笔小熊猫
+蜡笔小熊猫
+
+战士金
+感谢
+05-11 · IP 属地广东
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+您指的是代码？github.com/microsoft/De
+
+05-11 · IP 属地北京
+​回复
+​喜欢
+算法观察者
+算法观察者
+对于大模型的话，critic_model还用在强化学习阶段训练吗？只拿人工反馈的数据集练就可以了吧
+04-30 · IP 属地广东
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+critic model需要在强化学习阶段更新参数的，用来在强化学习阶段对未来奖励的预测。只用人工反馈数据训练的是reward model。
+04-30 · IP 属地北京
+​回复
+​2
+郭嘉
+郭嘉
+钻地鼹鼠
+好的，谢谢。
+
+06-30 · IP 属地广东
+​回复
+​喜欢
+展开其他 3 条回复​
+Shaohua Yang
+Shaohua Yang
+如果reward model和critic model share参数的话，那么第二部训练好reward模型，rlhf更新critic的时候，reward模型参数也在变？ 综合考虑KL散度和reward模型的输出，只考虑answer部分的KL散度. 这里为什么只加最后一个位置？ reward模型answer部分应该也包括partial reward?
+04-30 · IP 属地美国
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+1.两个模型不共享参数，只不过初始化值一样。2.只加最后一个位置是因为一句话只有一个奖励值 3. 不明白partial reward是啥。。
+04-30 · IP 属地北京
+​回复
+​2
+百分之八十女孩
+百分之八十女孩
+因为reward虽然加在最后一个位置，但是通过GAE，每个时间步都会使用到这最后一个reward，只是作用会越来越小
+
+08-10 · IP 属地浙江
+​回复
+​喜欢
+HelloKeroppi
+HelloKeroppi
+
+为什么算真实 y | given x 的时候，没有输入 prompts 呢
+
+04-28 · IP 属地上海
+​回复
+​喜欢
+战士金
+战士金
+作者
+​
+
+您具体指文章的哪个部分？
+04-28 · IP 属地北京
+​回复
+​喜欢
+名字不重要
+名字不重要
+不错，写的很细节了
+
+04-27 · IP 属地陕西
