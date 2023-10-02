@@ -10,6 +10,10 @@ import re
 # The template prompt dataset class that all new dataset porting needs to
 # follow in order to have a unified API and unified data format.
 '''
+0.2.3.1 自定义PromptRawDataset类
+UML时序图(3-6)
+...
+
 自定义的数据集可以继承自上述的“PromptRawDataset”类，
 例如class CustomDataset(PromptRawDataset)，
 然后重写其中的self.dataset_name及self.dataset_clean_name，

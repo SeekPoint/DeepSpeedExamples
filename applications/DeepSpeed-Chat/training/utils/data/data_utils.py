@@ -75,18 +75,16 @@ def get_raw_dataset(dataset_name, output_path, seed, local_rank):
             )
         return raw_datasets.LocalJsonFileDataset(output_path, seed, local_rank,
                                                  dataset_name, chat_path)
-    '''
-       """
-    将自定义的PromptRawDataset在此处进行注册
-    届时在传参“--data_path”中赋值“custom”即可读取到相应的数据集
-	"""
+
+
+    # 将自定义的PromptRawDataset在此处进行注册
+    # 届时在传参“--data_path”中赋值“custom”即可读取到相应的数据集
     elif "custom" in dataset_name:
     	return raw_datasets.CustomDataset(output_path, seed,
                                           local_rank, dataset_name)
 
-
- 至此完成自定义数据集的设置。理论上来说，只要实例函数能完全按照注释要求对原始数据进行处理，那么后续的数据流基本也无需再进行任何额外修改也能顺畅运行了。
-    '''
+    # 至此完成自定义数据集的设置。理论上来说，只要实例函数能完全按照注释要求对原始数据进行处理，
+    # 那么后续的数据流基本也无需再进行任何额外修改也能顺畅运行了。
     else:
         raise RuntimeError(
             f"We do not have configs for dataset {dataset_name}, but you can add it by yourself in raw_datasets.py."
@@ -165,6 +163,11 @@ class PromptDataset(Dataset):
                 self.pad_token_id
 
 '''
+0.2.3.2 阶段数据集处理过程
+UML时序图(10-12)
+这部分处理得到的数据形式，基本接近于数据传入阶段模型前的最终形式，
+因此通过理解这部分的数据处理过程，可以直接了解到模型所需要的输入形式。
+
 此处的处理部分很大程度依赖于原先所定义的PromptRawDataset实例函数，由此可见，只要正确编写实例函数，
 后续过程基本也不会出现什么问题。
 流程大致就是取出对应阶段所需的格式数据，然后使用tokenizer进行处理，综上所述：

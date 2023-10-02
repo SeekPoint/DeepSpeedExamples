@@ -1,21 +1,4 @@
-0.3 版块相关问题
-【1.2.2.2 阶段数据集处理过程】中，为什么phase3要专门对prompt token进行flip（翻转）操作？
-  这个额外操作很好解释，主要是便于进行前侧padding的操作。具体来说，phase3取用prompt的目的在于，将prompt输入至actor模型中，actor将根据prompt自回归地生成后续内容，以此进行经验采集。以基座为opt-125m的actor模型为例，该模型所能支持的最大序列长度（max_seq_len）为512，而phase3还将预设有最大prompt长度（max_prompt_len），通常为max_seq_len的一半，即256，余下的另一半长度将被用于生成。那么当输入的prompt不满足最大prompt长度max_prompt_len时，将需要对该prompt进行padding操作（将在后续phase3的data_collator代码中有所体现），而padding操作通常又是直接于序列后侧加入pad token，padding后的输入将变成[prompt, padding]的形式，自回归生成任务将接续pad_token进行生成——这是不合理的，因此需要先将prompt输入进行flip翻转，翻转后进行padding操作，然后再flip翻转回来，padding后的输入就成为了[padding, prompt]的形式，对于自回归任务来说，接续prompt的内容进行生成才是合理的。
-  通过下述伪代码例子应该能更好地理解这个操作的用意。
-max_prompt_len = 5
-pad_token_id = 0
 
-prompt_token_ids = [233, 11, 22]
-# padding位于后侧 ×
-prompt_token_ids.padding() = [233, 11, 22, 0, 0]
-
-prompt_token_ids.flip(0) = [22, 11, 233]
-prompt_token_ids.flip(0).padding() = [22, 11, 233, 0, 0]
-# padding位于前侧 √
-prompt_token_ids.flip(0).padding().flip(0) = [0, 0, 233, 11, 22]
-————————————————
-InstructGPT高效实践——【DeepSpeed-Chat】源码详解(1/3)：基本概念、数据集管理
-https://blog.csdn.net/Remixa/article/details/130576255
 
 
 
