@@ -27,6 +27,8 @@ from .reward_model import RewardModel
 模型调用create_hf_model方法进行构建,
 参数指定有AutoModelForCausalLM
 """
+# 2.2 模型训练
+# 构建一个用于SFT训练的模型，模型可以指定为AutoModelForCausalLM类
 def create_hf_model(model_class,
                     model_name_or_path,
                     tokenizer,
@@ -56,7 +58,7 @@ def create_hf_model(model_class,
     model.resize_token_embeddings(int(
         8 *
         math.ceil(len(tokenizer) / 8.0)))  # make the vocab size multiple of 8
-
+    #按照Causal Language Modeling进行训练，例如GPT、OPT、LLaMA、BLOOM等。
     return model
 
 

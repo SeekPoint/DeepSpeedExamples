@@ -1,0 +1,186 @@
+基于DeepSpeed训练ChatGPT
+https://wjn1996.blog.csdn.net/article/details/130227305
+
+基于DeepSpeed训练ChatGPT
+最少只需一张32G GPU，自己也可以训练一个ChatGPT！
+最近微软发布了一个基于DeepSpeed的训练优化框架来完成ChatGPT类模型的训练，博主对其进行了研究并通过此博文分享相关技术细节。
+
+一、配置预览
+1、开源仓库：DeepSpeed-Chat
+
+2、配置要求：
+● cuda：11.0以上
+● torch：1.12.1+cu113
+● deepspeed：0.9.0
+● transformers：4.29.0.dev0
+
+3、开源语料（Hugging face Dataset）：
+● Dahoas/rm-static
+● Dahoas/full-hh-rlhf
+● Dahoas/synthetic-instruct-gptj-pairwise
+● yitingxie/rlhf-reward-datasets
+● openai/webgpt_comparisons
+● stanfordnlp/SHP
+
+4、数据格式样例：
+
+需要包含三个字段，分别为：
+
+015.png
+
+● prompt：instruction-prompt，当前的输入；
+● chosen：人来反馈选中的回复，或当前pair得分最高的回复；
+● rejected：人类反馈未选中的回复，或当前pair得分最低的回复；
+
+个人也可以按照这个格式设计自己的训练数据。
+
+5、数据处理函数（样例）：
+....
+
+6、InstructGPT基本流程：
+InstructGPT是训练ChatGPT的核心思路，其融入了大量的对话数据，并按照如下三个步骤进行训练，如图所示：
+016.png
+在后面将会结合代码和相关知识介绍这三个步骤。
+
+7、显存优化相关知识：
+ZeRo-Stage和ZeRo-offload显存优化：https://zhuanlan.zhihu.com/p/619429610
+
+二、Step1: Supervised Fine-tuning（SFT）
+第一阶段主要为监督训练。在InstructGPT中，通过设计Instruction Prompt，收集各式各样的数据集，并构建为对话模式，例如下面的就是一个prompt：
+
+    Human: How can I find out what types of butterflies are in my area?
+    Assistant: Which location are you in?
+    Human: I am in Oregon.
+    Assistant: There are about 175 species of butterflies in Oregon,
+            of which 100 are long-distance migrants from southern California. Also, some of the common butterflies in Oregon
+    Human: Great. What are some common species then?
+    Assistant:
+
+对应人工打标的回复为：
+
+    About 150 species of butterflies live in Oregon, with about 100 species are moths,
+    and about 20 species are common here year-round, and another 10 species are seen here year-round.
+    I suggest you keep an eye out for skippers, gossamer wings, and red admirals.
+
+在这一过程，我们可以搜集50万到1000万不等的监督数据来构建此类监督数据。
+
+一般的，这类对话式数据的来源有如下几种：
+
+    搜集公开的benchmark，通过启发式方法将这些相互独立的样本构建成多轮对话模式；
+
+    互联网开源的一些对话数据集；
+
+    自行设计prompt，调用OpenAI gpt3.5-turbo，进行模型蒸馏。目前最近很多大厂或组织发布的ChatGPT类大模型中，
+    在SFT阶段使用的数据大多采用从OpenAI中套取数据的方法来实现的。
+    博主也自行整理了此类数据，详见：[Click Me]
+
+.....
+
+
+三、Step2: Training Pairwise Reward Function（RW）
+在此阶段，我们需要训练一个Reward函数，来为模型的输出进行评分。
+在InstructGPT原文中，采用的方法是对于同一个prompt，让大模型生成4～7个回复，然后让经过培训的标注人员为这些回复进行打分。
+因而可以得到若干个pair。而此过程需要借助人工标注来完成对齐。
+
+在DeepSpeed-Chat中，我们直接获取已经打标好的开源的Reward训练数据。
+对于每一条数据，除了prompt以外，包括一对回复：
+
+    chosen：表示较好的回复，可以作为正样本；
+    rejected：表示较差的回复，可以作为负样本。
+
+.....
+
+四、Step3：RLHF Tuning——PPO算法
+PPO算法是一种Actor-Critic强化学习架构。相关解读如下所示：
+https://zhuanlan.zhihu.com/p/110998399
+https://www.zhihu.com/question/56692640/answer/152930557
+
+.....
+
+4.3 模型
+在RLHF阶段，需要加载前两个阶段训练得到的SFT模型和reward，用于初始化RLHF引擎。下面展示具体细节。
+
+（1）初始化Actor、Reference模型：
+● 因为Actor模型是Stage1训练的SFT，其参数量很大，因此需要配置ZeRO-Stage和ZeRO-Offload进行显存优化：
+
+    def get_train_ds_config(offload,
+                            stage=2,
+                            ......
+ZeRo-stage一共有三个：
+017.png
+在这里插入图片描述如果设置为3，则为最优状态，包括参数、梯度和优化状态全部进行并行化处理。
+● 初始化Actor模型，加载预训练SFT的参数（以及LoRA）
+● deepspeed engine封装：
+
+    actor_engine, *_ = deepspeed.initialize(model=actor_model,
+                                                optimizer=optim,
+                                                lr_scheduler=lr_scheduler,
+                                                config=ds_config)
+
+（2）初始化Critic、Reward模型
+● 配置ZeRO-Stage和ZeRO-offload
+
+    ds_config = get_train_ds_config(offload=self.args.offload, stage=self.args.critic_zero_stage)
+
+● 用预训练的RW模型，初始化Critic参数；
+● 封装DeepSpeed Engine。
+
+
+4.3.2 PPO训练+无监督预训练
+在InstructGPT中，第三阶段的训练通常需要结合无监督的预训练目标和PPO训练目标联合训练，
+以确保模型在AC框架下强化学习训练过程中不会忘记原始的预训练任务，因此无监督的预训练可以作为一种正则化。
+
+因此定义DeepSpeedPPOTrainerUnsupervised类用于完成PPO+无监督预训练。
+训练关键细节如下：
+
+（1）Generate Experience
+在Actor-Critic框架下，首先需要优化Critic，用于评价在状态 s ss下的得分。
+因此需要采样一系列的状态-动作序列（即Experience），在GPT模型中，状态 s ss可以视为已经生成的文本。
+
+给定一个prompt（例如in-context examples和query），生成相应的文本，并进行打分。细节如下代码和注释：
+
+    def generate_experience(self, prompts):
+    ....
+
+2）保存Experience到经验池
+经验池包含一系列根据prompt生成的文本和一系列奖励信息，其可以用于训练Critic模型。
+
+（3）RLHF训练
+Actor-Critic的基本流程为：
+采样 → 更新Critic参数 → 根据Critic计算Advantage Function → 更新Actor参数
+
+Advantage计算：
+018.png
+因此RLHF训练为关键部分，也是InstructGPT第三步的优化过程。细节详见代码和注释：
+
+def train_rlhf(self, inputs):
+....
+
+（4）无监督预训练
+在无监督数据集上，按照Causal Language Modeling进行预训练，更新actor模型参数。其为最原始的GPT类模型的预训练目标。
+
+    def train_unsupervised(self, inputs, unsup_coef):
+
+（5）EMA（指数移动平均）
+  额外引入EMA优化模型的参数，详见：
+
+    def moving_average(model, model_ema, beta=0.992, device=None, zero_stage=0):
+        zero_stage_3 = (zero_stage == 3)
+
+4.3.3 RLHF整体训练过程
+下面展示第三步的训练过程：
+
+for 每一个epoch：
+    for 遍历每个batch，得到小批量的prompt和无监督语料：
+        对于所有prompt，调用trainer.generate_experience(prompts)获得经验数据，包括生成的seq、logits、奖励、状态价值等；
+        将这一组prompt的经验数据加入经验池；
+        for 每一个ppo_epoch:
+        for 遍历经验池中的每一个batch经验数据，以及无监督语料：
+                调用trainer.train_rlhf(exp_data)，更新Actor和Critic模型；
+                调用trainer.train_unsupervised(unsup_data)在无监督语料上预训练，更新Actor模型；
+                调用moving_average()进行指数移动平均
+            每一轮ppo_epoch时，打乱经验池和无监督语料的顺序。
+
+基于DeepSpeed训练可以实现在普通的GPU上训练超大规模语言模型，对照表如下所示：
+
+019.png

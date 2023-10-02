@@ -222,6 +222,7 @@ class DeepSpeedPPOTrainer():
         '''
 
         #将actor、reference、critic、reward转换为eval模式
+        # 给定prompt，生成response text
         self.eval()
 
         '''
@@ -234,6 +235,7 @@ class DeepSpeedPPOTrainer():
         
         _generate_sequence()更具体的细节可见后续详解。
         '''
+        # 调用model.generate()生成序列，由actor模型生成。
         seq = self._generate_sequence(prompts, mask, step)
 
         #将actor、critic转换为train模式，因为后续两者仍需要进行训练
@@ -257,6 +259,7 @@ class DeepSpeedPPOTrainer():
             3. reward:奖励-reward_score，InsructGPT中的r_\theta
             4. critic:（旧）价值估计-values
             '''
+            # 将生成的序列喂入actor模型中，得到输出的概率分布
             output = self.actor_model(seq, attention_mask=attention_mask)
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
 
@@ -267,6 +270,7 @@ class DeepSpeedPPOTrainer():
             reward_score取的是answer最后一个token的value
             reward_score.shape: (seq_bs,)
             '''
+            # 将生成的序列喂入critic和reward模型中，获得奖励和状态价值
             reward_score = self.reward_model.forward_value(
                 seq, attention_mask,
                 prompt_length=self.prompt_length)['chosen_end_scores'].detach(
@@ -295,6 +299,7 @@ class DeepSpeedPPOTrainer():
         # input_ids.shape: (seq_bs, max_seq_len)
         # attention_mask.shape: (seq_bs, max_seq_len)
         """gather_log_probs()更具体的细节可见后续详解。"""
+        # 获得生成的文本seq、以及对应的概率、状态价值和奖励等信息
         return {
             'prompts': prompts,
             # 分别得到两个模型在真实单词上的预测概率
@@ -369,30 +374,30 @@ class DeepSpeedPPOTrainer():
         # train the rlhf mode here
         ### process the old outputs
         # prompt input ids
-        prompts = inputs['prompts']
+        prompts = inputs['prompts']  # 输入的prompt（例如in-context exemplar + query）
 
         # （旧）策略
-        log_probs = inputs['logprobs']
+        log_probs = inputs['logprobs'] # 根据prompt，actor模型生成的文本的概率
 
         # SFT策略
-        ref_log_probs = inputs['ref_logprobs']
+        ref_log_probs = inputs['ref_logprobs']  # 根据prompt，reference生成模型的文本的概率
 
         # RM奖励
-        reward_score = inputs['rewards']
+        reward_score = inputs['rewards']  # 根据prompt生成的seq，reward模型得到的奖励
 
         # （旧）价值估计
-        values = inputs['value']
-        attention_mask = inputs['attention_mask']
+        values = inputs['value']  # 根据prompt生成的seq，critic模型得到的状态价值函数值
+        attention_mask = inputs['attention_mask']  # actor生成的文本的attention mask
 
         # seq input ids
-        seq = inputs['input_ids']
+        seq = inputs['input_ids'] # 根据prompt，actor生成的文本
 
         """
         获取prompts的最后1个位置作为start
         比如prompt_len为256，start则为 256-1=255
         这个start主要是用于取出经验数据中的“非prompt”部分（也即“answer+padding”部分）
         """
-        start = prompts.size()[-1] - 1
+        start = prompts.size()[-1] - 1   # 记prompt文本最后一个位置
 
         """
         action_mask相当于取 attention_mask除了第0个序列位置外的部分，
@@ -421,6 +426,10 @@ class DeepSpeedPPOTrainer():
             2. ref_log_probs为经验数据中的SFT策略
             3. reward_score为经验数据中的RM赋分
             """
+
+            # 获得prompt文本本身的奖励
+            # 由于prompt本身已存在文本，相当于整个决策序列中中已有的状态动作序列，
+            # 因此我们需要计算一下prompt文本对应的奖励
             old_rewards = self.compute_rewards(prompts, log_probs,
                                                ref_log_probs, reward_score,
                                                action_mask)
@@ -438,14 +447,17 @@ class DeepSpeedPPOTrainer():
             4. old_value为经验数据中的（旧）价值估计
             5. old_rewards为刚才计算得到的KL_reward
             '''
+            # 获得advantage值（v + r - v'）
             advantages, returns = self.get_advantages_and_returns(
                 old_values, old_rewards, start)
 
         ### process the new outputs
         # ###计算actor损失并更新
+        # 下面则是获得生成部分seq的奖励等信息
         batch = {'input_ids': seq, "attention_mask": attention_mask}
 
         #将seq经验数据输入至actor，进行自回归预测
+        # 获得seq的的概率
         actor_prob = self.actor_model(**batch, use_cache=False).logits
 
         #取出probs，此处为新策略
@@ -458,11 +470,13 @@ class DeepSpeedPPOTrainer():
             2. log_probs为经验数据中的（旧）策略
             3. advantages为之前计算出的优势
         """
+        # 根据seq的概率logits，advantage作为权重，优化actor模型参数
         actor_loss = self.actor_loss_fn(actor_log_prob[:, start:],
                                         log_probs[:, start:], advantages,
                                         action_mask[:, start:])
 
         #actor反向传播、更新参数
+        # 更新actor参数
         self.actor_model.backward(actor_loss)
 
         if not self.args.align_overflow:
@@ -470,6 +484,7 @@ class DeepSpeedPPOTrainer():
 
         #计算critic损失并更新################################################
         #将seq经验数据输入至critic，预测得到新价值估计
+        # 获得seq的critic得分
         value = self.critic_model.forward_value(**batch,
                                                 return_value_only=True,
                                                 use_cache=False)[:, :-1]
@@ -481,11 +496,13 @@ class DeepSpeedPPOTrainer():
            2. old_values为经验数据中的（旧）价值估计
            3. returns为之前计算出的回报
         """
+        # 计算Critic loss
         critic_loss = self.critic_loss_fn(value[:, start:], old_values[:,
                                                                        start:],
                                           returns, action_mask[:, start:])
 
         #critic反向传播、更新参数
+        # 更新Critic模型参数
         self.critic_model.backward(critic_loss)
 
         if self.args.align_overflow:

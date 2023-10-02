@@ -1,17 +1,6 @@
+https://wjn1996.blog.csdn.net/article/details/130227305
+基于DeepSpeed训练ChatGPT  --TBD  --无法复制
 
-
-
-
-
-InstructGPT高效实践——【DeepSpeed-Chat】源码详解(2/3)：Supervised Finetuning、Reward Model Finetuning
-https://blog.csdn.net/Remixa/article/details/130655635
-————————————————
-本篇为上中下三篇章的【中篇】，接续自【上篇】。主要针对三阶段训练中第一阶段、第二阶段较为重要的部分源码进行详解。
-尽管官方的上手文档均是以sh文件为例进行演示，且源码中确实也提供了便捷的sh文件供直接使用，但我仍建议通过各阶段的main.py文件
-（applications/DeepSpeed-Chat/training/step*/main.py）来运行训练，
-大致原因有二：其一是因为官方预设的sh文件调用了applications/DeepSpeed-Chat/train.py，其中对模型选型等参数进行了严格的限制，
-虽然提高了代码安全性，但对于以学习为目的的探索来说失去了一定的灵活性（见下方代码块），
-直接通过main.py进行传参即可实现绕过限制、使用更轻量的模型进行训练；
-其二是因为main.py中的传参相对更接近底层，更有助于深入理解代码。
-因此各阶段的解析我都将在其main.py文件的基础上进行。
-
+    通过编辑页面
+    删除 ***user-select 实现
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

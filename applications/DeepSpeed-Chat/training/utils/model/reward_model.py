@@ -20,6 +20,22 @@ from torch import nn
 
 
 '''
+'''
+3.3 定义Reward模型：
+定义reward模型：选择OPT-350M模型作为backbone，并定义一个linear层用于分类。
+
+    OPT模型中，需要定义–num_padding_at_beginning=1，OPT默认首个字符为PAD token;
+    
+    对于每个chosen或rejected tokens，取第一个padding token的前一个token的得分作为当前chosen或rejected input的得分
+    
+    For RW, the training objective is the pairwise ranking score, i.e., for the two query-answer pairs, 
+    RM is supposed to give a higher score to the better answer. There are multiple ways to achieve this.
+    In our implementation, 
+    we use either the end token of the sequence or the first padding token as the aggregated score and compare them. 
+    Others may also use the average score for the entire answer as an alternative.
+
+Reward函数细节详见代码和注释：
+'''
 ## Note that the following code is modified from
 ## https://github.com/CarperAI/trlx/blob/main/examples/summarize_rlhf/reward_model/reward_model.py
 class RewardModel(nn.Module):
@@ -67,9 +83,9 @@ class RewardModel(nn.Module):
             # `OPT` models use word_embed_proj_dim as final output
             # https://github.com/huggingface/transformers/blob/main/src/transformers/models/opt/modeling_opt.py#L497
             """
-            			OPT系列模型的word_embed_proj_dim为embedding层的输出维度，
-            			通常在transformer模型中也就等于 hidden_size，
-            			v_head将基于主干网络的输出特征 hidden_state 进行分值预测，共输出max_seq_len个分值
+            OPT系列模型的word_embed_proj_dim为embedding层的输出维度，
+            通常在transformer模型中也就等于 hidden_size，
+            v_head将基于主干网络的输出特征 hidden_state 进行分值预测，共输出max_seq_len个分值
             """
             self.v_head = nn.Linear(self.config.word_embed_proj_dim,
                                     1,
@@ -97,7 +113,12 @@ class RewardModel(nn.Module):
                 head_mask=None,
                 inputs_embeds=None,
                 use_cache=False):
+        """
+        假设默认设置的batch_size为N，那么len(input_ids)=2*N
+        其中前N个为chosen input ids（正样本），后N个为rejected input ids（负样本）
+        """
         loss = None
+
         """获得主干网络的输出的特征"""
         transformer_outputs = self.rwtranrsformer(
             input_ids,
@@ -145,20 +166,30 @@ class RewardModel(nn.Module):
         seq_len = input_ids.shape[1]
 
         # 区分出chosen和reject
-        chosen_ids = input_ids[:bs]  # bs x seq x 1
-        rejected_ids = input_ids[bs:]
-        chosen_rewards = rewards[:bs]
-        rejected_rewards = rewards[bs:]
+        chosen_ids = input_ids[:bs]  # N x seq x 1 前N个为正样本
+        rejected_ids = input_ids[bs:]  # 后N个为负样本
+        chosen_rewards = rewards[:bs]  # 获得前N个正样本的预测的reward
+        rejected_rewards = rewards[bs:]  # 获得后N个负样本的预测的reward
 
         # Compute pairwise loss. Only backprop on the different tokens before padding
         loss = 0
+
+        # 遍历每个样本
         for i in range(bs):
             # 取出同组chosen和rejected的token_id和分值reward
             # chosen_id.shape: (max_seq_len,)
+            # 获得一个chosen样本（正样本）
             chosen_id = chosen_ids[i]
+
+            # 获得一个rejected样本（负样本）
             rejected_id = rejected_ids[i]
+
+            # 当前正样本的得分
             chosen_reward = chosen_rewards[i]
+
+            # 当前负样本的得分
             rejected_reward = rejected_rewards[i]
+
             """
             下方本应有各种取index相关的操作，
             基于源码解读的可读性考量，且这些部分只是逻辑形式上的弯弯绕绕，与相关原理并不存在直接关系，
@@ -176,12 +207,16 @@ class RewardModel(nn.Module):
 
             """
 
+            # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
+
+            # 如果是OPT，那么第0个一定是OPT模型默认在input最前面的padding token，不予考虑
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
                 c_inds
             ) > self.num_padding_at_beginning else seq_len  # OPT model pads the first token, so we need to use the second padding token as the end of the sequence
-            check_divergence = (chosen_id != rejected_id).nonzero()
+            check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
 
+            # 说明不存在相等的padding token
             if len(check_divergence) == 0:
                 end_ind = rejected_reward.size(-1)
                 divergence_ind = end_ind - 1
@@ -278,8 +313,8 @@ class RewardModel(nn.Module):
             assert prompt_length > 1, "prompt_length must be greater than 1 to help select the end score"
             bs = values.size(0)
             seq_len = input_ids.shape[1]
-            chosen_end_scores = [
-            ]  # we use this name for consistency with the original forward function
+            chosen_end_scores = []  # we use this name for consistency with the original forward function
+
             for i in range(bs):
                 input_id = input_ids[i]
 
@@ -301,3 +336,6 @@ class RewardModel(nn.Module):
                 "values": values,
                 "chosen_end_scores": torch.stack(chosen_end_scores),
             }
+
+        # 上面的Reward函数可以认为是一个分类器，需要基于Causal
+        # LM（例如OPT）作为Backbone，获得完整的Reward模型： def create_critic_model(model_name_or_path

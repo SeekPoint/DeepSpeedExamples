@@ -453,6 +453,9 @@ def main():
     当然其内部仍旧调用了“create_hf_model”方法来读取模型，
     但其中实现了更为精细的DeepSpeed控制
     """
+
+    # 4.3.1初始化DeepSpeedRLHFEngine：
+    # 获得一个DeepSpeedRLHFEngine对象，用于初始化一系列模型，包括Actor、Critic、Reference和Reward。
     rlhf_engine = DeepSpeedRLHFEngine(
         actor_model_name_or_path=args.actor_model_name_or_path,
         critic_model_name_or_path=args.critic_model_name_or_path,

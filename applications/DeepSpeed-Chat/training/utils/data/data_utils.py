@@ -184,6 +184,10 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
     chosen_dataset = []
     reject_dataset = []
     if train_phase == 1:
+        # 2.1数据处理：
+        # ● 只需要获得训练集和验证集即可，也可以进行采样；
+        # ● 接着，读取的数据中，获取prompt和chosen两个字段：
+
         # 因为phase1只需要用到chosen数据，所以只取chosen进行处理
         for i, tmp_data in enumerate(current_dataset):
             # tokenize the text
@@ -193,6 +197,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 tmp_data)  # the accept response
             if chosen_sentence is not None:
                 # 在对话末尾加入对话终止符
+                # end_of_conversation_token表示每个对话的终止符，可以用“<|endoftext|>”表示
                 chosen_sentence += end_of_conversation_token
                 # 使用tokenizer处理chosen_sentence，采取截断truncation
                 chosen_token = tokenizer(chosen_sentence,
@@ -207,10 +212,16 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                     "attention_mask"].squeeze(0)
                 # 存储tokenize结果至列表chosen_dataset
                 chosen_dataset.append(chosen_token)
+        #● 此时，一条样本可以表示为prompt+chosen，
+        # 中间会插入一些用于对话的标记，例如“Human: ”、“Assistant: ”、“<|endoftext|>”等。
 
     elif train_phase == 2:
         # phase2需要用到chosen_sentence和reject_sentence
         # 所以需要对两者都进行处理
+
+        # 3.1数据处理：
+        # ● 读取训练集和验证集用来训练偏好模型；
+        # ● 此时需要读取prompt、chosen和rejected三个字段数据，每一条数据是一个pairwise
         for i, tmp_data in enumerate(current_dataset):
             # tokenize the text
             # 获取chosen_sentence，即是将prompt和chosen拼接起来形成完整对话
@@ -253,6 +264,10 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
 
     elif train_phase == 3:
         # phase3用到prompt，prompt将被用来生成经验数据
+
+        # 4.1数据处理
+        # 在第三阶段，可以选择监督训练数据和无监督数据。
+        # ● 监督数据：此时只有prompt，没有chosen和rejected input。
         for i, tmp_data in enumerate(current_dataset):
             # tokenize the text
             # 直接获取prompt
@@ -270,11 +285,15 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                         # 如果当前文本token长度比max_prompt_len还长
                         # 那么就截断文本前面的部分，保留后面max_prompt_len长度的部分文本
                         # 然后将token进行flip（翻转/倒序），之后在data_collator中再将其flip回来
+
+                        # 先将正常的token序列的顺序倒序排列，（会在datacollator中再次倒序恢复原始排列）
                         y = prompt_token[key_word].squeeze(0)[length -
                                                               (max_seq_len -
                                                                1):].flip(0)
                     else:
                         # 将token进行flip（翻转/倒序），之后在data_collator中再将其flip回来
+
+                        # 先将正常的token序列的顺序倒序排列，（会在datacollator中再次倒序恢复原始排列）
                         y = prompt_token[key_word].squeeze(0).flip(0)
                     prompt_token[key_word] = y
                 prompt_dataset.append(prompt_token)
@@ -438,6 +457,8 @@ def create_prompt_dataset(local_rank,
 	}
 后续输入模型后，直接将数据切分出前半部分和后半部分进行并列，即可获得对应的chosen-rejected数据对。
 '''
+# 3.2 DataCollator
+# 给定一个batch，其包含batch_size个chosen examples和rejected examples，将其进行拆分，具体操作如下：
 class DataCollatorReward:
 
     def __call__(self, data):
@@ -446,6 +467,11 @@ class DataCollatorReward:
                 入参 data 的具体样式可见下个代码块
         """
         batch = {}
+
+        # f[0]是chosen input ids，f[2]是rrejected input ids
+        # 该操作是指，先给定N个examples，转换为2*N个样本。
+        # 前N个为chosen input ids，后N个为rejected input ids
+
         """
         f为data中的1个tuple，tuple的第0个元素和第2个元素
         分别为chosen_sentence和reject_sentence的input_ids
@@ -453,6 +479,7 @@ class DataCollatorReward:
         batch["input_ids"] = torch.cat([f[0]
                                         for f in data] + [f[2] for f in data],
                                        dim=0)
+
         """
         f为data中的1个tuple，tuple的第1个元素和第3个元素
         分别为chosen_sentence和reject_sentence的attention_mask
@@ -460,10 +487,12 @@ class DataCollatorReward:
         batch["attention_mask"] = torch.cat([f[1] for f in data] +
                                             [f[3] for f in data],
                                             dim=0)
+
         """batch的具体样式可见下个代码块"""
         return batch
 
-
+# 4.2 DataCollator
+# 针对监督数据，需要进行处理：
 class DataCollatorRLHF:
 
     def __init__(self, max_token_len, inference_tp_size):
@@ -500,7 +529,7 @@ class DataCollatorRLHF:
         batch["prompt_att_mask"] = batch["prompt_att_mask"].flip(1)
         return batch
 
-
+# ● 无监督数据：只有文本，并进行group：
 def get_unsupervised_data(args, tokenizer):
     unsupervised_raw_datasets = load_dataset(
         args.unsupervised_dataset_name, args.unsupervised_dataset_config_name)

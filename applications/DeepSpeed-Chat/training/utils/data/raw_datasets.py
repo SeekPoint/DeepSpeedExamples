@@ -189,18 +189,28 @@ class DahoasSyntheticinstructgptjpairwiseDataset(PromptRawDataset):
         dataset = Subset(dataset, index)
         return dataset
 
+    # The prompt should be in the format of: " Human: " + actual_prompt_sentence + " Assistant:"
+    # 只获取prompt字段的数据
     def get_prompt(self, sample):
         return " Human: " + sample['prompt'] + " Assistant:"
 
+    # The chosen response should be in the format of: " " + actual_response_sentence
+    # 只获取chosen字段的数据
     def get_chosen(self, sample):
         return " " + sample['chosen']
 
+    # The rejected response should be in the format of: " " + actual_response_sentence
+    # If the dataset does not have rejected response, return None
+    # 只获取rejected字段的数据
     def get_rejected(self, sample):
         return " " + sample['rejected']
 
+    # 同时获取prompt和chosen的数据
+    # 这两段数据一一拼接后可以训练SFT
     def get_prompt_and_chosen(self, sample):
         return " Human: " + sample['prompt'] + " Assistant: " + sample['chosen']
 
+    # 同时获取prompt和rejected数据
     def get_prompt_and_rejected(self, sample):
         return " Human: " + sample['prompt'] + " Assistant: " + sample[
             'rejected']
