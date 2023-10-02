@@ -223,6 +223,7 @@ class DeepSpeedPPOTrainer():
 
         #将actor、reference、critic、reward转换为eval模式
         # 给定prompt，生成response text
+        # 开启eval模式
         self.eval()
 
         '''
@@ -236,9 +237,11 @@ class DeepSpeedPPOTrainer():
         _generate_sequence()更具体的细节可见后续详解。
         '''
         # 调用model.generate()生成序列，由actor模型生成。
+        # 输入instruct prompt，由Actor生成seq，上图中红色步骤（1），seq由instruct和response组成
         seq = self._generate_sequence(prompts, mask, step)
 
         #将actor、critic转换为train模式，因为后续两者仍需要进行训练
+        # 恢复训练模型
         self.train()
 
         pad_token_id = self.tokenizer.pad_token_id
@@ -260,7 +263,10 @@ class DeepSpeedPPOTrainer():
             4. critic:（旧）价值估计-values
             '''
             # 将生成的序列喂入actor模型中，得到输出的概率分布
+            # 将seq喂入actor中得到action_logits，上图中棕色步骤（2）
             output = self.actor_model(seq, attention_mask=attention_mask)
+
+            # 将seq喂入SFT中得到sft_logits，上图中黑色步骤（5）
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
 
             #然后利用reward model和ciric model对输出的prompt+answer进行打分
@@ -271,6 +277,7 @@ class DeepSpeedPPOTrainer():
             reward_score.shape: (seq_bs,)
             '''
             # 将生成的序列喂入critic和reward模型中，获得奖励和状态价值
+            # 将seq喂入reward模型中打分，得到r(x,  y)，上图绿色步骤（4）
             reward_score = self.reward_model.forward_value(
                 seq, attention_mask,
                 prompt_length=self.prompt_length)['chosen_end_scores'].detach(
@@ -279,6 +286,7 @@ class DeepSpeedPPOTrainer():
             # critic model返回的数据维度为(B,L)，L维度上第i个位置代表从i位置到最后的累积奖励
             # 舍去最后一个位置是因为句子“终止符”无意义
             # critic_model.forward_value(return_value_only=True)将返回shape为(seq_bs, max_seq_len)的序列各token的value
+            # 将seq喂入critic，获得critic的value，上图蓝色步骤（3）
             values = self.critic_model.forward_value(
                 seq, attention_mask, return_value_only=True).detach()[:, :-1]
 
@@ -300,6 +308,7 @@ class DeepSpeedPPOTrainer():
         # attention_mask.shape: (seq_bs, max_seq_len)
         """gather_log_probs()更具体的细节可见后续详解。"""
         # 获得生成的文本seq、以及对应的概率、状态价值和奖励等信息
+        # 获得经验数据
         return {
             'prompts': prompts,
             # 分别得到两个模型在真实单词上的预测概率
@@ -374,18 +383,24 @@ class DeepSpeedPPOTrainer():
         # train the rlhf mode here
         ### process the old outputs
         # prompt input ids
+        # 当前RLHF轮次最初采样的经验池中采样一批数据
+        # instruct prompt
         prompts = inputs['prompts']  # 输入的prompt（例如in-context exemplar + query）
 
         # （旧）策略
+        # actor模型生成response对应的action_logist
         log_probs = inputs['logprobs'] # 根据prompt，actor模型生成的文本的概率
 
         # SFT策略
+        # SFT模型生成response对应的sft_logits
         ref_log_probs = inputs['ref_logprobs']  # 根据prompt，reference生成模型的文本的概率
 
         # RM奖励
+        # reward模型预测的奖励r(x, y)
         reward_score = inputs['rewards']  # 根据prompt生成的seq，reward模型得到的奖励
 
         # （旧）价值估计
+        # critic模型预测的奖励
         values = inputs['value']  # 根据prompt生成的seq，critic模型得到的状态价值函数值
         attention_mask = inputs['attention_mask']  # actor生成的文本的attention mask
 
@@ -415,6 +430,7 @@ class DeepSpeedPPOTrainer():
         action_mask = attention_mask[:, 1:]
 
         # 经验数据中的价值估计为“旧”价值估计
+        ### 根据经验数据，接下来计算相应的reward和advantage
         old_values = values
         with torch.no_grad():
             ###计算KL惩罚修正的奖励################################################
@@ -430,6 +446,10 @@ class DeepSpeedPPOTrainer():
             # 获得prompt文本本身的奖励
             # 由于prompt本身已存在文本，相当于整个决策序列中中已有的状态动作序列，
             # 因此我们需要计算一下prompt文本对应的奖励
+
+            # 根据SFT的sft_logits和Actor的action_logist，计算KL散度；
+            # 并根据KL散度与reward模型预测的奖励r(x, y)，获得最终奖励
+            # 上图中红色步骤（1）
             old_rewards = self.compute_rewards(prompts, log_probs,
                                                ref_log_probs, reward_score,
                                                action_mask)
@@ -448,16 +468,25 @@ class DeepSpeedPPOTrainer():
             5. old_rewards为刚才计算得到的KL_reward
             '''
             # 获得advantage值（v + r - v'）
+            # 由critic或的的value与前面根据KL散度和r(x, y)得到的reward，从而计算得到advantage
+            # 上图蓝色步骤（2）
             advantages, returns = self.get_advantages_and_returns(
                 old_values, old_rewards, start)
 
         ### process the new outputs
         # ###计算actor损失并更新
         # 下面则是获得生成部分seq的奖励等信息
+        ### 根据经验数据以及得到的advatage，下面开始获得一系列的loss
         batch = {'input_ids': seq, "attention_mask": attention_mask}
 
         #将seq经验数据输入至actor，进行自回归预测
         # 获得seq的的概率
+
+        # 将这一批经验数据的seq（instruct prompt+response）再一次喂入actor得到logits
+        # 因为现在是在更新actor和critic，而经验数据所采用的actor和critic早已经是之前的了，所以
+        # 现在正在更新的actor和critic与当时进行经验采样时的actor、critic的参数已经有差异了；
+        # 所以需要重新获得当前最新的actor输出的logits
+        # 上图中棕色步骤（3）
         actor_prob = self.actor_model(**batch, use_cache=False).logits
 
         #取出probs，此处为新策略
@@ -471,12 +500,16 @@ class DeepSpeedPPOTrainer():
             3. advantages为之前计算出的优势
         """
         # 根据seq的概率logits，advantage作为权重，优化actor模型参数
+
+        # 根据新的actor logits以及经验数据中的logits，以及advantage，计算actor loss
+        # 上图中绿色步骤（4）
         actor_loss = self.actor_loss_fn(actor_log_prob[:, start:],
                                         log_probs[:, start:], advantages,
                                         action_mask[:, start:])
 
         #actor反向传播、更新参数
         # 更新actor参数
+        # 更新actor模型参数
         self.actor_model.backward(actor_loss)
 
         if not self.args.align_overflow:
@@ -485,6 +518,10 @@ class DeepSpeedPPOTrainer():
         #计算critic损失并更新################################################
         #将seq经验数据输入至critic，预测得到新价值估计
         # 获得seq的critic得分
+
+        # 经验数据中的seq（instruct prompt+response）再一次喂入critic得到value
+        # 同理，由于当前的critic和当初进行经验数据采样时的critic相差很远；所以需要重新获得value
+        # 上图中黑色步骤（5）
         value = self.critic_model.forward_value(**batch,
                                                 return_value_only=True,
                                                 use_cache=False)[:, :-1]
@@ -497,12 +534,14 @@ class DeepSpeedPPOTrainer():
            3. returns为之前计算出的回报
         """
         # 计算Critic loss
+        # 根据最新的critic的value，经验数据的old_value，以及advatage，计算得到critic loss
         critic_loss = self.critic_loss_fn(value[:, start:], old_values[:,
                                                                        start:],
                                           returns, action_mask[:, start:])
 
         #critic反向传播、更新参数
         # 更新Critic模型参数
+        # 更新critic参数
         self.critic_model.backward(critic_loss)
 
         if self.args.align_overflow:

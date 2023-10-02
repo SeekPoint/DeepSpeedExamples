@@ -478,12 +478,15 @@ def main():
     # Train!
     print_rank_0("***** Running training *****", args.global_rank)
 
+    # 训练的总Epoch数
     for epoch in range(args.num_train_epochs):
         print_rank_0(
             f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Generation Batches {min(len(prompt_train_dataloader), len(unsupervised_train_dataloader))}",
             args.global_rank)
+        # 遍历每一个Batch
         for step, (batch_prompt, batch_unsupervised) in enumerate(
                 zip(prompt_train_dataloader, unsupervised_train_dataloader)):
+
             batch_prompt = to_device(batch_prompt, device)
             if batch_unsupervised is not None:
                 batch_unsupervised = to_device(batch_unsupervised, device)
@@ -491,12 +494,14 @@ def main():
             else:
                 unsup_dataset = unsup_mini_dataset.add(
                     [[None] * args.per_device_train_batch_size])
+
             # prompts = batch_prompt['prompt']
             # length = prompts.size(-1)
             # if length > args.max_prompt_seq_len:
             #     prompts = prompts[:, length - args.max_prompt_seq_len:]
             #     raise ValueError("Prompt length is too long")
             # out为经验数据
+            # 进行采样，并加入到经验池，详见（3.1）
             out = trainer.generate_experience(batch_prompt['prompt'],
                                               batch_prompt['prompt_att_mask'],
                                               step)
@@ -526,6 +531,7 @@ def main():
                     即相当于这批经验数据被复用了n次用于off-policy训练。
                     
                 '''
+                # 从经验池中进行学习Epoch轮
                 for ppo_ep in range(args.ppo_epochs):
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
@@ -537,6 +543,7 @@ def main():
                         """
 
                         #经验数据训练，返回actor_loss和critic_loss
+                        # 得到actor和critic loss，详见（3.2）
                         actor_loss, critic_loss = trainer.train_rlhf(exp_data)
 
                         #累加本ppo_step的指标，后续将除以内层迭代次数计算均值
@@ -563,6 +570,7 @@ def main():
                                            zero_stage=args.actor_zero_stage)
 
                     # 打乱数据供off - policy复用
+                    # 每一轮结束后打乱经验池
                     random.shuffle(exp_dataset)
                     random.shuffle(unsup_dataset)
 

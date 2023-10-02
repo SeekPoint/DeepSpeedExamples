@@ -69,10 +69,12 @@ class DeepSpeedRLHFEngine():
         self.num_total_iters = num_total_iters
         self.tokenizer = tokenizer
 
+        # 用训练好的SFT模型初始化Actor模型
         # 此处的actor是模型经过DeepSpeed封装后得到的DeepSpeedHybridEngine对象
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
 
+        # 用训练好的SFT模型初始化SFT模型
         #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.ref = self._init_ref(
             actor_model_name_or_path=actor_model_name_or_path)
@@ -84,10 +86,12 @@ class DeepSpeedRLHFEngine():
             self.actor_ema = self._init_ema(
                 actor_model_name_or_path=actor_model_name_or_path)
 
+        # 用训练好的RW初始化Critic模型
         # 此处的critic是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.critic = self._init_critic(
             critic_model_name_or_path=critic_model_name_or_path)
 
+        # 用训练好的RW初始化reward模型
         # 此处的reward是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.reward = self._init_reward(
             critic_model_name_or_path=critic_model_name_or_path)
