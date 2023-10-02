@@ -332,18 +332,41 @@ def parse_args():
 
     return args
 
-
+# 3.3.1.3 无监督数据集的读取
+# 无监督数据集主要是进行了分块处理，将无监督语料全部拼接起来得到一个极长的序列，
+# 使用max_seq_len大小的滑窗对长序列进行分块，每个分块将作为1条无监督数据。
 def create_datasets(args, tokenizer, train_phase=3):
     unsupervised_training_enabled = args.unsupervised_dataset_name and args.unsupervised_dataset_config_name
+    """
+    获取Dataset和实例化dataloader
+    """
+
+    """
+    返回读取到的prompt数据，
+    该数据为经由tokenizer处理（tokenize但未padding），
+    且本地存储后的 input_ids 和 attention_mask 数据。
+
+    并且在【上篇】有所提及：
+    phase3存储的数据是经过flip翻转的、是倒序的，
+    后续将在data_collator中先padding后再flip回正序，
+    这将使得pad_token位于数据前侧。
+    """
+
     prompt_train_dataset, _ = create_prompt_dataset(
         args.local_rank, args.data_path, args.data_split,
         args.data_output_path, train_phase, args.seed, tokenizer,
         args.max_prompt_seq_len)
     if unsupervised_training_enabled:
+        """
+        如果启用无监督训练，则获取无监督数据，
+        并将其处理成分块形式，
+        每块为1条数据，为max_seq_len长度
+        """
         unsupervised_train_dataset = get_unsupervised_data(args, tokenizer)
     else:
         unsupervised_train_dataset = None
 
+    """实例化数据整理器data_collator"""
     # DataLoaders creation:
     data_collator = DataCollatorRLHF(args.max_prompt_seq_len,
                                      args.inference_tp_size)
@@ -357,18 +380,29 @@ def create_datasets(args, tokenizer, train_phase=3):
         if unsupervised_training_enabled:
             unsupervised_train_sampler = DistributedSampler(
                 unsupervised_train_dataset)
+
+    """
+    实例化数据加载器dataloader
+    并且使用data_collator整理读取到的prompt数据（如上述所说：先padding后flip）
+    """
     prompt_train_dataloader = DataLoader(
         prompt_train_dataset,
         collate_fn=data_collator,
         sampler=prompt_train_sampler,
         batch_size=args.per_device_train_batch_size)
     if unsupervised_training_enabled:
+        """如果启用无监督训练，则实例化无监督数据加载器"""
         unsupervised_train_dataloader = DataLoader(
             unsupervised_train_dataset,
             collate_fn=default_data_collator,
             sampler=unsupervised_train_sampler,
             batch_size=args.per_device_train_batch_size)
     else:
+        """
+        如果未启用无监督训练，也仍实例化一个空的数据加载器，
+        因为多数后续代码入参接口都支持同时输入prompt数据与无监督数据，
+        这一步是基于后续传参的安全性考虑
+        """
         unsupervised_train_dataloader = [None] * len(
             prompt_train_dataloader)  # basically a dummy dataloader
 
@@ -475,14 +509,19 @@ def main():
 
                 '''
                 3.3.5 PPO训练过程
+                
                 3.3.5.1 基本流程
+                
                 对于采集到的一批经验数据，使用MiniDataset处理成多批ppo_batch数据，供相关模型进行多次训练迭代，更具体的训练细节见后续内容。
                 
                 而DeepSpeed-Chat中所设置的ppo_epochs，从强化学习的角度来说，实际上代表的是一批经验数据的复用次数：
                 
-                假如ppo_epochs设置为1，训练时，引入的这批经验数据在经过1次全遍历后，将被直接弃置，随之进行下一轮prompt_epoch，届时将重新采集新的一批经验数据；
-                假如ppo_epochs设置为n，训练时，引入的这批经验数据将被遍历n次才被弃置，即相当于这批经验数据被复用了n次用于off-policy训练。
-                
+                    假如ppo_epochs设置为1，训练时，引入的这批经验数据在经过1次全遍历后，
+                    将被直接弃置，随之进行下一轮prompt_epoch，届时将重新采集新的一批经验数据；
+                    
+                    假如ppo_epochs设置为n，训练时，引入的这批经验数据将被遍历n次才被弃置，
+                    即相当于这批经验数据被复用了n次用于off-policy训练。
+                    
                 '''
                 for ppo_ep in range(args.ppo_epochs):
                     #ppo_epoch循环
@@ -511,7 +550,10 @@ def main():
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
 
-                        inner_iter += 1  #PPO训练迭代次数（ppo_step）+1
+                        # PPO训练迭代次数（ppo_step）+1
+                        inner_iter += 1
+
+                        """是否启用指数移动平均技术"""
                         if args.enable_ema:
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,

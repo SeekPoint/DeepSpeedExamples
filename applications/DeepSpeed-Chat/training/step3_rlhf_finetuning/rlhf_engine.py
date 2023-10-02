@@ -36,7 +36,25 @@ def log_init(model_name, stime=None):
         print("*" * stars + msg + "*" * stars + extra_star)
         return time.time()
 
+'''
+3.3.2 初始化各相关模型
+3.3.2.1 模型初始化过程
+源码中使用了 DeepSpeedRLHFEngine类进行了actor、ref/SFT、critic、reward/RM、actor_ema等模型的初始化，
+该类主要实现了：
 
+    1读取模型，虽然同样支持直接从huggingface hub拉取相应模型，但通常都是从本地路径读取phase1、phase2训练好的模型：
+    
+        1actor、ref/SFT以及actor_ema（如果开启了ema）通常都初始化自phase1训练所得的模型；
+        
+        2critic与reward通常都初始化自phase2训练所得的模型。
+        
+    2为各个相关模型设定不同的DeepSpeed配置（ds_config）并使用DeepSpeedEngine进行封装，
+    而actor默认情况下将使用DeepSpeedHybridEngine进行封装，DeepSpeedHybridEngine的简单介绍可见下方；
+    
+    3最终得到1个携有所有相关模型的对象rlhf_engine。
+
+模型初始化的相关代码
+'''
 class DeepSpeedRLHFEngine():
 
     def __init__(self, actor_model_name_or_path, critic_model_name_or_path,
@@ -123,7 +141,8 @@ class DeepSpeedRLHFEngine():
             ds_config=ds_config,
             disable_dropout=self.args.disable_actor_dropout)
 
-        # LoRA  如果开启LoRA训练则添加LoRA旁路
+        # LoRA
+        # 如果开启LoRA训练则添加LoRA旁路
         if self.args.actor_lora_dim > 0:
             actor_model = convert_linear_layer_to_lora(
                 actor_model, self.args.actor_lora_module_name,
@@ -131,7 +150,8 @@ class DeepSpeedRLHFEngine():
             if self.args.only_optimize_lora:
                 actor_model = only_optimize_lora_parameters(actor_model)
 
-        # Optimizer 实例化优化器：分组权重衰减等
+        # Optimizer
+        # 实例化优化器：分组权重衰减等
         AdamOptimizer = DeepSpeedCPUAdam if self.args.offload else FusedAdam
         optim_params = get_optimizer_grouped_parameters(
             actor_model, self.args.actor_weight_decay)
@@ -139,7 +159,8 @@ class DeepSpeedRLHFEngine():
                               lr=self.args.actor_learning_rate,
                               betas=(0.9, 0.95))
 
-        # LR Scheduler 实例化学习率调度器
+        # LR Scheduler
+        # 实例化学习率调度器
         lr_scheduler = get_scheduler(
             name=self.args.lr_scheduler_type,
             optimizer=optim,

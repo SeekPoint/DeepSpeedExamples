@@ -5,58 +5,18 @@
 import torch
 from torch import nn
 '''
-2.3.3 RM的正向传播及成对排序损失
-RM的正向传播过程不算复杂，总的来说就是：
-
-数据经过主干网络得到shape为(bs*2, max_seq_len, hidden_size)的最后层输出特征hidden_states；
-然后将输出特征送入线性层v_head得到shape为(bs*2, max_seq_len)的评分rewards。
-较为复杂的部分实际上是“成对排序损失的计算”以及“评分聚合设计”。
-
-成对排序损失（Pairwise Ranking Loss）
-,,,,,,,,,,,,,,,,,
-
-
-DeepSpeed-Chat在实现这部分时...........
-分别选择了chosen_sentence和reject_sentence两者answer的对齐部分，通过文字叙述略显抽象，查看下方的代码块有助于你理解这个概念：
-
-max_seq_len为10，pad_token_id为0，
-有同属同个prompt的chosen_sentence和reject_sentence:
-prompt: [11, 22, 33]
-chosen_sentence: [11, 22, 33, 44, 55, 66, 0, 0, 0, 0]
-reject_sentence: [11, 22, 33, 40, 50, 0, 0, 0, 0, 0]
-
-“两者answer的对齐部分”即为“非prompt部分也非padding部分、但长度要对齐”：
-chosen_truncated: [44, 55, 66]
-reject_truncated: [40, 50, 0]
-
-chosen_sentence的answer比较长，所以reject_sentence在取相应部分时要取至与chosen部分等长为止；
-reject_sentence的answer较长时同理。
-为了取到上述提及的“对齐部分”，代码进行了较为晦涩抽象的取index操作，但只要理解其最终目的是为了取到chosen_sentence和reject_sentence对齐部分的reward，来进行损失计算即可。
-
-对话奖励设计
-尽管使用的是“对齐部分”的reward来计算成对排序损失，但RM模型对一个对话的预测评分实际上取的是该对话文本最后一个有效token（通常会是“结束标记”）的reward，
-下方代码块提供了一个简单例子说明了这个情况。
-
-pad_token_id = 0
-conversation = [11, 22, 33, 44, 55, 66, 0, 0, 0, 0]
-conversation_rewards = [2.01, 0.23, 2.89, 0.66, 0.33, 2.25, 0.36, 0.99, 1.32, 1.62]
-token_id为66的token作为该对话的最后1个有效token，
-其对应的reward“2.25”将被用于表示整个对话的reward。
-
-
-
-
 3.3.3.3 奖励reward_score和价值估计values的获取
 奖励模型的模型类RewardModel中实现了相应的方法forward_value()，可支持输入“一句对话”返回“环境奖励与价值估计”。
-与原先训练所用的方法forward()不同，forward()可支持输入“chosen-reject对话对”，主要实现了“对话对”之间排序损失的计算（forward()在【中篇】的2.3.3中已有所介绍，此处将不再赘述）。
+与原先训练所用的方法forward()不同，forward()可支持输入“chosen-reject对话对”，
+主要实现了“对话对”之间排序损失的计算（forward()在【中篇】的2.3.3中已有所介绍，此处将不再赘述）。
 以下通过简单例子来对“奖励”以及“价值估计”作区分：
 
-“奖励/环境奖励/reward_score”主要是为对话序列给出一个奖励值/做出评分，
-“价值估计/values”是为对话序列中的每一个位置都给出价值预测，是与时间步/状态紧密相关的。
-
-有对话序列 seq=[11, 22, 33, 44, 55, 66, 0, 0, 0, 0]
-其奖励reward_score只会是1个标量，如reward_score_seq=2.25；
-其价值估计values是1维数组，如[2.01, 0.23, 2.89, 0.66, 0.33, 2.25, 0.36, 0.99, 1.32, 1.62]
+    “奖励/环境奖励/reward_score”主要是为对话序列给出一个奖励值/做出评分，
+    “价值估计/values”是为对话序列中的每一个位置都给出价值预测，是与时间步/状态紧密相关的。
+    
+    有对话序列 seq=[11, 22, 33, 44, 55, 66, 0, 0, 0, 0]
+    其奖励reward_score只会是1个标量，如reward_score_seq=2.25；
+    其价值估计values是1维数组，如[2.01, 0.23, 2.89, 0.66, 0.33, 2.25, 0.36, 0.99, 1.32, 1.62]
 
 
 '''
@@ -285,9 +245,9 @@ class RewardModel(nn.Module):
                       prompt_length=0,
                       use_cache=False):
         """
-                和forward有些差别，forward需要针对输入的chosen-rejected对计算排序损失并返回
-                而forward_value只需要考虑一个输入，然后返回分值
-                :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
+        和forward有些差别，forward需要针对输入的chosen-rejected对计算排序损失并返回
+        而forward_value只需要考虑一个输入，然后返回分值
+        :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
         """
 
         # 经过主干网络正向传播得到输出
@@ -307,8 +267,8 @@ class RewardModel(nn.Module):
         values = self.v_head(hidden_states).squeeze(-1)
         if return_value_only:
             """
-               如果传参中预设了“return_value_only=True”，
-               那么将直接返回 values: (bs, max_seq_len)
+            如果传参中预设了“return_value_only=True”，
+            那么将直接返回 values: (bs, max_seq_len)
             """
             return values
         else:

@@ -555,16 +555,21 @@ def get_unsupervised_data(args, tokenizer):
 
 '''
 3.3.4 PPO训练数据管理-MiniDataset
-最开始的时候载入过一次Dataset（见3.3.1），但刚开始载入的Dataset针对的是全部训练数据的管理，而此时使用的MiniDataset主要针对PPO训练迭代所使用的数据进行管理。PPO训练前的数据管理流程可以理解为：
+最开始的时候载入过一次Dataset（见3.3.1），但刚开始载入的Dataset针对的是全部训练数据的管理，
+而此时使用的MiniDataset主要针对PPO训练迭代所使用的数据进行管理。PPO训练前的数据管理流程可以理解为：
 
-Dataloader从Dataset中取出1个prompt_batch的无监督数据和1个prompt_batch的prompt数据；
-使用1个prompt_batch的prompt数据进行经验采集，将得到1个prompt_batch的经验数据；
-1个prompt_batch的无监督数据、1个prompt_batch的经验数据将被送入各自的MiniDataset实例进行管理：1个prompt_batch将被分成数个ppo_batch，供PPO训练进行数次迭代。
+    1 Dataloader从Dataset中取出1个prompt_batch的无监督数据和1个prompt_batch的prompt数据；
+    2 使用1个prompt_batch的prompt数据进行经验采集，将得到1个prompt_batch的经验数据；
+    3 1个prompt_batch的无监督数据、1个prompt_batch的经验数据将被送入各自的MiniDataset实例进行管理：
+      1个prompt_batch将被分成数个ppo_batch，供PPO训练进行数次迭代。
+
 上述第3步就是MiniDataset所要做的事，其函数方法分别执行了：
 
-add()：获取batch（prompt_batch）数据；
-seperate()：细分为ppo_batch数据；
-free():清空获取到的batch数据并返回ppo_batch数据。
+    1 add()：获取batch（prompt_batch）数据；
+    
+    2 seperate()：细分为ppo_batch数据；
+    
+    3 free():清空获取到的batch数据并返回ppo_batch数据。
 
 '''
 class MiniDataset:
@@ -572,8 +577,8 @@ class MiniDataset:
     def __init__(self, max_size, small_batch_size):
         '''
         :param max_size: batch数。通常此处指“用于给actor做生成的prompt的batch数（注意是batch数不是batch_size）”。
-        :param small_batch_size: batch size。通常此处指“PPO训练的batch_size”。
 
+        :param small_batch_size: batch size。通常此处指“PPO训练的batch_size”。
         '''
         self.dataset = []
         self.max_size = max_size
@@ -585,7 +590,8 @@ class MiniDataset:
 
         # 从self.dataset中逐个取batch
         for large_batch in self.dataset:
-            # 判断batch的数据类型（列表 / 元组 / 字典），根据数据类型取其batch_size，赋值给large_size
+            # 判断batch的数据类型（列表 / 元组 / 字典），
+            # 根据数据类型取其batch_size，赋值给large_size
             if type(large_batch) == list or type(large_batch) == tuple:
                 large_size = len(large_batch[0])
             elif type(large_batch) == dict:
@@ -595,9 +601,14 @@ class MiniDataset:
 
             '''
             以下部分代码略微抽象，需要举例说明
-            - 比如prompt的batch_size设置为3，PPO训练用的batch_size设置为4，则最后能取来用、存入small_dataset的也就只有3条数据，因为生成用的dataloader只采样出了3条，最多也就只有3条。
-            - 比如prompt的batch_size设置为5，PPO训练用的batch_size设置为4，则最后能取来用、存入small_dataset的就是2组数据（第1组为idx0,idx1,idx2,idx3共4条数据、第2组为idx4共1条数据）。
-            - 比如prompt的batch_size设置为9，PPO训练用的batch_size设置为4，则最后能取来用、存入small_dataset的就是3组数据（[0,1,2,3],[4,5,6,7],[8]）。
+            - 比如prompt的batch_size设置为3，PPO训练用的batch_size设置为4，
+            则最后能取来用、存入small_dataset的也就只有3条数据，因为生成用的dataloader只采样出了3条，最多也就只有3条。
+            
+            - 比如prompt的batch_size设置为5，PPO训练用的batch_size设置为4，
+            则最后能取来用、存入small_dataset的就是2组数据（第1组为idx0,idx1,idx2,idx3共4条数据、第2组为idx4共1条数据）。
+            
+            - 比如prompt的batch_size设置为9，PPO训练用的batch_size设置为4，
+            则最后能取来用、存入small_dataset的就是3组数据（[0,1,2,3],[4,5,6,7],[8]）。
             '''
             for i in range(0, large_size, self.small_batch_size):
                 if type(large_batch) == list or type(large_batch) == tuple:
@@ -619,10 +630,10 @@ class MiniDataset:
 
     def add(self, data):
         """
-        		在最开始的时候可以传参预设“生成X个batch再进行PPO训练”，
-        		此处的max_size就是其中的X，
-        		如果少于max_size则将batch数据加入至MiniDataset中，
-        		直至达到max_size个batch
+        在最开始的时候可以传参预设“生成X个batch再进行PPO训练”，
+        此处的max_size就是其中的X，
+        如果少于max_size则将batch数据加入至MiniDataset中，
+        直至达到max_size个batch
         """
         if len(self.dataset) < self.max_size:
             self.dataset.append(data)

@@ -38,7 +38,9 @@ def get_model_norm(model):
 
 '''
 3.3.3.4 策略模型logits的进一步处理
-策略模型（actor、ref/SFT）所输出logits的shape为(bs, max_seq_len, vocab_size)，然而计算KL散度惩罚、重要性权重时并不需要对所有vocab的logits进行计算，仅需要对groundtruth项（seq各个token对应的项）的logits进行计算即可。
+策略模型（actor、ref/SFT）所输出logits的shape为(bs, max_seq_len, vocab_size)，
+然而计算KL散度惩罚、重要性权重时并不需要对所有vocab的logits进行计算，
+仅需要对groundtruth项（seq各个token对应的项）的logits进行计算即可。
 
 batch_size = 1
 max_seq_len = 4
@@ -71,8 +73,8 @@ seq[:, 1:] = [
 probs = [
 			 [-0.56, -1.52, 0.13]
 			]
+			
 因此DeepSpeed-Chat定义了函数gather_log_probs()来对输出的logits进行后处理，以获取对数化后的结果log_probs。
-
 '''
 def gather_log_probs(logits, labels):
     """
@@ -129,7 +131,13 @@ class DeepSpeedPPOTrainer():
         self.cliprange_value = 0.2
         self.gamma = 1.0
         self.lam = 0.95
-
+'''
+3.3.3.2 seq的生成
+对于本次batch的prompt，将输入至当前actor（对于即将根据经验数据迭代得到的actor来说，
+此时的“当前actor”可以认为是“旧策略网络”）来生成answer（如下图所示），
+然后将prompt与answer进行拼接得到seq。
+在这里插入图片描述  011.png
+'''
     def _generate_sequence(self, prompts, mask, step):
         """
         生成seq
@@ -186,6 +194,25 @@ class DeepSpeedPPOTrainer():
 
         return out_seq
 
+    '''
+    3.3.3.1 经验数据获取过程
+    010.png
+    
+    再次借用ColossalChat的示意图来进行说明，经验数据的获取过程如下：
+    
+        1备有prompt数据（prompt_input_ids，prompt_attention_mask）；
+        2使用当前actor对prompt进行answer生成，得到完整对话序列seq（图示的sequence）；
+        3将seq输入至当前actor，输出得到当前（旧）策略logits（图示的action_logits），取对数logprobs；
+        4将seq输入至ref/SFT，输出得到baseline策略ref_logits（图示的sft_logits），取对数ref_logprobs；
+        5将seq输入至reward/RM，输出得到环境奖励reward_score（图示的r(x,y)）；
+        6将seq输入至当前critic，输出得到当前（旧）价值估计values（图示的value）；
+        7至此，用于进行PPO训练的各个基本经验数据已经获取齐全，
+        至于图示的adv、reward（此reward非彼reward，图示的reward指InstructGPT所提及的“KL Reward”：
+        为了防止对phase2学习到的reward过度自信，引入了SFT与logits的KL散度作为惩罚的Reward）等数据，
+        在DeepSpeed-Chat中，于具体训练过程才开始计算。
+    
+    相关代码实现可见下方代码块。
+    '''
     def generate_experience(self, prompts, mask, step):
         '''
         生成经验
@@ -232,7 +259,9 @@ class DeepSpeedPPOTrainer():
             '''
             output = self.actor_model(seq, attention_mask=attention_mask)
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
-            #然后利用reward model和ciric model对输出的prompt+answer进行打分（PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
+
+            #然后利用reward model和ciric model对输出的prompt+answer进行打分
+            # （PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
             '''
             价值函数的forward_value()更具体的细节可见后续详解。
             reward_score取的是answer最后一个token的value
@@ -293,16 +322,16 @@ class DeepSpeedPPOTrainer():
 
         # 只考虑answer部分的奖励，不考虑prompt
         """
-        		    找到answer的起始start：即prompt的最后1个token位置
-        		    比如prompts长度为256，answer的起始则为256-1=255
+        找到answer的起始start：即prompt的最后1个token位置
+        比如prompts长度为256，answer的起始则为256-1=255
         """
         start = prompts.shape[1] - 1
 
         # 不考虑padding部分
         '''
-			ends为batch中各个数据的最后1个有效token的index，
-			每个数据的最末有效token位置很大可能是不一样的，
-			因此ends是个数组
+		ends为batch中各个数据的最后1个有效token的index，
+		每个数据的最末有效token位置很大可能是不一样的，
+		因此ends是个数组
 		'''
         ends = start + action_mask[:, start:].sum(1) + 1
 
@@ -314,7 +343,7 @@ class DeepSpeedPPOTrainer():
         # 在L维度上，每个位置都有KL散度，但是只在最后一个位置加上奖励值
         '''
         因为batch中每个数据的最末有效token位置很可能不一样，
-		    所以无法通过矩阵来并行，需要使用for循环逐个数据处理
+		所以无法通过矩阵来并行，需要使用for循环逐个数据处理
 		'''
         for j in range(batch_size):
             """
@@ -323,9 +352,14 @@ class DeepSpeedPPOTrainer():
             """
             rewards[j, start:ends[j]][-1] += reward_clip[j]
 
+        """返回KL rewards"""
         return rewards
 
     '''
+    3.3.5.2 PPO训练
+    012.png
+    1次PPO训练由train_rlhf()方法进行管理，其内部主要实现了：
+    013.png
     具体代码可见下方，为保证阅读的流畅性，我对其中的部分代码进行了调整，
     使得相应的函数代码衔接在其调用后方，便于具体对照其传参，从而辨析传入的新旧策略、新旧价值估计等：
     '''
@@ -379,6 +413,7 @@ class DeepSpeedPPOTrainer():
         old_values = values
         with torch.no_grad():
             ###计算KL惩罚修正的奖励################################################
+
             """
             通过KL散度惩罚，以及r_\theta（来自reward model）计算得到修正的奖励，
             注意此处的入参：
@@ -406,7 +441,8 @@ class DeepSpeedPPOTrainer():
             advantages, returns = self.get_advantages_and_returns(
                 old_values, old_rewards, start)
 
-        ### process the new outputs  ###计算actor损失并更新
+        ### process the new outputs
+        # ###计算actor损失并更新
         batch = {'input_ids': seq, "attention_mask": attention_mask}
 
         #将seq经验数据输入至actor，进行自回归预测
@@ -416,8 +452,8 @@ class DeepSpeedPPOTrainer():
         actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:])
 
         """
-            计算actor损失
-            注意此处的入参：
+        计算actor损失
+        注意此处的入参：
             1. actor_log_probs为方才刚输出的新策略
             2. log_probs为经验数据中的（旧）策略
             3. advantages为之前计算出的优势
@@ -439,8 +475,8 @@ class DeepSpeedPPOTrainer():
                                                 use_cache=False)[:, :-1]
 
         """
-           计算critic损失
-           注意此处的入参：
+        计算critic损失
+        注意此处的入参：
            1. values为方才刚输出的新价值估计
            2. old_values为经验数据中的（旧）价值估计
            3. returns为之前计算出的回报
@@ -490,8 +526,10 @@ class DeepSpeedPPOTrainer():
     '''
     def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
         #"""计算actor的损失"""
+
         ## policy gradient loss
         # logprobs, old_logprobs都是经过log变化的单词概率，这里带着log做减法就相当于在做概率除法
+
         # 重要性采样权重计算：ratio = exp(log(new)-log(old))
         log_ratio = (logprobs - old_logprobs) * mask
 
@@ -511,6 +549,7 @@ class DeepSpeedPPOTrainer():
     #同样的，我们也要对critic model进行训练，更新，loss就是mse loss。
     def critic_loss_fn(self, values, old_values, returns, mask):
         # 计算价值损失
+
         ## value loss
         ## 用“老critic model”的输出约束“新critic model”不要步子太大，裁剪一下
         '''
@@ -532,9 +571,9 @@ class DeepSpeedPPOTrainer():
         vf_loss2 = (values_clipped - returns)**2
 
         """
-        	    选择损失较大者作为真正的损失，
-        		并且基于ppo_batch内所有数据的所有有效时间步计算平均损失值，
-        		此外critic损失项的系数为0.5。
+        选择损失较大者作为真正的损失，
+        并且基于ppo_batch内所有数据的所有有效时间步计算平均损失值，
+        此外critic损失项的系数为0.5。
         """
         vf_loss = 0.5 * torch.sum(
             torch.max(vf_loss1, vf_loss2) * mask) / mask.sum()
@@ -554,11 +593,13 @@ class DeepSpeedPPOTrainer():
         # rewards（B，）reward model输出
         # start answer开始的位置
         # Adopted from https://github.com/CarperAI/trlx/blob/main/trlx/models/modeling_ppo.py#L134
+
         # 计算优势与回报
         # 实现基本与上述公式相同
         lastgaelam = 0
         advantages_reversed = []
         length = rewards.size()[-1]
+
         # 计算每个时刻（序列位置）的critic model预测误差
         # 反向遍历计算各个时间步的优势advantage
         for t in reversed(range(start, length)):
@@ -568,18 +609,21 @@ class DeepSpeedPPOTrainer():
             # critic model预测的是t到到最后一个时刻的奖励和，所以变化量delta可以用如下公式表示
             """计算单步TD-error"""
             delta = rewards[:, t] + self.gamma * nextvalues - values[:, t]
+
             """累计优势"""
             # self.gamma=1，self.lam=0.95是衰减因子，表示之前计算的delta对现在影响越来越小
             lastgaelam = delta + self.gamma * self.lam * lastgaelam
 
             # """存储各个时间步的优势"""
             advantages_reversed.append(lastgaelam)
+
         #对逆序的优势列表进行正序处理，得到正常时间步排列的优势
         advantages = torch.stack(advantages_reversed[::-1], dim=1)
+
         # 后续用来更新critic model用
         """
-        		    return_t = adv_t + v(s_t)
-        		    由优势计算得到回报
+        return_t = adv_t + v(s_t)
+        由优势计算得到回报
         """
         returns = advantages + values[:, start:]
 
@@ -620,7 +664,13 @@ class DeepSpeedPPOTrainer():
         print_all_ranks(f'{tag} global_reward_model_norm', reward_model_norm,
                         self.args.local_rank)
 
-
+'''
+3.3.5.3 无监督训练
+实际上就是常规的自回归语言建模任务。InstructGPT中提及，进行phase3的RLHF训练时，
+为使得模型在学习人类偏好的过程中仍能保有预训练模型解决任务的性能，
+引入了传统的自回归语言建模进行联合训练。
+014.png
+'''
 class DeepSpeedPPOTrainerUnsupervised(DeepSpeedPPOTrainer):
 
     def __init__(self, *args, **kwargs):
@@ -628,9 +678,10 @@ class DeepSpeedPPOTrainerUnsupervised(DeepSpeedPPOTrainer):
 
     def train_unsupervised(self, inputs, unsup_coef):
         """
-            1个ppo_batch的无监督训练
-            :param inputs: dict：input_ids, attention_mask, labels
-            :param unsup_coef: 无监督损失系数
+        1个ppo_batch的无监督训练
+        :param inputs: dict：input_ids, attention_mask, labels
+        :param unsup_coef: 无监督损失系数
+
         确保actor处于训练模式，否则将返回报错
         """
 
