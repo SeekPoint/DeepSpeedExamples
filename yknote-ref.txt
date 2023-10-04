@@ -45,3 +45,59 @@ https://mathmach.com/2a29fbbd/
 DeepSpeed-Chat强化学习策略
 https://mathmach.com/be7f3b4f/
 
+
+https://zhuanlan.zhihu.com/p/634692854
+DeepSpeed-chat：民主化LLM全攻略
+
+
+https://zhuanlan.zhihu.com/p/643642174
+DeepSpeed-Chat强化学习策略
+https://zhuanlan.zhihu.com/p/643643325
+DeepSpeed-Chat全流程训练实战
+
+
+
+
+https://zhuanlan.zhihu.com/p/641675229
+DeepSpeed-Chat 打造类ChatGPT全流程 笔记二之监督指令微调
+
+
+
+https://zhuanlan.zhihu.com/p/640758965
+深度学习训练方法实操(DP/DDP/DeepSpeed)
+
+https://zhuanlan.zhihu.com/p/435112923
+Autotuning: 来自DeepSpeed的超参数自动搜索方案
+https://zhuanlan.zhihu.com/p/624413021
+deepSpeed （DeepSpeed-Chat）体验
+https://zhuanlan.zhihu.com/p/646204021
+DeepSpeed-MoE:训练更大及更复杂的混合专家网络
+https://zhuanlan.zhihu.com/p/629315053
+在Transformers中集成DeepSpeed
+https://zhuanlan.zhihu.com/p/646080311
+deepspeed基础入门-深度学习求解PDE多卡训练代码
+https://zhuanlan.zhihu.com/p/650824387
+关于Deepspeed的一些总结与心得
+https://zhuanlan.zhihu.com/p/626420999
+deepspeed chat代码解读
+https://zhuanlan.zhihu.com/p/646186242
+通过DeepSpeed框架结合Peft对chatglm进行微调代码解析
+https://zhuanlan.zhihu.com/p/642819809
+Deepspeed多卡多机ZeRo-3训练踩的坑
+https://zhuanlan.zhihu.com/p/639002087
+DeepSpeed ZeRO++：降低4倍网络通信，显著提高大模型及类ChatGPT模型训练效率
+https://zhuanlan.zhihu.com/p/636640427
+DeepSpeed Chat: 一键式RLHF训练，让你的类ChatGPT千亿大模型提速省钱15倍
+https://zhuanlan.zhihu.com/p/639927499
+DeepSpeed - 用ZeRO训练大模型原理解析
+https://zhuanlan.zhihu.com/p/650505023
+RLHF-PPO算法代码解析
+https://zhuanlan.zhihu.com/p/108571246
+ZeRO+DeepSpeed:微软发布的高效大规模训练套件(含详细分布式训练流程)
+
+
+https://zhuanlan.zhihu.com/p/633593024
+Chatglm-6B+Deepspeed+PTuningv2 多卡高效微调
+https://blog.csdn.net/v_JULY_v/article/details/129996493
+从零实现带RLHF的类ChatGPT：从TRL/ChatLLaMA/ColossalChat到DeepSpeed Chat
+
