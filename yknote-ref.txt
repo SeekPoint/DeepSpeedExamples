@@ -56,13 +56,6 @@ https://zhuanlan.zhihu.com/p/643643325
 DeepSpeed-Chat全流程训练实战
 
 
-
-
-https://zhuanlan.zhihu.com/p/641675229
-DeepSpeed-Chat 打造类ChatGPT全流程 笔记二之监督指令微调
-
-
-
 https://zhuanlan.zhihu.com/p/640758965
 深度学习训练方法实操(DP/DDP/DeepSpeed)
 

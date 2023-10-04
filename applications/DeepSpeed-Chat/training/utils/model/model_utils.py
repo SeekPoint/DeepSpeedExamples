@@ -29,21 +29,32 @@ from .reward_model import RewardModel
 """
 # 2.2 模型训练
 # 构建一个用于SFT训练的模型，模型可以指定为AutoModelForCausalLM类
+
+# 这段代码定义了一个名为create_hf_model的函数，该函数的作用是创建或加载一个预训练模型。该函数的主要参数包括：
+# model_class：模型的类别，例如GPT-2、BERT等。
+# tokenizer：用于模型的分词器。
+# ds_config: DeepSpeed的配置参数。
+# rlhf_training：一个标志，用来表示是否正在进行RLHF（Reinforcement Learning from Human Feedback）训练。
+# disable_dropout：一个标志，用来表示是否禁用dropout。Dropout是一种防止过拟合的技术。
 def create_hf_model(model_class,
                     model_name_or_path,
                     tokenizer,
                     ds_config=None,
                     rlhf_training=False,
                     disable_dropout=False):
+    # 根据model_name_or_path从预训练模型获取模型配置model_config。
     model_config = AutoConfig.from_pretrained(model_name_or_path)
+    # 如果disable_dropout为真，则将模型配置中的dropout设为0.0。
     if disable_dropout:
         model_config.dropout = 0.0
     # Note: dschf is defined in function scope to avoid global effects
     # https://huggingface.co/docs/transformers/main_classes/deepspeed#nontrainer-deepspeed-integration
+    # 根据ds_config中的设置，创建DeepSpeed的配置对象dschf，以便进行DeepSpeed优化。
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
         dschf = HfDeepSpeedConfig(ds_config)
     else:
         dschf = None
+    # 根据rlhf_training的值，确定是从配置中创建模型还是从预训练模型中加载模型。如果rlhf_training为真，则根据模型配置创建模型；否则，从预训练模型加载模型。
     if rlhf_training:
         # the weight loading is handled by create critic model
         model = model_class.from_config(model_config)
@@ -52,9 +63,10 @@ def create_hf_model(model_class,
             model_name_or_path,
             from_tf=bool(".ckpt" in model_name_or_path),
             config=model_config)
-
+    # 将模型的结束标记和填充标记设为分词器的结束标记id。
     model.config.end_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = model.config.eos_token_id
+    # 调整模型的词汇表大小，使其为8的倍数。这样做的目的是为了在某些硬件（如GPU）上提高效率。
     model.resize_token_embeddings(int(
         8 *
         math.ceil(len(tokenizer) / 8.0)))  # make the vocab size multiple of 8

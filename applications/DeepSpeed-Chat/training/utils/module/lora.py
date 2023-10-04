@@ -53,10 +53,15 @@ OPTForCausalLM(
 )
 ————————————————
 '''
+# LinearLayer_LoRA 是一个实现了 LoRA（Low-Rank Adaptation）策略的 PyTorch 模块。
+# LoRA 是一种在大型预训练模型（如 GPT-3 或者 BERT）微调中使用的策略，可以提高微调的效果。
+# 这个类是一个简单的 LoRA 实现，只支持线性层。
 class LinearLayer_LoRA(nn.Module):
     # an simple implementation of LoRA
     # for now only support Linear Layer
     """具体的lora层"""
+    # 初始化函数，定义了一些参数，如权重（weight）、LoRA 维度（lora_dim）、
+    # LoRA 缩放因子（lora_scaling）、LoRA dropout （lora_droppout）以及偏置（bias）。
     def __init__(self,
                  weight,
                  lora_dim=0,
@@ -68,48 +73,51 @@ class LinearLayer_LoRA(nn.Module):
         """此处的weight和bias即为原始结构中的参数"""
         self.weight = weight
         self.bias = bias
-
+        # 在初始化过程中，首先检查 lora_dim 是否大于0，如果不是，就抛出异常。
         if lora_dim <= 0:
             raise ValueError(
                 "You are training to use LoRA, whose reduced dim should be larger than 1"
             )
-
+        # 然后尝试获取权重的形状，如果权重是在 ZeRO 阶段3中的参数，那么通过 ds_shape 属性获取形状；
+        # 否则直接使用 shape 属性。
         try:
             # for zero stage 3
             rows, columns = weight.ds_shape
         except:
             rows, columns = weight.shape
+        # 然后初始化 LoRA 的左右两个权重矩阵，并设置它们为可学习的参数。
         self.lora_right_weight = nn.Parameter(torch.zeros(
             columns,
             lora_dim))  # apply transpose so in forward we do not need to
         self.lora_left_weight = nn.Parameter(torch.zeros(lora_dim, rows))
         self.lora_scaling = lora_scaling / lora_dim
-
+        # 如果 lora_droppout 大于0，则创建一个 Dropout 层；否则创建一个 Identity 层。
         if lora_droppout > 0:
             self.lora_dropout = nn.Dropout(lora_droppout)
         else:
             self.lora_dropout = nn.Identity()
-
+        # 然后调用 reset_parameters 方法对 LoRA 权重进行初始化。
         """初始化LoRA线性层的参数"""
         self.reset_parameters()
 
         # disable the original weight gradient
         """冻结weight部分的参数"""
+		# 最后，关闭原始权重的梯度，设置 LoRA 融合标志位为 False。
         self.weight.requires_grad = False
 
         # fuse LoRA to the original weight
         self.fuse_lora = False
 
     def eval(self):
-        self.lora_dropout.eval()
+        self.lora_dropout.eval() # 将模型设置为评估模式，这时候 Dropout 层会停止工作。
 
     #   self.fuse_lora_weight()
 
     def train(self, mode=True):
-        self.lora_dropout.train(mode)
+        self.lora_dropout.train(mode) # 将模型设置为训练模式，这时候 Dropout 层会开始工作。
         # self.unfuse_lora_weight()
 
-    def reset_parameters(self):
+    def reset_parameters(self): # 初始化 LoRA 权重的方法。右权重使用 kaiming 均匀分布进行初始化，左权重初始化为全0。
         """初始化LoRA线性层的参数"""
         # 降维矩阵使用kaiming均匀分布初始化，
         # 服从均匀分布U(-\sqrt{1/in_feature}, +\sqrt{1/in_feature})
@@ -119,6 +127,9 @@ class LinearLayer_LoRA(nn.Module):
         # 升维矩阵使用全0初始化
         nn.init.zeros_(self.lora_left_weight)
 
+    # fuse_lora_weight(self) 和 unfuse_lora_weight(self)：
+    # 这两个方法用于将 LoRA 权重融合到原始权重中，或者从原始权重中解融合。
+    # 融合操作实质上是将原始权重与 LoRA 权重的乘积（缩放后）相加。
     def fuse_lora_weight(self):
         if not self.fuse_lora:
             self.weight.data += self.lora_scaling * torch.matmul(
@@ -140,8 +151,9 @@ class LinearLayer_LoRA(nn.Module):
     F.linear(input, self.weight, self.bias) + 
     (self.lora_dropout(input) @ self.lora_right_weight @ self.lora_left_weight) * self.lora_scaling，
     加号左侧为原结构支路，加号右侧为新增支路，self.lora_right_weight和self.lora_left_weight分别为两个新引入线性层的参数。
-    
     '''
+	# 前向传播函数。如果 LoRA 权重已融合，则直接对输入进行线性变换；
+    # 否则，会额外计算一个 LoRA 项，该项是输入通过 Dropout 层，然后与 LoRA 权重相乘得到的。
     def forward(self, input):
         if self.fuse_lora:
             return F.linear(input, self.weight, self.bias)
@@ -152,7 +164,8 @@ class LinearLayer_LoRA(nn.Module):
                 self.bias) + (self.lora_dropout(input) @ self.lora_right_weight
                               @ self.lora_left_weight) * self.lora_scaling
 
-
+# 这个函数 convert_linear_layer_to_lora 是用来将模型中的线性层转换为 LoRA 层的。
+# 在训练深度学习模型时，这种方法能够在保持预训练模型参数不变的同时，通过添加额外的参数来微调模型。
 # convert the linear layer to LoRA
 def convert_linear_layer_to_lora(model,
                                  part_module_name,
@@ -164,37 +177,57 @@ def convert_linear_layer_to_lora(model,
     """
     """取出模型中参数名含有decoder.layers.的线性层"""
     repalce_name = []
+    # 函数首先遍历模型中的所有模块（model.named_modules()），找出名称中包含 part_module_name 的线性层（nn.Linear），
+    # 并将这些层的名称添加到 repalce_name 列表中。
     for name, module in model.named_modules():
         if isinstance(module, nn.Linear) and part_module_name in name:
             repalce_name.append(name)
+    # 然后，函数遍历 repalce_name 列表，使用 recursive_getattr 函数获取模型中对应名称的模块。
+    # 这些模块是需要被替换成 LoRA 层的线性层。
     for name in repalce_name:
         """recursive_getattr实现了从model中根据属性名取出对应原始结构"""
         module = recursive_getattr(model, name)
         """纳入原始结构的参数，实例化lora层"""
+        # 对于每一个需要被替换的模块，函数创建一个 LinearLayer_LoRA 实例 tmp，
+        # 并将其传输到与原始模块相同的设备和数据类型上。创建 LinearLayer_LoRA 实例时，
+        # 需要传入原始模块的权重、偏置以及 LoRA 层的一些参数，如 lora_dim、lora_scaling 和 lora_droppout。
         tmp = LinearLayer_LoRA(
             module.weight, lora_dim, lora_scaling, lora_droppout,
             module.bias).to(module.weight.device).to(module.weight.dtype)
         """recursive_getattr实现了将model对应属性的结构换成lora层实例"""
+        # 创建完 LinearLayer_LoRA 实例后，函数使用 recursive_setattr 函数将原始模块替换为 LinearLayer_LoRA 实例。
         recursive_setattr(model, name, tmp)
     return model
 
-
+# 这个函数的主要功能是筛选出那些在DeepSpeed Zero 3优化中被离线存储，但在当前还未获取的参数。
+# 在DeepSpeed Zero 3优化中，一些模型参数在使用过后会被离线存储，以此释放GPU显存。
+# 当这些参数需要再次被使用时，需要先获取到本地。
 def _z3_params_to_fetch(param_list):
+    # yknote--代码有改动
+	# 这个条件语句判断一个参数是否是被DeepSpeed Zero 3优化过的，且其状态为"未获取"（NOT_AVAILABLE）。
+    # 对于被DeepSpeed Zero 3优化过的参数，它们有一个ds_id属性和一个ds_status属性，其中ds_status表示参数的当前状态。
     return [
         p for p in param_list
         if hasattr(p, 'ds_id') and p.ds_status == deepspeed.runtime.zero.
         partition_parameters.ZeroParamStatus.NOT_AVAILABLE
     ]
 
-
+# 这个函数 convert_lora_to_linear_layer 是用来将模型中的 LoRA 层转换回线性层的。
+# 在训练深度学习模型时，这个操作可以用于在训练完 LoRA 层后，将模型恢复到原始的状态，
+# 以便进行下一步的操作，如模型的保存、加载等。
 # convert the LoRA layer to linear layer
 def convert_lora_to_linear_layer(model):
     repalce_name = []
+    # 函数首先遍历模型中的所有模块（model.named_modules()），找出所有的 LoRA 层（LinearLayer_LoRA），
+    # 并将这些层的名称添加到 repalce_name 列表中。
     for name, module in model.named_modules():
         if isinstance(module, LinearLayer_LoRA):
             repalce_name.append(name)
+    # 然后，函数遍历 repalce_name 列表，使用 recursive_getattr 函数获取模型中对应名称的 LoRA 层。
     for name in repalce_name:
         module = recursive_getattr(model, name)
+        # 对于每一个 LoRA 层，函数首先检查是否处于 zero stage 3（DeepSpeed 的一个特性，用于在多GPU训练中减少内存占用）。
+        # 如果是，则设置 zero_stage_3 为 True。
         zero_stage_3 = hasattr(module.weight, 'ds_id')
         with deepspeed.zero.GatheredParameters(_z3_params_to_fetch([
                 module.weight, module.bias, module.lora_left_weight,
@@ -205,11 +238,16 @@ def convert_lora_to_linear_layer(model):
             module.fuse_lora_weight()
     return model
 
-
+# 这个函数的作用是关闭模型中除LoRA参数之外的所有参数的梯度。这意味着在训练过程中，只有LoRA参数会被优化，其他参数保持不变。
 def only_optimize_lora_parameters(model):
     # turn off the gradient of all the parameters except the LoRA parameters
+    # 遍历模型的所有参数。每个参数都有一个唯一的名称name和对应的参数值param。
     for name, param in model.named_parameters():
+        # 查当前参数的名称是否包含lora_right_weight或lora_left_weight。
+        # 这是因为在LoRA（Low-Rank Adaptation）中，只有这两种参数是需要优化的。
         if "lora_right_weight" in name or "lora_left_weight" in name:
+            # param.requires_grad = True 如果参数名包含lora_right_weight或lora_left_weight，
+            # 则设置参数的requires_grad属性为True，表示需要对此参数进行梯度下降优化。
             param.requires_grad = True
         else:
             param.requires_grad = False

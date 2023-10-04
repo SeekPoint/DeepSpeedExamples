@@ -24,7 +24,20 @@ UML时序图(3-6)
 主要是实现将原始数据处理成注释所提及格式。
 
 '''
+
+# create_prompt_dataset解析
+# create_prompt_dataset这个函数实际上直接或者间接的用到了utils/data中raw_dataset.py和data_utils.py，
+# 为了搞清楚这个函数，我们需要对这两个文件做一个解析。
+#
+# 首先解析一下raw_dataset.py。这里先定义了一个PromptRawDataset类：
+
+# 这段代码定义了一个名为PromptRawDataset的类，这个类是一个模板类，用于处理和组织模型输入数据的格式。
+# 如果有新的数据集需要进行处理，可以继承这个类并实现相应的方法来确保数据的统一格式和接口。
 class PromptRawDataset(object):
+    # 首先，这个类的构造函数__init__接收四个参数：output_path（输出路径），seed（随机种子），
+    # local_rank（本地等级）和dataset_name（数据集名称）。
+    # 在构造函数中，如果数据集名称不是'local/jsonfile'，
+    # 那么会使用Hugging Face的datasets库的load_dataset函数来加载数据集。
     def __init__(self, output_path, seed, local_rank, dataset_name):
         """
         初始化
@@ -40,66 +53,76 @@ class PromptRawDataset(object):
             # load_dataset源自datasets库，该方法支持读取csv/json/text等多种文件格式的数据
             self.raw_datasets = load_dataset(dataset_name)
 
-    def get_train_data(self):
+    # 然后，这个类定义了一些方法，这些方法在默认情况下并没有实现（只是返回None或者空操作），
+    # 这是因为这个类只是一个模板类，这些方法需要在实际使用时在子类中具体实现。
+    def get_train_data(self): # 获取训练数据
         """
-              获取训练集
-              :return: dataset数据格式
+        获取训练集
+        :return: dataset数据格式
         """
         return
 
-    def get_eval_data(self):
+    def get_eval_data(self):  # 获取评估数据
         """
-                获取验证集
-                :return: dataset数据格式
+        获取验证集
+        :return: dataset数据格式
         """
         return
 
     # The prompt should be in the format of: " Human: " + actual_prompt_sentence + " Assistant:"
+    # get_prompt方法用于获取样本中的prompt（提示，这是模型的输入）。
     def get_prompt(self, sample):
         """
-                从dataset的sample（单个样本）中获取prompt。
-                :param sample: dataset的元素
-                :return: prompt。prompt的格式必须为 "Human: {} Assistant:".format(actual_prompt_sentence)
+        从dataset的sample（单个样本）中获取prompt。
+        :param sample: dataset的元素
+        :return: prompt。prompt的格式必须为 "Human: {} Assistant:".format(actual_prompt_sentence)
         """
         return
 
     # The chosen response should be in the format of: " " + actual_response_sentence
+    # get_chosen方法用于获取样本中的chosen（已选的回应，这是模型需要生成的目标输出）。
     def get_chosen(self, sample):
         """
-                从dataset的sample（单个样本）中获取chosen。chosen实际上是“chosen response”，指的是“精选的回复”，即人类所偏好的、高分的回复。
-                :param sample: dataset的元素
-                :return: chosen。chosen的格式必须为" {}".format(actual_response_sentence)
-    """
+        从dataset的sample（单个样本）中获取chosen。chosen实际上是“chosen response”，
+        指的是“精选的回复”，即人类所偏好的、高分的回复。
+        :param sample: dataset的元素
+        :return: chosen。chosen的格式必须为" {}".format(actual_response_sentence)
+        """
         return
 
     # The rejected response should be in the format of: " " + actual_response_sentence
     # If the dataset does not have rejected response, return None
+    # get_rejected方法用于获取样本中的rejected（被拒绝的回应，这可能用于一些特定的训练场景，
+    # 比如在对抗训练中，但如果数据集中没有这样的数据，可以返回None）。
     def get_rejected(self, sample):
         """
-                从dataset的sample（单个样本）中获取rejected。rejected实际上是“rejected response”，指的是“排斥的回复”，即人类所厌恶的、低分的回复。
-                :param sample: dataset的元素
-                :return: rejected。如果数据集中不存在则返回为None；如果存在，则其格式必须为 " {}".format(actual_response_sentence)
+        从dataset的sample（单个样本）中获取rejected。rejected实际上是“rejected response”，
+        指的是“排斥的回复”，即人类所厌恶的、低分的回复。
+        :param sample: dataset的元素
+        :return: rejected。如果数据集中不存在则返回为None；
+        如果存在，则其格式必须为 " {}".format(actual_response_sentence)
         """
         return
 
+    # 获取样本中的prompt和chosen
     def get_prompt_and_chosen(self, sample):
         """
-                从dataset的sample（单个样本）中获取prompt与chosen。
-                :param sample: dataset的元素
-                :return: prompt与chosen的衔接。同样需要满足上述格式要求，即衔接结果为
-                "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
+        从dataset的sample（单个样本）中获取prompt与chosen。
+        :param sample: dataset的元素
+        :return: prompt与chosen的衔接。同样需要满足上述格式要求，即衔接结果为
+        "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
         """
         return
 
+    # 获取样本中的prompt和rejected
     def get_prompt_and_rejected(self, sample):
         """
-                从dataset的sample（单个样本）中获取prompt与rejected。
-                :param sample: dataset的元素
-                :return: prompt与rejected的衔接。同样需要满足上述格式要求，即衔接结果为
-                "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
+        从dataset的sample（单个样本）中获取prompt与rejected。
+        :param sample: dataset的元素
+        :return: prompt与rejected的衔接。同样需要满足上述格式要求，即衔接结果为
+        "Human: {} Assistant: {}".format(actual_prompt_sentence, actual_response_sentence)
         """
         return
-
 
 # English dataset
 class DahoasRmstaticDataset(PromptRawDataset):
@@ -245,15 +268,22 @@ class YitingxieRlhfrewarddatasetsDataset(PromptRawDataset):
     def get_prompt_and_rejected(self, sample):
         return sample['prompt'] + sample['rejected']
 
+# 接下来就是每个具体数据集的定义，我这里以 OpenaiWebgptcomparisonsDataset 为例解析一下，剩下的读者又需要可以自行理解：
 
 # English dataset
+# 这个类OpenaiWebgptcomparisonsDataset继承自PromptRawDataset类，
+# 针对"openai/webgpt_comparisons"这个具体的数据集进行了特化。
 class OpenaiWebgptcomparisonsDataset(PromptRawDataset):
-
+    # 在构造函数__init__中，调用了父类的构造函数，并设定了dataset_name和dataset_name_clean两个属性，
+    # 分别为"openai/webgpt_comparisons"和"openai_webgpt_comparisons"。
     def __init__(self, output_path, seed, local_rank, dataset_name):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "openai/webgpt_comparisons"
         self.dataset_name_clean = "openai_webgpt_comparisons"
 
+    # get_train_data和get_eval_data方法分别从raw_datasets中获取训练数据和测试数据。
+    # 它们与之前的DahoasRmstaticDataset类不同之处在于，它们使用get_raw_dataset_split_index
+    # 方法对训练数据进行了划分，将其划分为训练集和验证集，并返回对应的数据子集。
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
         dataset = self.raw_datasets["train"]
@@ -274,6 +304,13 @@ class OpenaiWebgptcomparisonsDataset(PromptRawDataset):
         dataset = Subset(dataset, index)
         return dataset
 
+    # get_prompt，get_chosen和get_rejected方法分别从样本中获取提示，已选回应和被拒绝的回应。
+    # 这里假定样本是一个字典，其中包含了名为'question'，'score_0'，'score_1'，'answer_0'和'answer_1'的字段。
+    # 其中，'question'字段是一个字典，包含了'full_text'字段。这个字段包含了人类提出的问题。
+    # 'score_0'和'score_1'字段是字符串，表示对'answer_0'和'answer_1'的评分。
+    # 如果'score_0'大于等于'score_1'，那么'answer_0'就是已选回应，'answer_1'就是被拒绝的回应，反之亦然。
+    # 在获取已选回应和被拒绝的回应时，还对回应进行了处理，
+    # 去除了所有形如"[...]"或"(...)"的文本，然后在回应前添加了一个空格。
     def get_prompt(self, sample):
         return " Human: " + sample['question']['full_text'] + " Assistant:"
 
@@ -298,6 +335,9 @@ class OpenaiWebgptcomparisonsDataset(PromptRawDataset):
         response = re.sub(r"[\(\[].*?[\)\]]", "", response)
         return " " + response
 
+    # get_prompt_and_chosen和get_prompt_and_rejected方法则分别返回样本中的'prompt'和'chosen'，
+    # 以及'prompt'和'rejected'的组合。这两个方法的返回值可以直接作为模型的输入和目标输出。
+    # 在返回这两个组合时，也进行了类似的处理，去除了所有形如"[...]"或"(...)"的文本。
     def get_prompt_and_chosen(self, sample):
         if float(sample['score_0']) >= float(sample['score_1']):
             response = sample['answer_0']
