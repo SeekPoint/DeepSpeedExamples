@@ -354,6 +354,7 @@ class DeepSpeedPPOTrainer():
         找到answer的起始start：即prompt的最后1个token位置
         比如prompts长度为256，answer的起始则为256-1=255
         """
+        # 状态s_1在prompt最后一个token，动作a_1表示预测response的第一个token
         start = prompts.shape[1] - 1
 
         # 不考虑padding部分
@@ -382,6 +383,7 @@ class DeepSpeedPPOTrainer():
             KL_reward = KL + reward
             加和只在最末有效token上进行
             """
+            # 在最后一个token加reward_score
             rewards[j, start:ends[j]][-1] += reward_clip[j]
 
         """返回KL rewards"""
@@ -700,6 +702,7 @@ class DeepSpeedPPOTrainer():
 
         # 计算每个时刻（序列位置）的critic model预测误差
         # 反向遍历计算各个时间步的优势advantage
+        # 反向计算
         for t in reversed(range(start, length)):
             # 获取下个时间步的价值估计V_{old}(s_{t+1})
             nextvalues = values[:, t + 1] if t < length - 1 else 0.0
@@ -716,14 +719,14 @@ class DeepSpeedPPOTrainer():
             advantages_reversed.append(lastgaelam)
 
         #对逆序的优势列表进行正序处理，得到正常时间步排列的优势
-        advantages = torch.stack(advantages_reversed[::-1], dim=1)
+        advantages = torch.stack(advantages_reversed[::-1], dim=1)  # 再反转
 
         # 后续用来更新critic model用
         """
         return_t = adv_t + v(s_t)
         由优势计算得到回报
         """
-        returns = advantages + values[:, start:]
+        returns = advantages + values[:, start:]  # adv(t) + value(t+1)更合理些
 
         # 返回优势与回报
         return advantages.detach(), returns
