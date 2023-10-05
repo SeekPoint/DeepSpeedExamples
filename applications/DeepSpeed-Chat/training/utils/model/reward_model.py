@@ -76,6 +76,8 @@ class RewardModel(nn.Module):
 
     """
     def __init__(self, base_model, tokenizer, num_padding_at_beginning=0):
+        ## 为当前输入打分, 每个token都会对应一个分数
+
         super().__init__()
         self.config = base_model.config
         self.num_padding_at_beginning = num_padding_at_beginning
@@ -170,6 +172,7 @@ class RewardModel(nn.Module):
         rejected_ids = input_ids[bs:]  # 后N个为负样本
         chosen_rewards = rewards[:bs]  # 获得前N个正样本的预测的reward
         rejected_rewards = rewards[bs:]  # 获得后N个负样本的预测的reward
+        ## chosen 和 reject都会生成一个对应的分数 rewards
 
         # Compute pairwise loss. Only backprop on the different tokens before padding
         loss = 0
@@ -206,6 +209,7 @@ class RewardModel(nn.Module):
             divergence_ind为chosen_sentence和reject_sentence两者answer的第1个token的index
 
             """
+            ## 获取 PAD_token 的索引, 只支持right_padding ?
 
             # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
@@ -214,6 +218,8 @@ class RewardModel(nn.Module):
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
                 c_inds
             ) > self.num_padding_at_beginning else seq_len  # OPT model pads the first token, so we need to use the second padding token as the end of the sequence
+
+            # 获取不同id的索引
             check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
 
             # 说明不存在相等的padding token
@@ -240,8 +246,11 @@ class RewardModel(nn.Module):
             # [divergence_ind:end_ind]索引了padding前一个位置的输出分值
             # chosen_reward是同一个句子pair里分数高的句子，r_truncated_reward是句子pair里分数低的句子
 
+
             # 以chosen_sentence和reject_sentence最先不同的地方为起始、生成结束的地方为终止，取两者在这个片段的对应分值
             # 这部分其实就是上个代码块提及的“对齐部分”
+
+            ## 从不相同的第一个token到 最后一个token的reward
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
 
@@ -249,6 +258,10 @@ class RewardModel(nn.Module):
             chosen_mean_scores.append(
                 chosen_reward[c_ind - 1])  #use the end score for reference
             rejected_mean_scores.append(rejected_reward[r_ind - 1])
+
+            ## 最后一个token的分数为reward model 的reference 分数。训练critic，为一一对应的loss
+            ## chosen 的reward尽可能大，reject reward尽可能小
+
             #pair wise loss代码如下，如果给pair里边好的句子打分高（c_truncated_reward），坏的句子（r_truncated_reward）打分低，loss就会小：
             loss += -torch.nn.functional.logsigmoid(c_truncated_reward -
                                                     r_truncated_reward).mean()
@@ -300,6 +313,8 @@ class RewardModel(nn.Module):
         # 将隐状态特征传入线性层v_head输出得到分值"""
         # values.shape: (bs, max_seq_len)
         values = self.v_head(hidden_states).squeeze(-1)
+
+        ## value 为 bs * seq 的sequence 分数
         if return_value_only:
             """
             如果传参中预设了“return_value_only=True”，
@@ -339,3 +354,5 @@ class RewardModel(nn.Module):
 
         # 上面的Reward函数可以认为是一个分类器，需要基于Causal
         # LM（例如OPT）作为Backbone，获得完整的Reward模型： def create_critic_model(model_name_or_path
+
+        # 上述reward model 用来训练奖励模型

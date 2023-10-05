@@ -1,0 +1,34 @@
+LLM学习笔记--RLHF 代码篇
+
+https://zhuanlan.zhihu.com/p/659321779
+
+代码 <--> PPO
+数据通常包含正（chosen）和负（rejected）例。[1]
+032.webp
+
+## Copy from microsoft deepspeed-chat[2]
+....
+
+KL penalty -- Another approach
+TRPO[4] 建议用KL散度作为惩罚项来解决非约束优化问题（避免policy剧烈迭代）
+
+<TRPO is related to prior methods (e.g.natural policy gradient) but makes several changes, most notably by using a fixed KL divergence rather than a fixed penalty coefficient>
+
+但是PPO中说这个方法不如Clipped Surrogate
+
+<In our experiments, we found that the KL penalty performed worse than the clipped surrogate objective,
+however, we’ve included it here because it’s an important baseline.>
+
+034.png
+
+没有看到微软的代码中体现了这个方法
+
+...
+
+
+参考
+^Dahoas/rm-static https://huggingface.co/datasets/Dahoas/rm-static/viewer/default/train?row=0
+^Microsoft-DeepspeedChat https://github.com/microsoft/DeepSpeedExamples/tree/master/applications/DeepSpeed-Chat/training
+^Proximal Policy Optimization Algorithms https://arxiv.org/pdf/1707.06347.pdf
+^Trust Region Policy Optimization https://arxiv.org/abs/1502.05477
+发布于 2023-10-03 15:48・IP 属地北京

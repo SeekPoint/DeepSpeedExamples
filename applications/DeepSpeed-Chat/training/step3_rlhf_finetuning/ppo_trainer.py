@@ -131,13 +131,14 @@ class DeepSpeedPPOTrainer():
         self.cliprange_value = 0.2
         self.gamma = 1.0
         self.lam = 0.95
-'''
-3.3.3.2 seq的生成
-对于本次batch的prompt，将输入至当前actor（对于即将根据经验数据迭代得到的actor来说，
-此时的“当前actor”可以认为是“旧策略网络”）来生成answer（如下图所示），
-然后将prompt与answer进行拼接得到seq。
-在这里插入图片描述  011.png
-'''
+
+    '''
+    3.3.3.2 seq的生成
+    对于本次batch的prompt，将输入至当前actor（对于即将根据经验数据迭代得到的actor来说，
+    此时的“当前actor”可以认为是“旧策略网络”）来生成answer（如下图所示），
+    然后将prompt与answer进行拼接得到seq。
+    在这里插入图片描述  011.png
+    '''
     def _generate_sequence(self, prompts, mask, step):
         """
         生成seq
@@ -147,6 +148,8 @@ class DeepSpeedPPOTrainer():
         用于对生成长度做限制
         """
         max_min_length = self.max_answer_seq_len + prompts.shape[1]
+
+        ## 首先inference获取对应的模型输出
 
         # 首先用actor model在推理模式下根据prompt生成一个answer（prompt对应强化学习里边的state，answer对应一些列的action），代码如下：
         # 保证不触发反向传播
@@ -236,6 +239,8 @@ class DeepSpeedPPOTrainer():
         
         _generate_sequence()更具体的细节可见后续详解。
         '''
+        ## 获取后，根据解码获得的seq来计算各个奖励和actor与ref对应的logits
+
         # 调用model.generate()生成序列，由actor模型生成。
         # 输入instruct prompt，由Actor生成seq，上图中红色步骤（1），seq由instruct和response组成
         seq = self._generate_sequence(prompts, mask, step)
@@ -323,6 +328,14 @@ class DeepSpeedPPOTrainer():
             "attention_mask": attention_mask
         }
 
+    ## action_mask = attention_mask[:, 1:]
+    ## reward_score shape = [bs]
+    ## prompt means the inputs for model.generate() method, so the input length is aligned
+
+    ## 获取上述critic，reward，actor logits 和ref logits后计算rewards，
+    # 最终rewards为 actor 和 ref 的 logits 差加上 clamp后的reward_scores
+
+    # 如何计算Advantage？
     def compute_rewards(self, prompts, log_probs, ref_log_probs, reward_score,
                         action_mask):
         # 计算kl散度，log_probs里边存的数字经过log变化了，因此减法就对应除法
@@ -351,6 +364,9 @@ class DeepSpeedPPOTrainer():
 		'''
         ends = start + action_mask[:, start:].sum(1) + 1
 
+        ## rewards_scores 仅为最后一个非pad token的值，shape 为 bs * 1
+        ## values 是 return_values_only 得到的，为每一个token对应的rewards 分数
+
         #将RM得到的奖励值限定在一定范围，默认为(-5,5)
         reward_clip = torch.clamp(reward_score, -self.clip_reward_value,
                                   self.clip_reward_value)
@@ -370,6 +386,8 @@ class DeepSpeedPPOTrainer():
 
         """返回KL rewards"""
         return rewards
+
+        ## 用计算好的 rewards来更新actor model，values来更新critic model
 
     '''
     3.3.5.2 PPO训练
@@ -459,6 +477,7 @@ class DeepSpeedPPOTrainer():
             # we need to zero out the reward and value after the end of the conversation
             # otherwise the advantage/return will be wrong
             for i in range(old_rewards.shape[0]):
+                ## 之前生成_generate_sequence时并没有过滤掉pad_token，所以要把pad_token处的rewards 记 0
                 old_rewards[i, ends[i]:] = 0
                 old_values[i, ends[i]:] = 0
 
@@ -472,6 +491,9 @@ class DeepSpeedPPOTrainer():
             # 获得advantage值（v + r - v'）
             # 由critic或的的value与前面根据KL散度和r(x, y)得到的reward，从而计算得到advantage
             # 上图蓝色步骤（2）
+
+            ## old_values 为 critic model计算的每个token 对应的rewards分数
+            ## old_rewards为actor 和 ref 做logits差后加上 reward model 的最后一个token 的reward分数
             advantages, returns = self.get_advantages_and_returns(
                 old_values, old_rewards, start)
 
@@ -574,14 +596,27 @@ class DeepSpeedPPOTrainer():
         # 本次ppo_step将返回actor_loss和critic_loss供指标统计
         return actor_loss, critic_loss
 
+        ### process the new outputs
+
+    '''
+    batch = {'input_ids': seq, "attention_mask": attention_mask}
+
+    ## 训练时外部还有 ppo_epoch的循环，但默认值为1，所以这两个log都是同一个模型（有无dropout）计算出来的
+    actor_prob = self.actor_model(**batch, use_cache=False).logits
+    actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:])
+    actor_loss = self.actor_loss_fn(actor_log_prob[:, start:], log_probs[:, start:], advantages, action_mask[:, start:])
+    '''
+
     '''
     以上过程，我们已经拿到了PPO训练所需要的advantage以及actor model的输出，我先现在可以对actor model进行训练啦。
-    具体代码如下。logprobs和old_logprobs这两个参数分别是“老actor（n个epoch才会更新一次）”和新actor（每个batch都会更新它）”在正确单词上出处的概率，
+    具体代码如下。
+    logprobs和old_logprobs这两个参数分别是“老actor（n个epoch才会更新一次）”和新actor（每个batch都会更新它）”在正确单词上出处的概率，
     这块时PPO import sampling相关的知识，就不在这重复介绍了，不明白的同学补习一下哈。借用一下李宏毅老师的PPO公式：
     图！
 
-
     '''
+
+    # Clipped Surrogate Objective 033.png  对应为更新actor的loss
     def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
         #"""计算actor的损失"""
 
@@ -646,6 +681,11 @@ class DeepSpeedPPOTrainer():
 
     图片出处：https://huggingface.co/blog/deep-rl-a2c
     '''
+
+    ## values 为 更新参数前critic model对actor 解码得到的seq计算得到的各个token评分，shape 为 [bs * seq]
+    ## rewards is the output from compute_rewards function, with shape [bs * seq]
+    ## 公式 035.png
+
     def get_advantages_and_returns(self, values, rewards, start):
         # values（B，L） critic model输出
         # rewards（B，）reward model输出

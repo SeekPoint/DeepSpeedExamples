@@ -209,6 +209,8 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
+        ## 往往会再定义一个ref model，为原始的actor_model，用来计算KL避免生成的内容与原始模型差太远【怕训飞】。
+        ## ref_model 不会进行参数更新
         ref_model = create_hf_model(AutoModelForCausalLM,
                                     actor_model_name_or_path, self.tokenizer,
                                     ds_config)
@@ -330,6 +332,7 @@ class DeepSpeedRLHFEngine():
         #TODO(jeff): it means we never create the critic w. zero.init context if we are using ZeRO-3
         ds_eval_config = get_eval_ds_config(offload=False, stage=0)
 
+        ## reward model 和 critic model 都是用step 2 的模型初始化，step 3 中 reward model 不再训练
         # Model
         reward_model = create_critic_model(
             model_name_or_path=critic_model_name_or_path,
