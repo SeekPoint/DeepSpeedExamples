@@ -162,6 +162,7 @@ class DahoasRmstaticDataset(PromptRawDataset):
         debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ if self else '')
         return self.raw_datasets["train"]
 
     def get_eval_data(self):

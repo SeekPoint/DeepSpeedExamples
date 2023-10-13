@@ -4,3 +4,19 @@ https://wjn1996.blog.csdn.net/article/details/130227305
     通过编辑页面
     删除 ***user-select 实现
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   ---可以跟上多个数据集
+
+   ---有多少数据集，就会生成多少个对应的npy文件applications/DeepSpeed-Chat/training/step1_supervised_finetuning/data_files/目录下
+   get_raw_dataset
+
+
+   ---已经生成了，下次训练不会重新触发dataset相关代码,因为仅仅考名称和位置判定
+  即使数据集大小变化也不会检测道，所以需要删除再来！！！！
+
+
+  不同阶段都有不同算子，可能被cache
+  /home/amd00/.cache/torch_extensions/py39_cu121
