@@ -254,7 +254,7 @@ def main():
                                      tokenizer, None)
     # 然后，这些模型被移动到指定的设备上。
     print("device :", device)
-    print("tokenizer :", tokenizer)
+    print("2--tokenizer :", tokenizer)
     print("model_baseline :", model_baseline)
     print("model_fintuned :", model_fintuned)
 

@@ -4,7 +4,7 @@
 
 # DeepSpeed Team
 OUTPUT=$1
-ZERO_STAGE=$2
+ZERO_STAGE=0
 if [ "$OUTPUT" == "" ]; then
     OUTPUT=./output
 fi
@@ -14,7 +14,7 @@ fi
 mkdir -p $OUTPUT
 
 deepspeed main.py \
-   --data_path Dahoas/rm-static Dahoas/full-hh-rlhf Dahoas/synthetic-instruct-gptj-pairwise yitingxie/rlhf-reward-datasets \
+   --data_path Dahoas/rm-static  \
    --data_split 2,4,4 \
    --model_name_or_path /home/amd00/hf_model/opt-125m \
    --per_device_train_batch_size 4 \
@@ -30,4 +30,4 @@ deepspeed main.py \
    --zero_stage $ZERO_STAGE \
    --deepspeed \
    --output_dir $OUTPUT \
-   &> $OUTPUT/training-1node2gpus-opt125.log
+    2>&1 | tee $OUTPUT/training-ph1-1node2gpus-opt125-ZERO$ZERO_STAGE.log

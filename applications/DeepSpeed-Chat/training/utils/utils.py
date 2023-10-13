@@ -11,6 +11,8 @@ import json
 import deepspeed
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
 
+from pydebug import debuginfo, infoTensor
+
 # 在rank0也就是master rank打印信息，防止每个机器或GPU都打印消息造成大量重复信息
 def print_rank_0(msg, rank=0):
     if rank <= 0:
@@ -124,6 +126,15 @@ def get_all_reduce_mean(tensor):
     # 等于所有处理器上原始tensor的平均值。
     return tensor
 
+# 打印 get_optimizer_grouped_parameters 的返回值
+def debugOGP(optimizer_grouped_parameters):
+    for id1, pg in enumerate(optimizer_grouped_parameters): #根据下面代码，这是固定3个！
+        for id2, p in enumerate(pg["params"]):
+            print_rank_0(f'T OGP:{id1}-params-{id2}:' + infoTensor(pg["params"][id2]))
+        print(f'T OGP:{id1}-weight_decay:' + str(pg["weight_decay"]))
+        if 'lr' in pg.keys():
+            print_rank_0(f'T OGP:{id1}-lr:' + str(pg["lr"]))
+
 # 这段代码的作用是将模型中的参数分组以便于在优化器中使用。它将模型参数分为两组：
 # 一组需要进行权重衰减（L2正则化）的参数，另一组不需要进行权重衰减的参数。
 def get_optimizer_grouped_parameters(
@@ -134,7 +145,8 @@ def get_optimizer_grouped_parameters(
     lora_name_list=["lora_right_weight", "lora_left_weight"],
 ):
     #yknote代码有变动
-    # 它定义了一个列表 optimizer_grouped_parameters，其中包含两个字典。每个字典都对应一个参数组，包含 "params" 和 "weight_decay" 这两个关键字。
+    # 它定义了一个列表 optimizer_grouped_parameters，其中包含两个字典。
+    # 每个字典都对应一个参数组，包含 "params" 和 "weight_decay" 这两个关键字。
     optimizer_grouped_parameters = [
         # 在第一个字典中，它从模型参数中选出那些名称不包含 "bias" 或 "LayerNorm.weight"
         # 且需要求梯度的参数。这些参数在优化过程中会应用 weight_decay 作为权重衰减项。
@@ -175,7 +187,8 @@ def get_optimizer_grouped_parameters(
     if not optimizer_grouped_parameters[1]["params"]:
         optimizer_grouped_parameters.pop(1)
     return optimizer_grouped_parameters
-    #这种参数的分组策略是很常见的。比如在训练Transformer模型时，通常会为权重和偏置项设定不同的学习策略。这是因为权重衰减对于防止过拟合很有帮助，但对于某些参数（如偏置项或者层归一化的权重）可能会导致性能下降，因此常常会排除这些参数不进行权重衰减。
+    # 这种参数的分组策略是很常见的。比如在训练Transformer模型时，通常会为权重和偏置项设定不同的学习策略。
+    # 这是因为权重衰减对于防止过拟合很有帮助，但对于某些参数（如偏置项或者层归一化的权重）可能会导致性能下降，因此常常会排除这些参数不进行权重衰减。
 
 
 # 这个函数的主要功能是筛选出那些在DeepSpeed Zero 3优化中被离线存储，但在当前还未获取的参数。
@@ -222,10 +235,12 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
     model_to_save = model_ema.module if hasattr(model_ema,
                                                 'module') else model_ema
     if not zero_stage_3:
+        debuginfo(prj='ds-chat', info="Not use zero3")
       # 如果没有使用Zero阶段3优化，直接使用PyTorch的torch.save函数保存模型状态。
         if global_rank == 0:
             torch.save(model_to_save.state_dict(), output_model_file)
     else:
+        debuginfo(prj='ds-chat', info = "use zero3")
         # 如果使用了Zero阶段3优化，因为模型的部分参数和优化器状态在不同的设备上，所以需要先将它们收集起来。
         output_state_dict = {}
         for k, v in model_to_save.named_parameters():
@@ -245,6 +260,22 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
         # 最后，再使用torch.save函数保存模型状态。
         if global_rank == 0:
             torch.save(output_state_dict, output_model_file)
+
+        '''
+        不同阶段输出不同，同一个ph同一个程序也有不同输出！！，仅仅在z3出现
+        z123都可能是空的字典
+        或者非常大的输出
+        '''
+        print("++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
+        if len(output_state_dict.keys()) != 0:
+            for k in output_state_dict.keys():
+                infoTen = infoTensor(output_state_dict[k])
+                print(f"(### {k} is: {infoTen}")
+        else:
+            print("output_state_dict is", output_state_dict)
+        print("++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
+
+
         # 同时为了节省内存，使用del关键字删除了存储参数的字典。
         del output_state_dict
 

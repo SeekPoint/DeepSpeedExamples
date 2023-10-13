@@ -16,6 +16,8 @@ import hashlib  # Python的内置库，提供了一系列散列函数，如MD5�
 from itertools import chain  # Python的内置库，提供了一系列用于操作迭代器的函数。
 from . import raw_datasets
 
+from pydebug import debuginfo, infoTensor
+
 
 # 定义好自定义PromptRawDataset后，还需要对其进行“注册”，具体可见下述代码块。
 # 这段代码定义了一个名为get_raw_dataset的函数，其主要作用是根据传入的数据集名称dataset_name
@@ -26,6 +28,7 @@ def get_raw_dataset(dataset_name, output_path, seed, local_rank):
     # 例如，如果dataset_name为"Dahoas/rm-static"，那么就创建一个DahoasRmstaticDataset的实例；
     # 如果dataset_name为"Dahoas/full-hh-rlhf"，那么就创建一个DahoasFullhhrlhfDataset的实例，以此类推。
     if "Dahoas/rm-static" in dataset_name:
+        print("yk==dataset_name is:", dataset_name)
         return raw_datasets.DahoasRmstaticDataset(output_path, seed,
                                                   local_rank, dataset_name)
     elif "Dahoas/full-hh-rlhf" in dataset_name:
@@ -110,6 +113,10 @@ def get_shuffle_idx(seed, size):
     shuffle_idx = np.arange(start=0, stop=size, step=1,
                             dtype=dtype_)  # 创建一个由0开始，步长为1，到size结束（不包含size），并且数据类型为dtype_的等差数列，将其赋值给shuffle_idx。
     np_rng.shuffle(shuffle_idx)  # 使用np_rng随机状态生成器对shuffle_idx进行随机排列，这样就打乱了shuffle_idx的顺序。
+
+    print("len of shuffle_idx is:", len(shuffle_idx))
+    # print("shuffle_idx is:", shuffle_idx)
+    # shuffle_idx is: [6503 4944 5285 ... 1318  723 2863]
     return shuffle_idx  # 返回乱序后的shuffle_idx。
 
 
@@ -121,7 +128,12 @@ def get_raw_dataset_split_index(local_rank, output_path, dataset_name, seed,
                                 split_name, data_split, split_index,
                                 data_size):
     # 根据给定参数生成索引文件名。
+    '''
+   608 10月  9 15:41 Dahoas_rm_static_seed1234_eval_2,4,4_1.npy
+   1728 10月  9 15:41 Dahoas_rm_static_seed1234_train_2,4,4_2.npy
+    '''
     index_file_name = f"{output_path}/{dataset_name}_seed{seed}_{split_name}_{data_split}_{split_index}.npy"
+
     # reindex each time when using local jsonfile since it's more likely to get modified
     # 如果索引文件不存在，或者数据集名为'jsonfile'，则执行下面的操作。
     if (not os.path.isfile(index_file_name)) or (dataset_name == 'jsonfile'):
@@ -156,6 +168,9 @@ def get_raw_dataset_split_index(local_rank, output_path, dataset_name, seed,
                     allow_pickle=True)
     # 加载索引文件。
     index = np.load(index_file_name, allow_pickle=True)
+    #print("index is:", index)
+    print("len of index is:", len(index))
+
     # 将索引数组转换为列表并返回。
     return index.tolist()
 
@@ -167,20 +182,26 @@ class PromptDataset(Dataset):
     # prompt_dataset、chosen_dataset、reject_dataset、pad_token_id和train_phase。
     def __init__(self, prompt_dataset, chosen_dataset, reject_dataset,
                  pad_token_id, train_phase) -> None:
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         super().__init__()  # 调用父类torch.utils.data.Dataset的构造函数。
+
         self.prompt_dataset = prompt_dataset  # 将传入的参数赋值给类的成员变量。
         self.chosen_dataset = chosen_dataset
         self.reject_dataset = reject_dataset
         self.pad_token_id = pad_token_id
         self.train_phase = train_phase
 
-    def __len__(self):  # 定义类的__len__方法，它返回数据集的长度。这是PyTorch数据集的必要方法。
+    def __len__(self):
+        # 定义类的__len__方法，它返回数据集的长度。
+        # 这是PyTorch数据集的必要方法。
         length = len(self.chosen_dataset)  # 初始设定数据集长度为chosen_dataset的长度。
         if self.train_phase == 3:
             length = len(self.prompt_dataset)  # 如果训练阶段为3，则数据集长度设定为prompt_dataset的长度。
         return length  # 返回计算得出的数据集长度。
 
-    # 定义类的__getitem__方法，它接受一个参数idx，返回索引idx处的数据。这是PyTorch数据集的必要方法。
+    # 定义类的__getitem__方法，它接受一个参数idx，返回索引idx处的数据。
+    # 这是PyTorch数据集的必要方法。
     def __getitem__(self, idx):
         # 如果训练阶段为1，则返回一个字典，包含input_ids、attention_mask和labels，它们都来自chosen_dataset的索引idx处。
         if self.train_phase == 1:
@@ -213,7 +234,6 @@ phase1模型所需的输入数据为chosen_sentence的input_ids及attention_mask
 phase2模型所需的输入数据为chosen_sentence和reject_sentence的input_ids及attention_mask；
 phase3模型所需的输入数据为promt的input_ids及attention_mask。
 '''
-
 # 这是一个名为create_dataset_split的函数，它的功能是根据给定的训练阶段（train_phase），创建并返回相应的数据集分割。
 # 具体来说，它为每个训练阶段生成不同的数据集列表，并将它们放入PromptDataset对象中。
 # 函数接受6个参数：当前数据集(current_dataset)、原始数据集(raw_dataset)、训练阶段(train_phase)、
@@ -226,7 +246,8 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
     chosen_dataset = []
     reject_dataset = []
     # 如果训练阶段为1，则将接受的对话进行分词并添加到chosen_dataset中。
-    if train_phase == 1:
+    if train_phase == 1:  #需要刪除data_files才可以
+        debuginfo(prj='ds-chat', info="train_phase == 1")
         # 2.1数据处理：
         # ● 只需要获得训练集和验证集即可，也可以进行采样；
         # ● 接着，读取的数据中，获取prompt和chosen两个字段：
@@ -240,6 +261,9 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             # 具体样例可参照“数据格式基本概念”中的样例
             chosen_sentence = raw_dataset.get_prompt_and_chosen(
                 tmp_data)  # the accept response
+
+            #print("chosen_sentence--ph1:", chosen_sentence)
+
             # 如果接受的对话不为空，则将其分词并添加到chosen_dataset中。
             if chosen_sentence is not None:
                 # 在对话末尾加入对话终止符
@@ -258,10 +282,36 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                     "attention_mask"].squeeze(0)
                 # 存储tokenize结果至列表chosen_dataset
                 chosen_dataset.append(chosen_token)
+                #print("chosen_token--ph1:", chosen_token)
+            '''
+            chosen_sentence--ph1:
+            
+            Human: Can you tell me how often I should be changing my sheets?
+            
+            Assistant: A good rule of thumb is to change the sheets on your bed once a week.  It can depend on how many people sleep in your bed, and how many wet spots and smells accumulate on your sheets.
+            chosen_token--ph1: {
+            'input_ids': tensor([    2, 50118, 50118, 33837,    35,  2615,    47,  1137,   162,   141,
+                        ...
+                        2,     2,     2,     2,     2,     2,     2,     2]), 
+            'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                        ...
+                    0, 0, 0, 0, 0, 0, 0, 0])}
+            '''
+
+            #print("T chosen_token['input_ids']-1:", infoTensor(chosen_token['input_ids']))
+            #print("T chosen_token['attention_mask']-1:", infoTensor(chosen_token['attention_mask']))
+            # T chosen_token['input_ids']-1: _Size([128])_int64_cpu_        #only ph1
+            # T chosen_token['attention_mask']-1: _Size([128])_int64_cpu_   #only ph1
+
+        #print("chosen_dataset--ph1:", chosen_dataset) ===就是 chosen_token 的 list
+        print("len of chosen_dataset--ph1:", len(chosen_dataset))
+
         # ● 此时，一条样本可以表示为prompt+chosen，
         # 中间会插入一些用于对话的标记，例如“Human: ”、“Assistant: ”、“<|endoftext|>”等。
-        # 如果训练阶段为2，则将接受和被拒绝的对话都进行分词并分别添加到chosen_dataset和reject_dataset中。
-        elif train_phase == 2:
+
+    # 如果训练阶段为2，则将接受和被拒绝的对话都进行分词并分别添加到chosen_dataset和reject_dataset中。
+    elif train_phase == 2:
+        debuginfo(prj='ds-chat', info="train_phase == 2")
         # phase2需要用到chosen_sentence和reject_sentence
         # 所以需要对两者都进行处理
 
@@ -279,6 +329,9 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             # 具体样例可参照“数据格式基本概念”中的样例
             reject_sentence = raw_dataset.get_prompt_and_rejected(
                 tmp_data)  # the accept response
+
+            # print("chosen_sentence--ph2:", chosen_sentence)
+            # print("reject_sentence--ph2:", reject_sentence)
 
             if chosen_sentence is not None and reject_sentence is not None:
                 # 在对话末尾加入对话终止符
@@ -307,8 +360,60 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
 
                 # 存储tokenize结果至列表reject_dataset
                 reject_dataset.append(reject_token)
+
+                # print("reject_token--ph2:", reject_token)
+                # print("chosen_token--ph2:", chosen_token)
+
+            '''
+            chosen_sentence--ph2:
+    
+                Human: are crunches or sit-ups better?
+                
+                Assistant: I would recommend both! They can help you stay healthy and are also helpful if you want to lose weight.
+                
+            reject_sentence--ph2:
+            
+                Human: are crunches or sit-ups better?
+                
+                Assistant: What are you looking for exactly?
+            
+            reject_token--ph2: {
+                'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
+                        ...
+                         2,     2,     2,     2,     2,     2,     2,     2]]), 
+                'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                        ...
+                     0, 0, 0, 0, 0, 0, 0, 0]])}
+                     
+            chosen_token--ph2: {
+                'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
+                        ...
+                         2,     2,     2,     2,     2,     2,     2,     2]]), 
+                'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                    ...
+                     0, 0, 0, 0, 0, 0, 0, 0]])}
+            '''
+            # print("T reject_token['input_ids']--ph2:", infoTensor(reject_token['input_ids']))
+            # print("T reject_token['attention_mask']--ph2:", infoTensor(reject_token['attention_mask']))
+            # print("T chosen_token['input_ids']--ph2:", infoTensor(chosen_token['input_ids']))
+            # print("T chosen_token['attention_mask']--ph2:", infoTensor(chosen_token['attention_mask']))
+            ''' only ph2
+            T reject_token['input_ids']--ph2: _Size([1, 128])_int64_cpu_
+            T reject_token['attention_mask']--ph2: _Size([1, 128])_int64_cpu_
+            T chosen_token['input_ids']--ph2: _Size([1, 128])_int64_cpu_
+            T chosen_token['attention_mask']--ph2: _Size([1, 128])_int64_cpu_
+            '''
+
+        #print("reject_dataset--ph2:", reject_dataset)   就是 reject_token 的 list
+        print("len of reject_dataset--ph2:", len(reject_dataset))
+
+        # print("chosen_dataset--ph2:", chosen_dataset)  就是 chosen_token 的 list
+        print("len of chosen_dataset--ph2:", len(chosen_dataset))
+
+
     # 如果训练阶段为3，则将对话提示进行分词并添加到prompt_dataset中。
     elif train_phase == 3:
+        debuginfo(prj='ds-chat', info="train_phase == 3")
         # phase3用到prompt，prompt将被用来生成经验数据
 
         # 4.1数据处理
@@ -319,6 +424,8 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             # 直接获取prompt
             # 具体样例可参照“数据格式基本概念”中的样例
             prompt = raw_dataset.get_prompt(tmp_data)
+            #print("prompt--ph3:", prompt)
+
             if prompt is not None:
                 prompt_token = tokenizer(prompt, return_tensors="pt")
                 prompt_token["input_ids"] = prompt_token["input_ids"]
@@ -343,6 +450,49 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                         y = prompt_token[key_word].squeeze(0).flip(0)
                     prompt_token[key_word] = y
                 prompt_dataset.append(prompt_token)
+
+                #print("prompt_token--ph3:", prompt_token)
+                '''
+                prompt--ph3:
+                
+                Human: Can you recommend some ways to propose marriage to my girlfriend?
+                
+                Assistant: Sure, how about if you had a romantic vacation planned, and then when you got there you surprised her with a ring?
+                
+                Human: That's a great suggestion! Should I propose in a specific location?
+                
+                Assistant: Definitely in a location that means something to the two of you, and you've found a place that represents something important to you both, like a spot where you both first kissed or talked about marriage.
+                
+                Human: Good plan. We could go to Greece, where we first met.
+                
+                Assistant: Oh, that sounds perfect!
+                
+                Human: Is it very expensive to buy an engagement ring?
+                
+                Assistant: It might be if you aren't very careful about the type of ring and where you buy it.  For instance, if the ring isn't sized right and the wrong type, it will need to be re-sized later.  And the larger the diamond, the more you'll pay.  So it's best to choose a simple ring, if it's what the two of you really want.  Keep in mind that you don't need a diamond ring to be engaged!
+                
+                Human: Right, got it, thanks.
+                
+                Assistant:
+                prompt_token--ph3: {
+                    'input_ids': tensor([   35, 46184, 50118, 50118,     4,  2446,     6,    24,   300,     6,
+                        ...
+                         6096,   127,     7,  3397, 15393]), 
+                    'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                        ...
+                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])}
+                '''
+                # print("T prompt_token['input_ids']--H:", infoTensor(prompt_token['input_ids']))
+                # print("T prompt_token['attention_mask']--H:", infoTensor(prompt_token['attention_mask']))
+                '''
+                大小可变, only ph3 z1,z1
+                T prompt_token['input_ids']--H: _Size([134])_int64_cpu_
+                T prompt_token['attention_mask']--H: _Size([134])_int64_cpu_
+                '''
+
+        #print("prompt_dataset--ph3:", prompt_dataset) 就是prompt_token的list
+        print("len of prompt_dataset--ph3:", len(prompt_dataset))
+
     # 返回PromptDataset实例，该实例相当于torch中的Dataset，可供DataLoader调用
     # 创建一个新的PromptDataset对象，并返回。这个对象包含了对话提示、接受的对话和被拒绝的对话的数据集，
     # 以及分词器的填充标记ID和训练阶段。
@@ -354,24 +504,50 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
 def create_dataset(local_rank, dataset_name, data_split, output_path,
                    train_phase, seed, tokenizer, end_of_conversation_token,
                    max_seq_len):
+    debuginfo(prj='ds-chat', info=f"train_phase {train_phase}")
+
     # 调用 get_raw_dataset 函数，该函数根据提供的数据集名称、输出路径、随机种子和local_rank等参数，
     # 从各种预定义的数据集中获取所需的原始数据集。
     raw_dataset = get_raw_dataset(dataset_name, output_path, seed, local_rank)
     train_dataset = raw_dataset.get_train_data()  # 从原始数据集中获取训练数据。
+    #print("raw_dataset is:", raw_dataset)
+    #print("train_dataset---A is:", train_dataset)
+    '''
+        
+    raw_dataset is: <utils.data.raw_datasets.DahoasRmstaticDataset object at 0x7fe83804ed00>
+    train_dataset---A is: Dataset({
+        features: ['prompt', 'response', 'chosen', 'rejected'],
+        num_rows: 7000
+    })  
+        '''
+
     #  获取训练数据集的索引，涉及数据的分割。
     train_index = get_raw_dataset_split_index(local_rank, output_path,
                                               raw_dataset.dataset_name_clean,
                                               seed, "train", data_split,
                                               train_phase - 1,
                                               len(train_dataset))
+
     # 根据上一步获取的索引，创建训练数据的子集。
     train_dataset = Subset(train_dataset, train_index)
+    print("len of train_index is:", len(train_index))
+    # print("train_index is:", train_index)
+    # print("train_dataset---B is:", train_dataset)
+    '''
+    train_index is: [869, 1971, 6162, 4194, 1508, 2043, 3775,...]
+    train_dataset---B is: <torch.utils.data.dataset.Subset object at 0x7fe7f80dac40>``
+    '''
+
     # 调用 create_dataset_split 函数对上一步获得的数据子集进行进一步处理，
     # 这可能包括对文本的标记化(tokenization)，并且创建一个PromptDataset 对象。
     train_dataset = create_dataset_split(train_dataset, raw_dataset,
                                          train_phase, tokenizer,
                                          end_of_conversation_token,
                                          max_seq_len)
+
+    # print("train_dataset---C is:", train_dataset)
+    # train_dataset---C is: <utils.data.data_utils.PromptDataset object at 0x7fb5680452b0>
+
     # 是用于创建评估数据集的，步骤与训练数据集的创建基本相同。
     eval_dataset = raw_dataset.get_eval_data()
     eval_index = get_raw_dataset_split_index(local_rank, output_path,
@@ -379,10 +555,32 @@ def create_dataset(local_rank, dataset_name, data_split, output_path,
                                              seed, "eval",
                                              data_split, train_phase - 1,
                                              len(eval_dataset))
+
+    # print("eval_index is:", eval_index)
+    # eval_index is: [1551, 1476, 40, 2157, 1317, 1711, 712, 2070,
+    print("len of eval_index is:", len(eval_index))
+
+    # print("eval_dataset---A is:", eval_dataset)
+
+
     eval_dataset = Subset(eval_dataset, eval_index)
+    # print("eval_dataset---B is:", eval_dataset)
+
     eval_dataset = create_dataset_split(eval_dataset, raw_dataset, train_phase,
                                         tokenizer, end_of_conversation_token,
                                         max_seq_len)
+    # print("eval_dataset---C is:", eval_dataset)
+
+    '''
+
+    eval_dataset---A is: Dataset({
+        features: ['prompt', 'response', 'chosen', 'rejected'],
+        num_rows: 3000
+    })
+    eval_dataset---B is: <torch.utils.data.dataset.Subset object at 0x7fb5680505b0>
+    eval_dataset---C is: <utils.data.data_utils.PromptDataset object at 0x7fb5c37cd2e0>
+    '''
+
     return train_dataset, eval_dataset
 
 
@@ -408,6 +606,8 @@ def create_prompt_dataset(local_rank,
                           end_of_conversation_token="<|endoftext|>",
                           sft_only_data_path=[],
                           reload=False):
+    debuginfo(prj='ds-chat', info=f"train_phase {train_phase}")
+
     """
     Creates the prompt dataset
     """
@@ -418,13 +618,29 @@ def create_prompt_dataset(local_rank,
     fname = "_".join(data_path)
     sft_cache_key = "_".join(sft_only_data_path)
     tokenizer_name = tokenizer.init_kwargs["name_or_path"].replace("/", "_")
-    fname = f"{fname}_split{data_split}_phase{train_phase}_seed{seed}_tokenizer{tokenizer_name}_seqlen{max_seq_len}_sft{sft_cache_key}"
+    # fname = f"{fname}_split{data_split}_phase{train_phase}_seed{seed}_tokenizer{tokenizer_name}_seqlen{max_seq_len}_sft{sft_cache_key}"
+    fname = f"{fname}_ph{train_phase}_tokenizer{tokenizer_name}_sft{sft_cache_key}"
     fname = "_".join(fname.split("/"))
-    fname = hashlib.sha256(fname.encode()).hexdigest(
-    )  # hash the file name to avoid too long file name
+    assert(len(fname)) < 100, len(fname)
+
+    # 调试中取消哈希
+    # fname = hashlib.sha256(fname.encode()).hexdigest()  # hash the file name to avoid too long file name
+
     # 构造训练数据集和评估数据集的文件路径。
-    train_fname = f"{output_path}/traindata_{fname}.pt"
-    eval_fname = f"{output_path}/evaldata_{fname}.pt"
+    train_fname = f"../../traindata_{fname}.pt"
+    eval_fname = f"../../evaldata_{fname}.pt"
+
+    print("train_fname is", train_fname)
+    print("train_fname is", train_fname)
+    '''
+    要想看到dataset创建过程，就要删除， ph1,2,3都有！
+    原来位置和文件名样式
+train_fname is /tmp/data_files//traindata_aa981ebbdc26ba0c4e46b123a94edae66e2c058a407c8ff11ea6c5bbe67c27cd.pt
+train_fname is /tmp/data_files//traindata_aa981ebbdc26ba0c4e46b123a94edae66e2c058a407c8ff11ea6c5bbe67c27cd.pt
+
+train_fname is /tmp/data_files/traindata_e7b11df4f76290627ffa57589ebd268d59ce98a2126ca343b4b6b22e9bc44c80.pt
+train_fname is /tmp/data_files/traindata_e7b11df4f76290627ffa57589ebd268d59ce98a2126ca343b4b6b22e9bc44c80.pt
+    '''
 
     # 检查训练数据集和评估数据集的文件是否都已经存在，如果存在，则表示缓存已经找到，否则表示需要创建缓存。
     cache_found = os.path.isfile(train_fname) and os.path.isfile(eval_fname)
@@ -434,11 +650,13 @@ def create_prompt_dataset(local_rank,
     # 如果当前进程是主进程（local_rank <= 0）并且需要创建缓存，就执行以下操作。
     if local_rank <= 0 and (buf_create_cache.item() != 0 or reload):
         # 如果只有一个数据集，直接调用create_dataset函数创建训练数据集和评估数据集。
+        debuginfo(prj='ds-chat', info="只有一个数据集")
         if len(data_path) == 1:  # Single dataset.
             train_dataset, eval_dataset = create_dataset(
                 local_rank, data_path[0], data_split, output_path, train_phase,
                 seed, tokenizer, end_of_conversation_token, max_seq_len)
         else:  # Blending datasets.
+            debuginfo(prj='ds-chat', info="多个数据集")
             # 如果有多个数据集，对每个数据集都调用create_dataset函数，并把得到的训练数据集和评估数据集添加到对应的列表中，
 
             train_datasets = []
@@ -465,6 +683,7 @@ def create_prompt_dataset(local_rank,
         # 如果当前是第一阶段的训练（SFT）并且指定了仅用于SFT的数据集，那么对这些数据集执行类似的操作，
         # 然后把得到的训练数据集和评估数据集添加到原有的数据集中。
         if train_phase == 1 and sft_only_data_path:
+            debuginfo(prj='ds-chat', info="train_phase == 1 and sft_only_data_path")
             sft_train_datasets = []
             sft_eval_datasets = []
             sft_train_size = 0
@@ -496,11 +715,14 @@ def create_prompt_dataset(local_rank,
                 eval_dataset = ConcatDataset([eval_dataset, sft_eval_dataset])
                 shuffle_idx = get_shuffle_idx(seed, len(eval_dataset))
                 eval_dataset = Subset(eval_dataset, shuffle_idx.tolist())
+
         # 把训练数据集和评估数据集保存到对应的文件中。
         torch.save(train_dataset, train_fname)
         torch.save(eval_dataset, eval_fname)
+
     # 在多进程环境中，确保所有进程都完成了数据集的保存操作。
     torch.distributed.barrier()
+
     return torch.load(train_fname), torch.load(eval_fname)
 
 
@@ -539,7 +761,6 @@ def create_prompt_dataset(local_rank,
 后续输入模型后，直接将数据切分出前半部分和后半部分进行并列，即可获得对应的chosen-rejected数据对。
 '''
 
-
 # 3.2 DataCollator
 # 给定一个batch，其包含batch_size个chosen examples和rejected examples，将其进行拆分，具体操作如下：
 class DataCollatorReward:
@@ -572,6 +793,24 @@ class DataCollatorReward:
                                             dim=0)
 
         """batch的具体样式可见下个代码块"""
+        #print("batch--D:", batch)
+        '''
+        batch--D: {
+            'input_ids': tensor([[    2, 50118, 50118,  ...,     2,     2,     2],
+        ...
+        [    2, 50118, 50118,  ...,    24,    35, 50118]]), 
+            'attention_mask': tensor([[1, 1, 1,  ..., 0, 0, 0],
+        ...
+        [1, 1, 1,  ..., 1, 1, 1]])}
+        '''
+
+        # print("T batch['input_ids']--F:", infoTensor(batch['input_ids']))
+        # print("T batch['attention_mask']--F:", infoTensor(batch['attention_mask']))
+        '''
+        T batch['input_ids']--F: _Size([16, 128])_int64_cpu_
+        T batch['attention_mask']--F: _Size([16, 128])_int64_cpu_
+        '''
+
         return batch
 
 
@@ -580,10 +819,12 @@ class DataCollatorReward:
 class DataCollatorRLHF:
 
     def __init__(self, max_token_len, inference_tp_size):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         self.max_token_len = max_token_len
         self.inference_tp_size = inference_tp_size
 
     def __call__(self, data):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         batch = {}
         pad_token_id = data[-1][-1]
 
@@ -611,6 +852,25 @@ class DataCollatorRLHF:
             batch["prompt_att_mask"] = prompt_mask
         batch["prompt"] = batch["prompt"].flip(1)
         batch["prompt_att_mask"] = batch["prompt_att_mask"].flip(1)
+
+        # print("batch-RLHF:", batch)
+        '''
+        batch-RLHF: {
+            'prompt': tensor([[    2,  1667,    14,  ..., 50118, 46184,    35],
+            ...
+        [    2,    80,  3678,  ..., 50118, 46184,    35]]), 
+            'prompt_att_mask': tensor([[0, 1, 1,  ..., 1, 1, 1],
+            ...
+        [0, 1, 1,  ..., 1, 1, 1]])}
+        '''
+
+        # print("T batch['prompt']--RLHF:", infoTensor(batch['prompt']))
+        # print("T batch['prompt_att_mask']--RLHF:", infoTensor(batch['prompt_att_mask']))
+        ''' only ph3
+        T batch['prompt']--RLHF: _Size([4, 256])_int64_cpu_
+        T batch['prompt_att_mask']--RLHF: _Size([4, 256])_int64_cpu_
+        '''
+
         return batch
 
 
@@ -688,7 +948,6 @@ def get_unsupervised_data(args, tokenizer):
 
 '''
 
-
 class MiniDataset:
 
     def __init__(self, max_size, small_batch_size):
@@ -697,11 +956,15 @@ class MiniDataset:
 
         :param small_batch_size: batch size。通常此处指“PPO训练的batch_size”。
         '''
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         self.dataset = []
         self.max_size = max_size
         self.small_batch_size = small_batch_size
 
     def seperate(self):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         # 维护1个small_dataset
         small_dataset = []
 
@@ -752,13 +1015,15 @@ class MiniDataset:
         如果少于max_size则将batch数据加入至MiniDataset中，
         直至达到max_size个batch
         """
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         if len(self.dataset) < self.max_size:
             self.dataset.append(data)
             if len(self.dataset) == self.max_size:
                 """
-                 seperate()主要实现了
-                 1. 在batch的基础上，再细分ppo_batch并返回
-                 2. 清空MiniDataset中的数据
+                seperate()主要实现了
+                1. 在batch的基础上，再细分ppo_batch并返回
+                2. 清空MiniDataset中的数据
                 """
                 return self.seperate()
             else:

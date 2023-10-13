@@ -32,4 +32,4 @@ deepspeed --hostfile /hostfile --master_addr=192.168.1.7 --master_port=29701 mai
    --zero_stage $ZERO_STAGE \
    --deepspeed \
    --output_dir $OUTPUT \
-    2>&1 | tee $OUTPUT/training-step2-2nodes2gpus-125m-2ndnode-ZERO_STAGE$ZERO_STAGE.log
+    2>&1 | tee $OUTPUT/training-ph2-2nodes2gpus-125m-2ndnode-ZERO_STAGE$ZERO_STAGE.log

@@ -15,6 +15,7 @@ from utils.model.model_utils import create_critic_model
 from utils.utils import to_device
 from utils.utils import load_hf_tokenizer
 
+from pydebug import debuginfo, infoTensor
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -39,7 +40,7 @@ def parse_args():
 
 
 def load_stuff(model_name_or_path, num_padding_at_beginning):
-
+    debuginfo(prj='ds-chat')
     tokenizer = load_hf_tokenizer(model_name_or_path, fast_tokenizer=True)
     tokenizer.pad_token = tokenizer.eos_token
     model = create_critic_model(model_name_or_path, tokenizer, None,
@@ -141,6 +142,8 @@ def run_pair_comparison():
         print("good_ans score: ", outputs["chosen_mean_scores"].item())
         print("bad_ans score: ", outputs["rejected_mean_scores"].item())
 
+        debuginfo(prj='ds-chat', info = f"batch is: {batch}")
+
 
 def run_single_sample():
     args = parse_args()
@@ -158,6 +161,8 @@ def run_single_sample():
                                  tokenizer,
                                  max_seq_len=512,
                                  end_of_conversation_token="<|endoftext|>")
+    print("batch---A", batch)
+
     batch = to_device(batch, device)
 
     rm_model.eval()
@@ -166,6 +171,8 @@ def run_single_sample():
         outputs = rm_model.forward_value(
             **batch, prompt_length=max(2, args.num_padding_at_beginning)
         )  # we just need to skip the number of padding tokens at the beginning
+        print("outputs---A", outputs)
+
     print("==================Eval result============================")
     print("prompt: ", prompt)
     print("my_ans: ", my_ans)
@@ -176,4 +183,4 @@ def run_single_sample():
 
 if __name__ == "__main__":
     run_pair_comparison()
-    # run_single_sample()
+    run_single_sample()

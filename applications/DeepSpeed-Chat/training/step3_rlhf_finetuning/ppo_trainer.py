@@ -13,7 +13,7 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 
 from utils.utils import print_rank_0
-
+from pydebug import debuginfo, infoTensor
 
 def print_all_ranks(tag, value, rank):
     world_size = torch.distributed.get_world_size()
@@ -112,6 +112,7 @@ def gather_log_probs(logits, labels):
 class DeepSpeedPPOTrainer():
 
     def __init__(self, rlhf_engine, args):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         self.rlhf_engine = rlhf_engine
         self.actor_model = self.rlhf_engine.actor
         self.critic_model = self.rlhf_engine.critic
@@ -147,7 +148,11 @@ class DeepSpeedPPOTrainer():
         实际上相当于max_seq_len，
         用于对生成长度做限制
         """
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         max_min_length = self.max_answer_seq_len + prompts.shape[1]
+        #print("max_min_length--2 is:", max_min_length)
+        # max_min_length--2 is: 512
 
         ## 首先inference获取对应的模型输出
 
@@ -161,21 +166,49 @@ class DeepSpeedPPOTrainer():
                 max_length=max_min_length,
                 pad_token_id=self.tokenizer.pad_token_id,
                 synced_gpus=self.z3_enabled)
+            # print("seq--2 is:", seq)
+            # print("T seq--2  :", infoTensor(seq)) #only ph3 x1
 
         # """下方操作是为了过滤掉只有极短answer（有效长度小于1）的seq"""
         # Filter out seq with no answers (or very short). This happens when users directly use the pre-training ckpt without supervised finetuning
         # NOTE: this will causes each GPU has different number of examples
         batch_size = seq.shape[0]
+        #print("batch_size--2 is:", batch_size)
 
         #prompt长度：实际上就是max_prompt_len
         prompt_length = prompts.shape[1]
         self.prompt_length = prompt_length
+        #print("prompt_length--2 is:", prompt_length)
 
         #取出answer部分，此时还含有pad token
         ans = seq[:, prompt_length:]
+        #print("ans--2 is:", ans)
 
         #统计answer的有效长度（去掉pad token后的长度）
         valid_ans_len = (ans != self.tokenizer.pad_token_id).sum(dim=-1)
+        #print("valid_ans_len--2 is:", valid_ans_len)
+
+
+        # print("T ans--2 :", infoTensor(ans))  #only ph3 x1
+        # print("T valid_ans_len--2 :", infoTensor(valid_ans_len)) #only ph3 x1
+        '''
+        T seq--2  : _Size([4, 512])_int64_cuda:0_   
+        T ans--2 : _Size([4, 256])_int64_cuda:0_
+        T valid_ans_len--2 : _Size([4])_int64_cuda:0_
+        '''
+        '''
+        seq--2 is: tensor([[    2,     2,     2,  ...,  1079,     9,    39],
+                [    2,     2,     2,  ...,    47,  2435,   402],
+                [    2,   236,     7,  ...,   860,   103, 22810],
+                [    2,     2,     2,  ...,  1911,     6,     8]], device='cuda:1')
+        batch_size--2 is: 4
+        prompt_length--2 is: 256
+        ans--2 is: tensor([[ 370,  197,   28,  ..., 4835,  615,  514],
+                [8976,    6,   14,  ..., 4946,    4, 1437],
+                [  38,  206,   24,  ...,   38,  206,   24],
+                [ 280,   17,   27,  ...,   17,   27,  119]], device='cuda:0')
+        valid_ans_len--2 is: tensor([256, 256, 256, 256], device='cuda:0')
+        '''
 
         if self.args.print_answers:
             print(
@@ -186,16 +219,33 @@ class DeepSpeedPPOTrainer():
             )
 
         #排除较短（此处设置为有效长度小于1）的answer，余下的answer将被存入out_seq作为最终返回
+        #zero3的设置下，可能导致out_seq为空！！！
         out_seq = []
         for i in range(batch_size):
-            if valid_ans_len[
-                    i] <= 1:  # if the answer is shorter than 1 token, drop it
-                continue
-            else:
-                out_seq.append(seq[i:i + 1])
-        out_seq = torch.cat(out_seq, dim=0)  # concate output in the batch dim
+            # if valid_ans_len[i] <= 0:  # if the answer is shorter than 1 token, drop it, 改0
+            #     continue
+            # else:
+            out_seq.append(seq[i:i + 1])
 
+        # print("len of out_seq--H is", len(out_seq)) #len of out_seq--H
+
+        # # yknote让程序跑通！
+        # if len(out_seq) == 4:
+        #     out_seq = torch.cat(out_seq, dim=0)  # concate output in the batch dim  #ph3+z3出错！
+        #     print("T out_seq--F is", infoTensor(out_seq))
+        #     print("xxxx is", out_seq)
+        #     return out_seq
+        # else:
+        #     return None
+        #     # print("======================================")
+        #     # tmp = torch.rand(4,512).long()
+        #     # print("T rand--F is", infoTensor(tmp))===这样还是不行，会出现设备不一致！
+        #     # print("tmp is", tmp)
+        #     # return tmp
+
+        out_seq = torch.cat(out_seq, dim=0)
         return out_seq
+
 
     '''
     3.3.3.1 经验数据获取过程
@@ -223,6 +273,7 @@ class DeepSpeedPPOTrainer():
         :param mask: prompt attention mask, (bs, max_prompt_len)
         :return:
         '''
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         #将actor、reference、critic、reward转换为eval模式
         # 给定prompt，生成response text
@@ -244,13 +295,34 @@ class DeepSpeedPPOTrainer():
         # 调用model.generate()生成序列，由actor模型生成。
         # 输入instruct prompt，由Actor生成seq，上图中红色步骤（1），seq由instruct和response组成
         seq = self._generate_sequence(prompts, mask, step)
+        # print("seq-1 :", seq)
+        # print("T ans-1 :", infoTensor(seq)) #only ph3 x1
+        # T ans-1 : _Size([4, 512])_int64_cuda:1_
+        ''' 
+        seq-1 : tensor([[    2,     2,     2,  ...,    17,    46,     6],
+                [    2,     2,     2,  ..., 33837,    35,   653],
+                [    2,     2,     2,  ...,    13,    63, 21968],
+                [    2,     2,     2,  ...,    17,    27,   119]], device='cuda:0')
+        '''
 
         #将actor、critic转换为train模式，因为后续两者仍需要进行训练
         # 恢复训练模型
         self.train()
 
         pad_token_id = self.tokenizer.pad_token_id
-        attention_mask = seq.not_equal(pad_token_id).long()
+        attention_mask = seq.not_equal(pad_token_id).long()  #ph3+zero3出错！seq可能为空！
+        # print("pad_token_id-1 :", pad_token_id)
+        # print("attention_mask-1 :", attention_mask)
+        # print("T attention_mask :", infoTensor(attention_mask)) #only ph3 x1
+        #T attention_mask : _Size([4, 512])_int64_cuda:1_
+        '''
+        pad_token_id-1 : 2
+        attention_mask-1 : tensor([[0, 0, 0,  ..., 1, 1, 1],
+                [0, 0, 0,  ..., 1, 1, 1],
+                [0, 0, 0,  ..., 1, 1, 1],
+                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')
+        '''
+
         '''
         actor model是我们想通过强化学习微调的大模型，但是强化学习过程很容易把模型训练“坏”，
         因此需要另外一个不会参数更新的 ref_model来当作标的，别让actor mode跑偏太远。
@@ -274,6 +346,10 @@ class DeepSpeedPPOTrainer():
             # 将seq喂入SFT中得到sft_logits，上图中黑色步骤（5）
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
 
+            #巨大
+            # print("output-1 :", output)
+            # print("output_ref-1 :", output_ref)
+
             #然后利用reward model和ciric model对输出的prompt+answer进行打分
             # （PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
             # 奖励模型返回的是个字典，key为chosen_end_scores位置存储数据维度为(B,)，表示对于prompt+answer的打分
@@ -288,6 +364,14 @@ class DeepSpeedPPOTrainer():
                 seq, attention_mask,
                 prompt_length=self.prompt_length)['chosen_end_scores'].detach(
                 )
+            #巨大
+            # print("reward_score-1:", reward_score)
+            # print("T reward_score-1 :", infoTensor(reward_score))
+            # #only ph3 x1 T T reward_score-1 : _Size([4])_float16_cuda:0_
+            '''
+            reward_score-1: tensor([ 0.5713,  0.9023, -0.4629,  0.4783], device='cuda:0',
+                   dtype=torch.float16)
+            '''
 
             # critic model返回的数据维度为(B,L)，L维度上第i个位置代表从i位置到最后的累积奖励
             # 舍去最后一个位置是因为句子“终止符”无意义
@@ -297,11 +381,37 @@ class DeepSpeedPPOTrainer():
             values = self.critic_model.forward_value(
                 seq, attention_mask, return_value_only=True).detach()[:, :-1]
 
+            # print("values-1 :", values)
+            # print("T values-1 :", infoTensor(values))  #T values-1 : _Size([4, 511])_float16_cuda:1_  only ph3 x1
+
         # (seq_bs, max_seq_len, vocab_size)
         logits = output.logits
+        # print("logits-1 :", logits)
 
         # (seq_bs, max_seq_len, vocab_size)
         logits_ref = output_ref.logits
+        # print("logits_ref-1 :", logits_ref)
+
+
+        # print("T logits-1 :", infoTensor(logits))  #only ph3 x1
+        # print("T logits_ref-1 :", infoTensor(logits_ref)) #only ph3 x1
+        # T logits-1 : _Size([4, 512, 50272])_float16_cuda:1_
+        # T logits_ref-1 : _Size([4, 512, 50272])_float16_cuda:1_
+        '''
+        values-1 : tensor([[-0.4238, -0.4238, -0.4238,  ..., -0.6475, -0.5742, -0.3826],
+                ...
+                [ 0.7188,  0.7188,  0.7188,  ...,  0.5762,  0.3242,  0.1738]],
+               device='cuda:1', dtype=torch.float16)
+        logits-1 : tensor([[[ -7.1914,  -7.1875,   2.5566,  ...,  -7.1758,  -7.1719,  -7.1406],
+                ...
+                 [ -6.6836,  -6.6602,   5.5117,  ...,  -6.5547,  -6.6680,  -6.6484]]],
+               device='cuda:1', dtype=torch.float16)
+        logits_ref-1 : tensor([[[ -7.1914,  -7.1875,   2.5566,  ...,  -7.1758,  -7.1719,  -7.1406],
+                ...
+                 [ -6.6836,  -6.6602,   5.5117,  ...,  -6.5547,  -6.6680,  -6.6484]]],
+               device='cuda:1', dtype=torch.float16)
+        
+        '''
 
         # 返回的dict是“进行PPO所需要使用的一组数据”
         # prompts.shape: (bs, max_prompt_len)
@@ -338,12 +448,24 @@ class DeepSpeedPPOTrainer():
     # 如何计算Advantage？
     def compute_rewards(self, prompts, log_probs, ref_log_probs, reward_score,
                         action_mask):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         # 计算kl散度，log_probs里边存的数字经过log变化了，因此减法就对应除法
         """
         计算实际rewards，涉及（旧）策略与SFT的KL散度惩罚、RM的reward
         计算经验采样时actor与SFT的KL散度惩罚
         """
         kl_divergence_estimate = -self.kl_ctl * (log_probs - ref_log_probs)
+        # print("kl_divergence_estimate is:", kl_divergence_estimate)
+        # print("T kl_divergence_estimate:", infoTensor(kl_divergence_estimate))
+        # T kl_divergence_estimate: _Size([4, 511])_float16_cuda:0_    only ph3
+        '''
+        kl_divergence_estimate is: tensor([[-3.9053e-04, -3.9053e-04, -3.9053e-04,  ..., -6.7115e-05,
+         -1.0526e-04, -1.5914e-05],
+        ...
+        [-0.0000e+00, -0.0000e+00, -0.0000e+00,  ..., -2.2435e-04,
+         -1.8435e-03,  5.3644e-07]], device='cuda:0', dtype=torch.float16)
+        '''
 
         # PPO训练时候的奖励值综合考虑KL散度和reward模型的输出，只考虑answer部分的KL散度，将reward
         # model的输出加到KL散度L维度的最后一个位置上，得到最终的奖励值，代码如下：
@@ -372,6 +494,16 @@ class DeepSpeedPPOTrainer():
         reward_clip = torch.clamp(reward_score, -self.clip_reward_value,
                                   self.clip_reward_value)
         batch_size = log_probs.shape[0]
+        # print("batch_size is:", batch_size)
+        # print("reward_clip is:", reward_clip)
+        #print("T reward_clip--A:", infoTensor(reward_clip))
+        '''
+        T reward_clip--A: _Size([4])_float16_cuda:0_
+        
+        batch_size is: 4
+        reward_clip is: tensor([ 1.5645, -0.7383, -0.5581, -2.2441], device='cuda:0',
+               dtype=torch.float16)
+        '''
 
         # 在L维度上，每个位置都有KL散度，但是只在最后一个位置加上奖励值
         '''
@@ -387,9 +519,21 @@ class DeepSpeedPPOTrainer():
             rewards[j, start:ends[j]][-1] += reward_clip[j]
 
         """返回KL rewards"""
-        return rewards
+        #print("return rewards is:", rewards)
+        #print("T reward_clip--B:", infoTensor(rewards))
+        '''
+        
+        T reward_clip--B: _Size([4, 511])_float16_cuda:1_
 
+        return rewards is: tensor([[-3.9053e-04, -3.9053e-04, -3.9053e-04,  ..., -6.7115e-05,
+         -1.0526e-04,  1.5645e+00],
+        ...
+        [-0.0000e+00, -0.0000e+00, -0.0000e+00,  ..., -2.2435e-04,
+         -1.8435e-03, -2.2441e+00]], device='cuda:0', dtype=torch.float16)
+        '''
+        return rewards
         ## 用计算好的 rewards来更新actor model，values来更新critic model
+
 
     '''
     3.3.5.2 PPO训练
@@ -400,6 +544,8 @@ class DeepSpeedPPOTrainer():
     使得相应的函数代码衔接在其调用后方，便于具体对照其传参，从而辨析传入的新旧策略、新旧价值估计等：
     '''
     def train_rlhf(self, inputs):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         # 使用1个ppo_batch的经验数据，执行1次rlhf训练迭代
 
         # train the rlhf mode here
@@ -451,6 +597,67 @@ class DeepSpeedPPOTrainer():
         """
         action_mask = attention_mask[:, 1:]
 
+        # print("prompts is:", prompts)
+        # print("log_probs is:", log_probs)
+        # print("ref_log_probs is:", ref_log_probs)
+        # print("reward_score is:", reward_score)
+        # print("values is:", values)
+        # print("attention_mask is:", attention_mask)
+        # print("seq is:", seq)
+        # print("start is:", start)
+        # print("action_mask is:", action_mask)
+
+        # print("T prompts:", infoTensor(prompts))
+        # print("T log_probs:", infoTensor(log_probs))
+        # print("T ref_log_probs:", infoTensor(ref_log_probs))
+        # print("T reward_score:", infoTensor(reward_score))
+        # print("T values:", infoTensor(values))
+        # print("T attention_mask:", infoTensor(attention_mask))
+        # print("T seq:", infoTensor(seq))
+        # print("T action_mask:", infoTensor(action_mask))
+        '''
+        T prompts: _Size([4, 256])_int64_cuda:0_
+        T log_probs: _Size([4, 511])_float16_cuda:0_
+        T ref_log_probs: _Size([4, 511])_float16_cuda:0_
+        T reward_score: _Size([4])_float16_cuda:0_
+        T values: _Size([4, 511])_float16_cuda:0_
+        T attention_mask: _Size([4, 512])_int64_cuda:0_
+        T seq: _Size([4, 512])_int64_cuda:0_
+        T action_mask: _Size([4, 511])_int64_cuda:0_
+        '''
+
+        '''
+        prompts is: tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
+                ...
+                [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:1')
+        log_probs is: tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.2253e-02,
+                 -1.6815e-02, -3.3474e-03],
+                ...
+                [-2.0078e+00, -2.0078e+00, -2.0078e+00,  ..., -1.9516e-02,
+                 -2.6443e-02, -6.1607e-03]], device='cuda:1', dtype=torch.float16)
+        ref_log_probs is: tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.3519e-02,
+                 -1.8341e-02, -3.7823e-03],
+                ...
+                [-2.0391e+00, -2.0391e+00, -2.0391e+00,  ..., -2.1149e-02,
+                 -2.8412e-02, -6.6376e-03]], device='cuda:1', dtype=torch.float16)
+        reward_score is: tensor([-0.4282,  1.4141, -0.3965,  1.2178], device='cuda:1',
+               dtype=torch.float16)
+        values is: tensor([[-0.4321, -0.4321, -0.4321,  ..., -0.4736, -0.4829, -0.3918],
+                ...
+                [ 1.5361,  1.5361,  1.5361,  ...,  1.2910,  1.3447,  1.2559]],
+               device='cuda:1', dtype=torch.float16)
+        attention_mask is: tensor([[0, 0, 0,  ..., 1, 1, 1],
+                ...
+                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')
+        seq is: tensor([[   2,    2,    2,  ...,   47,   64,   67],
+                ...
+                [   2,    2,    2,  ...,    7, 7142,   24]], device='cuda:1')
+        start is: 255
+        action_mask is: tensor([[0, 0, 0,  ..., 1, 1, 1],
+                ...
+                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')
+        '''
+
         # 经验数据中的价值估计为“旧”价值估计
         ### 根据经验数据，接下来计算相应的reward和advantage
         old_values = values
@@ -475,7 +682,29 @@ class DeepSpeedPPOTrainer():
             old_rewards = self.compute_rewards(prompts, log_probs,
                                                ref_log_probs, reward_score,
                                                action_mask)
+
             ends = start + action_mask[:, start:].sum(1) + 1
+
+            # print("old_rewards is:", old_rewards)
+            # print("ends is:", ends)
+
+            # print("T old_rewards:", infoTensor(old_rewards))
+            # print("T ends:", infoTensor(ends))
+            '''
+            T old_rewards: _Size([4, 511])_float16_cuda:1_
+            T ends: _Size([4])_int64_cuda:1_
+
+            old_rewards is: tensor([[-3.9053e-04, -3.9053e-04, -3.9053e-04,  ..., -6.7115e-05,
+                     -1.0526e-04,  1.5645e+00],
+                    [-1.1721e-03, -1.1721e-03, -1.1721e-03,  ..., -3.3557e-05,
+                     -1.8299e-05, -7.3828e-01],
+                    [-1.5621e-03, -1.5621e-03, -1.9526e-04,  ..., -7.6294e-05,
+                     -6.7949e-06, -5.5811e-01],
+                    [-0.0000e+00, -0.0000e+00, -0.0000e+00,  ..., -2.2435e-04,
+                     -1.8435e-03, -2.2441e+00]], device='cuda:0', dtype=torch.float16)
+            ends is: tensor([512, 512, 512, 512], device='cuda:0')
+            '''
+
             # we need to zero out the reward and value after the end of the conversation
             # otherwise the advantage/return will be wrong
             for i in range(old_rewards.shape[0]):
@@ -499,11 +728,43 @@ class DeepSpeedPPOTrainer():
             advantages, returns = self.get_advantages_and_returns(
                 old_values, old_rewards, start)
 
+            # print("advantages is:", advantages)
+            # print("returns is:", returns)
+            # print("T advantages:", infoTensor(advantages))
+            # print("T returns:", infoTensor(returns))
+            '''
+            T advantages: _Size([4, 256])_float16_cuda:1_
+            T returns: _Size([4, 256])_float16_cuda:1_
+
+            advantages is: tensor([[-0.1390,  0.0554, -0.3184,  ...,  0.3071,  0.2463,  0.0576],
+                    [ 0.2349,  0.5220,  0.0591,  ...,  0.3701,  0.2075,  0.1572],
+                    [ 0.3958,  0.3511,  0.6201,  ...,  0.0502,  0.1464,  0.0811],
+                    [ 0.2108,  0.1600,  0.0022,  ..., -0.2986, -0.0490,  0.1067]],
+                   device='cuda:1', dtype=torch.float16)
+            returns is: tensor([[-0.5776, -0.5752, -0.5908,  ..., -0.3403, -0.3279, -0.3250],
+                    [-0.1965, -0.1704, -0.1674,  ..., -0.4312, -0.4209, -0.4131],
+                    [ 0.7368,  0.7544,  0.7856,  ...,  1.2734,  1.2812,  1.2852],
+                    [ 0.5503,  0.5581,  0.5586,  ...,  0.2776,  0.2751,  0.2805]],
+            '''
+
         ### process the new outputs
         # ###计算actor损失并更新
         # 下面则是获得生成部分seq的奖励等信息
         ### 根据经验数据以及得到的advatage，下面开始获得一系列的loss
         batch = {'input_ids': seq, "attention_mask": attention_mask}
+        # print("T batch['input_ids']:", infoTensor(batch['input_ids']))
+        # print("T batch['attention_mask']:", infoTensor(batch['attention_mask']))
+        # print("batch is:", batch)
+        '''
+        batch is: {'input_ids': tensor([[    2,     2,     2,  ...,    64,    67, 10397],
+        ...
+        [    2,     2,     2,  ...,    10,   357,  4885]], device='cuda:0'), 'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
+        ...
+        [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')}
+        
+        T batch['input_ids']: _Size([4, 512])_int64_cuda:0_
+        T batch['attention_mask']: _Size([4, 512])_int64_cuda:0_
+        '''
 
         #将seq经验数据输入至actor，进行自回归预测
         # 获得seq的的概率
@@ -517,6 +778,28 @@ class DeepSpeedPPOTrainer():
 
         #取出probs，此处为新策略
         actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:])
+
+
+        # print("actor_prob is:", actor_prob)
+        # print("actor_log_prob is:", actor_log_prob)
+        # print("T actor_prob:", infoTensor(actor_prob))
+        # print("T actor_log_prob:", infoTensor(actor_log_prob))
+        '''
+        T actor_prob: _Size([4, 512, 50272])_float16_cuda:0_
+        T actor_log_prob: _Size([4, 511])_float16_cuda:0_
+
+                actor_prob is: tensor([[[-6.6680e+00, -6.6641e+00,  2.8535e+00,  ..., -6.6484e+00,
+                  -6.6602e+00, -6.6328e+00],
+        ....
+                 [ 1.3191e-02,  2.1805e-02,  3.0352e+00,  ...,  7.7942e-02,
+                   2.4506e-02, -2.8662e-01]]], device='cuda:0', dtype=torch.float16,
+               grad_fn=<UnsafeViewBackward0>)
+        actor_log_prob is: actor_loss is: tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
+                 -1.4099e-02, -3.5980e-02],
+        ...
+                 -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16,
+               grad_fn=<SqueezeBackward1>)
+        '''
 
         """
         计算actor损失
@@ -537,6 +820,8 @@ class DeepSpeedPPOTrainer():
         # 更新actor参数
         # 更新actor模型参数
         self.actor_model.backward(actor_loss)
+        # print("actor_loss is:", actor_loss)
+        # actor_loss is: tensor(0.0085, device='cuda:0', dtype=torch.float16, grad_fn=<DivBackward0>)
 
         if not self.args.align_overflow:
             self.actor_model.step()
@@ -552,6 +837,16 @@ class DeepSpeedPPOTrainer():
                                                 return_value_only=True,
                                                 use_cache=False)[:, :-1]
 
+        # print("value is:", value)
+        # print("T value:", infoTensor(value))
+        '''
+        T value: _Size([4, 511])_float16_cuda:1_
+        value is: tensor([[-0.3354, -0.3354, -0.3354,  ...,  0.2708,  0.1158,  0.2218],
+        ...
+        [-0.2240, -0.2240, -0.2240,  ...,  1.1074,  1.1123,  1.0693]],
+            device='cuda:0', dtype=torch.float16, grad_fn=<SliceBackward0>)
+        '''
+
         """
         计算critic损失
         注意此处的入参：
@@ -565,6 +860,9 @@ class DeepSpeedPPOTrainer():
                                                                        start:],
                                           returns, action_mask[:, start:])
 
+        # print("critic_loss is:", critic_loss)
+        # critic_loss is: tensor(0.0110, device='cuda:0', dtype=torch.float16, grad_fn=<DivBackward0>)
+
         #critic反向传播、更新参数
         # 更新Critic模型参数
         # 更新critic参数
@@ -575,6 +873,9 @@ class DeepSpeedPPOTrainer():
                 external=True)
             critic_overflow = self.critic_model.optimizer.check_overflow(
                 external=True)
+
+            print("actor_overflow is:", actor_overflow)
+            print("critic_overflow is:", critic_overflow)
 
             rank = torch.distributed.get_rank()
             if actor_overflow and not critic_overflow:
@@ -620,6 +921,8 @@ class DeepSpeedPPOTrainer():
 
     # Clipped Surrogate Objective 033.png  对应为更新actor的loss
     def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         #"""计算actor的损失"""
 
         ## policy gradient loss
@@ -643,6 +946,8 @@ class DeepSpeedPPOTrainer():
 
     #同样的，我们也要对critic model进行训练，更新，loss就是mse loss。
     def critic_loss_fn(self, values, old_values, returns, mask):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         # 计算价值损失
 
         ## value loss
@@ -689,6 +994,8 @@ class DeepSpeedPPOTrainer():
     ## 公式 035.png
 
     def get_advantages_and_returns(self, values, rewards, start):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         # values（B，L） critic model输出
         # rewards（B，）reward model输出
         # start answer开始的位置
@@ -720,6 +1027,9 @@ class DeepSpeedPPOTrainer():
 
         #对逆序的优势列表进行正序处理，得到正常时间步排列的优势
         advantages = torch.stack(advantages_reversed[::-1], dim=1)  # 再反转
+        #太大
+        # print("advantages_reversed--1 is:", advantages_reversed)
+        # print("advantages--1 is:", advantages)
 
         # 后续用来更新critic model用
         """
@@ -742,14 +1052,32 @@ class DeepSpeedPPOTrainer():
         assert not self.reward_model.module.training
 
     def train(self):
+        #debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        # debuginfo(prj='ds-chat', info="start actor_model.train")
         self.actor_model.train()
+        # debuginfo(prj='ds-chat', info="end actor_model.train")
+        #
+        debuginfo(prj='ds-chat', info="-start critic_model.train")
         self.critic_model.train()
+        debuginfo(prj='ds-chat', info="end critic_model.train")
 
     def eval(self):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        # debuginfo(prj='ds-chat', info="start actor_model.eval")
         self.actor_model.eval()
+        # debuginfo(prj='ds-chat', info="end actor_model.eval")
+        #
+        # debuginfo(prj='ds-chat', info="start critic_model.eval")
         self.critic_model.eval()
+        # debuginfo(prj='ds-chat', info="end critic_model.eval")
+        #
+        # debuginfo(prj='ds-chat', info="start reward_model.eval")
         self.reward_model.eval()
+        # debuginfo(prj='ds-chat', info="end reward_model.eval")
+        #
+        # debuginfo(prj='ds-chat', info="start ref_model.eval ")
         self.ref_model.eval()
+        # debuginfo(prj='ds-chat', info="end ref_model.eval")
 
     def dump_model_norms(self, tag):
         actor_model_norm = get_model_norm(self.actor_model)
@@ -775,9 +1103,12 @@ class DeepSpeedPPOTrainer():
 class DeepSpeedPPOTrainerUnsupervised(DeepSpeedPPOTrainer):
 
     def __init__(self, *args, **kwargs):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         super().__init__(*args, **kwargs)
 
     def train_unsupervised(self, inputs, unsup_coef):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+
         """
         1个ppo_batch的无监督训练
         :param inputs: dict：input_ids, attention_mask, labels

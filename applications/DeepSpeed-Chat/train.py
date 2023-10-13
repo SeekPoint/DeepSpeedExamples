@@ -155,6 +155,8 @@ def verify_model(args, step_num):
 def get_cmd(args, step_num):
     output_dir = get_output_dir(args, step_num)
     script = get_script(args, step_num)
+    print("output_dir is:", output_dir)
+    print("script is:", script)
 
     if step_num in (1, 2):
         zero_stage = get_zero_stage(args, step_num)
@@ -195,6 +197,9 @@ def main(args):
         step_start_time = time.time()
 
         cmd = get_cmd(args, step_num)
+        # print("cmd is:", cmd)
+        # cmd isbash /home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/output/actor-models/125m
+
         launch_cmd(args, step_num, cmd)
 
         step_time = int(time.time() - start_time)
@@ -210,4 +215,5 @@ def main(args):
 
 if __name__ == "__main__":
     args = parse_args()
+    print("args is:", args)
     main(args)

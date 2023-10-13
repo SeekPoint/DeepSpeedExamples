@@ -35,6 +35,8 @@ import deepspeed
 from ppo_trainer import DeepSpeedPPOTrainer, DeepSpeedPPOTrainerUnsupervised
 from rlhf_engine import DeepSpeedRLHFEngine
 
+from pydebug import debuginfo, infoTensor
+
 import sys
 
 sys.path.append(
@@ -356,6 +358,9 @@ def create_datasets(args, tokenizer, train_phase=3):
         args.local_rank, args.data_path, args.data_split,
         args.data_output_path, train_phase, args.seed, tokenizer,
         args.max_prompt_seq_len)
+    # print('prompt_train_dataset is', prompt_train_dataset)
+    # prompt_train_dataset is <utils.data.data_utils.PromptDataset object at 0x7f5d3c0aa790>
+
     if unsupervised_training_enabled:
         """
         如果启用无监督训练，则获取无监督数据，
@@ -363,6 +368,7 @@ def create_datasets(args, tokenizer, train_phase=3):
         每块为1条数据，为max_seq_len长度
         """
         unsupervised_train_dataset = get_unsupervised_data(args, tokenizer)
+        print('unsupervised_train_dataset is', unsupervised_train_dataset)
     else:
         unsupervised_train_dataset = None
 
@@ -370,6 +376,9 @@ def create_datasets(args, tokenizer, train_phase=3):
     # DataLoaders creation:
     data_collator = DataCollatorRLHF(args.max_prompt_seq_len,
                                      args.inference_tp_size)
+    # print('data_collator is', data_collator)
+    # data_collator is <utils.data.data_utils.DataCollatorRLHF object at 0x7fda5203df40>
+
     if args.local_rank == -1:
         prompt_train_sampler = RandomSampler(prompt_train_dataset)
         if unsupervised_training_enabled:
@@ -381,6 +390,9 @@ def create_datasets(args, tokenizer, train_phase=3):
             unsupervised_train_sampler = DistributedSampler(
                 unsupervised_train_dataset)
 
+    #print('prompt_train_sampler is', prompt_train_sampler)
+    #prompt_train_sampler is <torch.utils.data.distributed.DistributedSampler object at 0x7fda5203deb0>
+
     """
     实例化数据加载器dataloader
     并且使用data_collator整理读取到的prompt数据（如上述所说：先padding后flip）
@@ -390,6 +402,7 @@ def create_datasets(args, tokenizer, train_phase=3):
         collate_fn=data_collator,
         sampler=prompt_train_sampler,
         batch_size=args.per_device_train_batch_size)
+
     if unsupervised_training_enabled:
         """如果启用无监督训练，则实例化无监督数据加载器"""
         unsupervised_train_dataloader = DataLoader(
@@ -410,6 +423,18 @@ def create_datasets(args, tokenizer, train_phase=3):
         (args.per_device_train_batch_size / args.per_device_mini_train_batch_size) * \
         args.ppo_epochs / args.gradient_accumulation_steps
     num_total_iters = int(args.num_train_epochs * num_update_steps_per_epoch)
+
+    # print('prompt_train_dataloader is', prompt_train_dataloader)
+    # prompt_train_dataloader is <torch.utils.data.dataloader.DataLoader object at 0x7fda5203dbb0>
+
+
+    # unsupervised_train_dataloader is [None, None, None, None, None, None, None, None, None, ...]
+    #print('unsupervised_train_dataloader is', unsupervised_train_dataloader)
+    print('len of unsupervised_train_dataloader is', len(unsupervised_train_dataloader))
+
+    print('num_update_steps_per_epoch is', num_update_steps_per_epoch)
+    print('num_total_iters is', num_total_iters)
+
 
     return prompt_train_dataloader, unsupervised_train_dataloader, num_total_iters
 
@@ -463,10 +488,18 @@ def main():
         num_total_iters=num_total_iters,
         args=args)
 
+    # print("rlhf_engine is:", rlhf_engine)
+    # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
+
     args.end_of_conversation_token = "<|endoftext|>"
 
     ppo_trainer = DeepSpeedPPOTrainerUnsupervised if unsupervised_training_enabled else DeepSpeedPPOTrainer
     trainer = ppo_trainer(rlhf_engine, args)
+
+    # print("ppo_trainer is:", ppo_trainer)
+    # print("trainer is:", trainer)
+    # ppo_trainer is: <class 'ppo_trainer.DeepSpeedPPOTrainer'>
+    # trainer is: <ppo_trainer.DeepSpeedPPOTrainer object at 0x7f939c0b7160>
 
     # first number is how many experience-batch to generate, second number is the training batch size, which is the micro-batch size used
     #经验数据以及无监督数据都将被MiniDataset所管理
@@ -474,6 +507,9 @@ def main():
                                    args.per_device_mini_train_batch_size)
     unsup_mini_dataset = MiniDataset(args.generation_batch_numbers,
                                      args.per_device_mini_train_batch_size)
+
+    print("exp_mini_dataset is:", exp_mini_dataset)
+    print("unsup_mini_dataset is:", unsup_mini_dataset)
 
     # Train!
     print_rank_0("***** Running training *****", args.global_rank)
@@ -489,11 +525,18 @@ def main():
 
             batch_prompt = to_device(batch_prompt, device)
             if batch_unsupervised is not None:
+                debuginfo(prj='ds-chat')
                 batch_unsupervised = to_device(batch_unsupervised, device)
                 unsup_dataset = unsup_mini_dataset.add(batch_unsupervised)
             else:
+                debuginfo(prj='ds-chat')
                 unsup_dataset = unsup_mini_dataset.add(
                     [[None] * args.per_device_train_batch_size])
+            # print("len of unsup_dataset", len(unsup_dataset))
+            #len of unsup_dataset 1
+            #print("unsup_dataset", unsup_dataset)
+            # unsup_dataset [[[None, None, None, None]]]
+
 
             # prompts = batch_prompt['prompt']
             # length = prompts.size(-1)
@@ -505,9 +548,99 @@ def main():
             out = trainer.generate_experience(batch_prompt['prompt'],
                                               batch_prompt['prompt_att_mask'],
                                               step)
+            # print("out of generate_experience :", out)
+            '''
+            out of generate_experience : {
+            'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
+                    ...
+                    [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:1'), 
+            'logprobs': tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.2253e-02,
+                     -1.6815e-02, -3.3474e-03],
+                    ...
+                    [-2.0078e+00, -2.0078e+00, -2.0078e+00,  ..., -1.9516e-02,
+                     -2.6443e-02, -6.1607e-03]], device='cuda:1', dtype=torch.float16), 
+            'ref_logprobs': tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.3519e-02,
+                     -1.8341e-02, -3.7823e-03],
+                    ...
+                    [-2.0391e+00, -2.0391e+00, -2.0391e+00,  ..., -2.1149e-02,
+                     -2.8412e-02, -6.6376e-03]], device='cuda:1', dtype=torch.float16), 
+            'value': tensor([[-0.4321, -0.4321, -0.4321,  ..., -0.4736, -0.4829, -0.3918],
+                    ...
+                    [ 1.5361,  1.5361,  1.5361,  ...,  1.2910,  1.3447,  1.2559]],device='cuda:1', dtype=torch.float16), 
+            'rewards': tensor([-0.4282,  1.4141, -0.3965,  1.2178], device='cuda:1',dtype=torch.float16), 
+            'input_ids': tensor([[   2,    2,    2,  ...,   47,   64,   67],
+                    ...
+                    [   2,    2,    2,  ...,    7, 7142,   24]], device='cuda:1'), 
+            'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
+                    ...
+                    [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')}
+            '''
+
+
+            # print("T out['prompts']:", infoTensor(out['prompts']))
+            # print("T out['logprobs']:", infoTensor(out['logprobs']))
+            # print("T out['ref_logprobs']:", infoTensor(out['ref_logprobs']))
+            # print("T out['value']:", infoTensor(out['value']))
+            # print("T out['rewards']:", infoTensor(out['rewards']))
+            # print("T out['input_ids']:", infoTensor(out['input_ids']))
+            # print("T out['attention_mask']:", infoTensor(out['attention_mask']))
+            ''' only ph3 x1
+            T out['prompts']: _Size([4, 256])_int64_cuda:1_
+            T out['logprobs']: _Size([4, 511])_float16_cuda:1_
+            T out['ref_logprobs']: _Size([4, 511])_float16_cuda:1_
+            T out['value']: _Size([4, 511])_float16_cuda:1_
+            T out['rewards']: _Size([4])_float16_cuda:1_
+            T out['input_ids']: _Size([4, 512])_int64_cuda:1_
+            T out['attention_mask']: _Size([4, 512])_int64_cuda:1_
+            '''
+
             exp_dataset = exp_mini_dataset.add(out)
+            #print("exp_dataset is:", exp_dataset)
+            # print("len of exp_dataset", len(exp_dataset))
+            # len of exp_dataset
+            '''
+            exp_dataset is: [
+            {'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
+                    ...
+                    [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:0'), 
+            'logprobs': tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
+                     -1.4099e-02, -3.5980e-02],
+                    ...
+                    [-4.4873e-01, -4.4873e-01, -4.4873e-01,  ..., -1.6678e-02,
+                     -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16),
+            'ref_logprobs': tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
+                    ...
+                    [-4.4873e-01, -4.4873e-01, -4.4873e-01,  ..., -1.6678e-02,
+                     -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16), 
+            'value': tensor([[-0.1948, -0.1948, -0.1948,  ...,  0.8779,  0.9243,  0.9229],
+                    ...
+                    [ 0.4233,  0.4233,  0.4233,  ...,  0.5342,  0.6001,  0.5879]],
+                   device='cuda:0', dtype=torch.float16),
+            'rewards': tensor([0.7358, 0.8081, 0.0402, 0.4734], device='cuda:0', dtype=torch.float16), 'input_ids': tensor([[    2,     2,     2,  ...,    64,    67, 10397],
+                    ...
+                    [    2,     2,     2,  ...,    10,   357,  4885]], device='cuda:0'),
+            'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
+                    ...
+                    [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')}]
+            '''
+
+            # print("T exp_dataset[0]['prompts']:", infoTensor(exp_dataset[0]['prompts']))
+            # print("T exp_dataset[0]['logprobs']:", infoTensor(exp_dataset[0]['logprobs']))
+            # print("T exp_dataset[0]['ref_logprobs']:", infoTensor(exp_dataset[0]['ref_logprobs']))
+            # print("T exp_dataset[0]['value']:", infoTensor(exp_dataset[0]['value']))
+            # print("T exp_dataset[0]['rewards']:", infoTensor(exp_dataset[0]['rewards']))
+            # print("T exp_dataset[0]['attention_mask']:", infoTensor(exp_dataset[0]['attention_mask']))
+            '''
+            T exp_dataset[0]['prompts']: _Size([4, 256])_int64_cuda:0_
+            T exp_dataset[0]['logprobs']: _Size([4, 511])_float16_cuda:0_
+            T exp_dataset[0]['ref_logprobs']: _Size([4, 511])_float16_cuda:0_
+            T exp_dataset[0]['value']: _Size([4, 511])_float16_cuda:0_
+            T exp_dataset[0]['rewards']: _Size([4])_float16_cuda:0_
+            T exp_dataset[0]['attention_mask']: _Size([4, 512])_int64_cuda:0_
+            '''
 
             if exp_dataset is not None:
+                debuginfo(prj='ds-chat')
                 inner_iter = 0
                 actor_loss_sum, critic_loss_sum, unsup_loss_sum = 0, 0, 0
                 average_reward = 0
@@ -533,9 +666,61 @@ def main():
                 '''
                 # 从经验池中进行学习Epoch轮
                 for ppo_ep in range(args.ppo_epochs):
+                    debuginfo(prj='ds-chat', info = f"ppo_ep is {ppo_ep}")
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
                             zip(exp_dataset, unsup_dataset)):
+                        debuginfo(prj='ds-chat')
+                        # print("exp_data is:", exp_data)
+                        # print("unsup_dataset is:", unsup_dataset)
+                        '''
+                        exp_data is: {
+                        'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
+                                ...
+                                [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:0'), 
+                        'logprobs': tensor([[-5.1875e+00, -5.1875e+00, -5.1875e+00,  ..., -7.6709e-01,
+                                 -7.7271e-02, -1.6201e+00],
+                                ...
+                                [-1.1699e+00, -1.1699e+00, -1.1699e+00,  ..., -7.5006e-04,
+                                 -7.5684e-02, -3.6438e-02]], device='cuda:0', dtype=torch.float16), 
+                        'ref_logprobs': tensor([[-5.1641e+00, -5.1641e+00, -5.1641e+00,  ..., -8.6523e-01,
+                                 -1.0699e-01, -1.7266e+00],
+                                ...
+                                [-1.1084e+00, -1.1084e+00, -1.1084e+00,  ..., -7.0190e-04,
+                                 -1.5137e-01, -6.1401e-02]], device='cuda:0', dtype=torch.float16), 
+                        'value': tensor([[-0.2289, -0.2289, -0.2289,  ...,  0.2812,  0.3298,  0.4016],
+                                ...
+                                [ 1.1162,  1.1162,  1.1162,  ...,  0.7139,  0.6431,  0.6313]],
+                               device='cuda:0', dtype=torch.float16), 
+                        'rewards': tensor([0.3215, 0.9287, 1.0088, 0.5864], device='cuda:0', dtype=torch.float16), 
+                        'input_ids': tensor([[    2,     2,     2,  ...,     9,     5,   144],
+                                ...
+                                [    2,     2,     2,  ...,    35,   318,    47]], device='cuda:0'), 
+                        'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
+                                ...
+                                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')}
+                                
+                        unsup_dataset is: [[[None, None, None, None]]]
+                        '''
+
+                        # print("T exp_data['prompts']:", infoTensor(exp_data['prompts']))
+                        # print("T exp_data['logprobs']:", infoTensor(exp_data['logprobs']))
+                        # print("T exp_data['ref_logprobs']:", infoTensor(exp_data['ref_logprobs']))
+                        # print("T exp_data['value']:", infoTensor(exp_data['value']))
+                        # print("T exp_data['rewards']:", infoTensor(exp_data['rewards']))
+                        # print("T exp_data['input_ids']:", infoTensor(exp_data['input_ids']))
+                        # print("T exp_data['attention_mask']:", infoTensor(exp_data['attention_mask']))
+                        '''
+                        T exp_data['prompts']: _Size([4, 256])_int64_cuda:1_
+                        T exp_data['logprobs']: _Size([4, 511])_float16_cuda:1_
+                        T exp_data['ref_logprobs']: _Size([4, 511])_float16_cuda:1_
+                        T exp_data['value']: _Size([4, 511])_float16_cuda:1_
+                        T exp_data['rewards']: _Size([4])_float16_cuda:1_
+                        T exp_data['input_ids']: _Size([4, 512])_int64_cuda:1_
+                        T exp_data['attention_mask']: _Size([4, 512])_int64_cuda:1_
+                        '''
+
+
                         """
                         ppo_step循环：
                         从MiniDataset返回的数据中，
@@ -557,6 +742,8 @@ def main():
                             unsup_loss = trainer.train_unsupervised(
                                 unsup_data, args.unsup_coef)
 
+                            debuginfo(prj='ds-chat', info=f"unsup_loss is {unsup_loss}")
+
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
 
@@ -565,6 +752,7 @@ def main():
 
                         """是否启用指数移动平均技术"""
                         if args.enable_ema:
+                            debuginfo(prj='ds-chat', info=f"enable_ema")
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
@@ -615,6 +803,7 @@ def main():
                 rlhf_engine.actor_ema)
 
         if torch.distributed.get_rank() == 0:
+            debuginfo(prj='ds-chat')
             save_hf_format(rlhf_engine.actor,
                            tokenizer,
                            args,
@@ -630,6 +819,7 @@ def main():
                                sub_folder='actor_ema')
 
         if args.actor_zero_stage == 3:
+            debuginfo(prj='ds-chat')
             save_zero_three_model(rlhf_engine.actor,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(
@@ -641,7 +831,9 @@ def main():
                                       save_dir=os.path.join(
                                           args.output_dir, 'actor_ema'),
                                       zero_stage=args.actor_zero_stage)
+
         if args.critic_zero_stage == 3:
+            debuginfo(prj='ds-chat')
             save_zero_three_model(rlhf_engine.critic,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(

@@ -4,6 +4,8 @@
 # DeepSpeed Team
 import torch
 from torch import nn
+from pydebug import debuginfo, infoTensor
+
 '''
 3.3.3.3 奖励reward_score和价值估计values的获取
 奖励模型的模型类RewardModel中实现了相应的方法forward_value()，可支持输入“一句对话”返回“环境奖励与价值估计”。
@@ -81,7 +83,9 @@ class RewardModel(nn.Module):
         super().__init__()
         self.config = base_model.config
         self.num_padding_at_beginning = num_padding_at_beginning
+
         if hasattr(self.config, "word_embed_proj_dim"):
+            debuginfo(prj='ds-chat', info=self.__class__.__name__ + '-- word_embed_proj_dim')
             # `OPT` models use word_embed_proj_dim as final output
             # https://github.com/huggingface/transformers/blob/main/src/transformers/models/opt/modeling_opt.py#L497
             """
@@ -93,10 +97,13 @@ class RewardModel(nn.Module):
                                     1,
                                     bias=False)
         else:
+            debuginfo(prj='ds-chat', info=self.__class__.__name__ + '--No word_embed_proj_dim')
             # `gpt-neo(x)` models use `hidden_size` attribute names instead of `n_embd``
             self.config.n_embd = self.config.hidden_size if hasattr(
                 self.config, "hidden_size") else self.config.n_embd
             self.v_head = nn.Linear(self.config.n_embd, 1, bias=False)
+
+
         """base_model即为主干网络，因此RM最终由1个主干网络和1个线性层构成"""
         self.rwtranrsformer = base_model
         self.PAD_ID = tokenizer.pad_token_id
@@ -120,6 +127,8 @@ class RewardModel(nn.Module):
         其中前N个为chosen input ids（正样本），后N个为rejected input ids（负样本）
         """
         loss = None
+
+        # debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         """获得主干网络的输出的特征"""
         transformer_outputs = self.rwtranrsformer(
@@ -152,11 +161,26 @@ class RewardModel(nn.Module):
         # 取最后一层的输出特征
         # hidden_states.shape: (bs * 2, max_seq_len, hidden_size)
         hidden_states = transformer_outputs[0]
+        #print("hidden_states is:", hidden_states)
 
         # v_head为Dx1的全连接网络对最后一维压缩
         # 将特征送入全连接层得到分数回归值
         # rewards.shape: (bs * 2, max_seq_len)
         rewards = self.v_head(hidden_states).squeeze(-1)
+        #print("rewards is:", rewards)
+
+        '''
+        hidden_states is: tensor([[[-0.8462, -5.7422,  0.7568,  ..., -2.2910, -1.5664,  0.4041],
+         ....
+         [-0.8838, -3.8242,  0.0475,  ..., -0.6792,  0.3499,  3.2148]]], device='cuda:1', dtype=torch.float16)
+        rewards is: tensor([[-0.4866, -0.3369, -0.3350,  ..., -0.2542, -0.2542, -0.2542],
+                ...,
+                [-0.4866, -0.3369, -0.3350,  ..., -0.0409,  0.3579,  0.1017]], device='cuda:1', dtype=torch.float16)
+        '''
+        # print("T hidden_states:", infoTensor(hidden_states)) #only ph2
+        # T hidden_states: _Size([16, 128, 768])_float16_cuda:1_
+        # print("T rewards:", infoTensor(rewards)) #only ph2
+
         chosen_mean_scores = []
         rejected_mean_scores = []
 
@@ -172,6 +196,20 @@ class RewardModel(nn.Module):
         rejected_ids = input_ids[bs:]  # 后N个为负样本
         chosen_rewards = rewards[:bs]  # 获得前N个正样本的预测的reward
         rejected_rewards = rewards[bs:]  # 获得后N个负样本的预测的reward
+        # print("len of chosen_ids is:", len(chosen_ids))
+        # print("len of rejected_ids is:", len(rejected_ids))
+        # print("len of chosen_rewards is:", len(chosen_rewards))
+        # print("len of rejected_rewards is:", len(rejected_rewards))
+        # print("bs is:", bs)
+        # print("seq_len is:", seq_len)
+        '''
+        len of chosen_ids is: 8
+        len of rejected_ids is: 8
+        len of chosen_rewards is: 8
+        len of rejected_rewards is: 8
+        bs is: 8
+        seq_len is: 128
+        '''
         ## chosen 和 reject都会生成一个对应的分数 rewards
 
         # Compute pairwise loss. Only backprop on the different tokens before padding
@@ -183,15 +221,48 @@ class RewardModel(nn.Module):
             # chosen_id.shape: (max_seq_len,)
             # 获得一个chosen样本（正样本）
             chosen_id = chosen_ids[i]
+            # print("chosen_id is:", chosen_id)
 
             # 获得一个rejected样本（负样本）
             rejected_id = rejected_ids[i]
+            # print("rejected_id is:", rejected_id)
 
             # 当前正样本的得分
             chosen_reward = chosen_rewards[i]
+            # print("chosen_reward is:", chosen_reward)
 
             # 当前负样本的得分
             rejected_reward = rejected_rewards[i]
+            # print("rejected_reward is:", rejected_reward)
+            '''
+            chosen_id is: tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
+                    ...
+                       33,    10,   182,  2166,  2465,   516,     8,  5929],
+                   device='cuda:0')
+            rejected_id is: tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
+                    ...
+                       33,    10,   182,  2166,  2465,   516,     8,  5929],
+                   device='cuda:0')
+            chosen_reward is: tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.3831,  0.0515,  0.1240,
+                    ...
+                    -0.0613,  0.6763, -0.2629,  0.5146,  0.2266, -0.4478, -0.4583, -0.7490],
+                   device='cuda:1', dtype=torch.float16)
+            rejected_reward is: tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.1185,  0.6387,  0.4653,
+                    ...
+                    -0.7280,  0.4292,  0.0875,  0.0076,  0.2520,  0.3594, -0.3235,  0.1514],
+                   device='cuda:0', dtype=torch.float16)
+            '''
+
+            #print("T chosen_id--5:", infoTensor(chosen_id))
+            #print("T rejected_id--5:", infoTensor(rejected_id))
+            #print("T chosen_reward--5:", infoTensor(chosen_reward))
+            #print("T rejected_reward--5:", infoTensor(rejected_reward))
+            '''
+            only ph2
+            T chosen_id--5: _Size([128])_int64_cuda:0_
+            T rejected_id--5: _Size([128])_int64_cuda:0_
+            T chosen_reward--5: _Size([128])_float16_cuda:0_
+            T rejected_reward--5: _Size([128])_float16_cuda:0_'''
 
             """
             下方本应有各种取index相关的操作，
@@ -213,14 +284,18 @@ class RewardModel(nn.Module):
 
             # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
+            # print("c_inds is:", c_inds)
 
             # 如果是OPT，那么第0个一定是OPT模型默认在input最前面的padding token，不予考虑
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
                 c_inds
             ) > self.num_padding_at_beginning else seq_len  # OPT model pads the first token, so we need to use the second padding token as the end of the sequence
 
+            # print("c_ind is:", c_ind)
+
             # 获取不同id的索引
             check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
+            # print("check_divergence is:", check_divergence)
 
             # 说明不存在相等的padding token
             if len(check_divergence) == 0:
@@ -234,6 +309,7 @@ class RewardModel(nn.Module):
                 ) if len(r_inds) > self.num_padding_at_beginning else seq_len
                 end_ind = max(c_ind, r_ind)
                 divergence_ind = check_divergence[0]
+
             assert divergence_ind > 0
             '''
             对于一个奖励模型来说，目标是给一个句子进行打分，按理说每个句子对应一个分值就行了，但是目前对于长度为L的句子，奖励模型输出了L个值。
@@ -253,6 +329,10 @@ class RewardModel(nn.Module):
             ## 从不相同的第一个token到 最后一个token的reward
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
+            # print("c_truncated_reward is:", c_truncated_reward)
+            # print("r_truncated_reward is:", r_truncated_reward)
+
+
 
             # 取代表结束的pad token所在位置的前一个位置（可以理解为的最后一个有效token的位置）的分值作为参考分值
             chosen_mean_scores.append(
@@ -265,10 +345,54 @@ class RewardModel(nn.Module):
             #pair wise loss代码如下，如果给pair里边好的句子打分高（c_truncated_reward），坏的句子（r_truncated_reward）打分低，loss就会小：
             loss += -torch.nn.functional.logsigmoid(c_truncated_reward -
                                                     r_truncated_reward).mean()
+            '''
+            c_ind is: 87
+            c_inds is: tensor([[ 50],
+                    [ 51],
+            ...
+                    [ 99],
+                    [100]], device='cuda:0')
+            c_truncated_reward is: tensor([[  0],
+                    [ 83],
+            ...
+                    [126],
+                    [127]], device='cuda:1')
+            check_divergence is: tensor([-0.7969, -0.9590, -0.7002, -0.7397, -1.0400, -1.1787, -1.1152, -1.8379,
+                    -2.3906, -2.6797, -2.9160, -2.8047, -3.2949, -3.1367, -2.9453, -2.7754,
+            ...
+                    -1.4961, -1.4961, -1.4961], device='cuda:0', dtype=torch.float16,
+                   grad_fn=<SliceBackward0>)
+            r_truncated_reward is: tensor([-1.2334, -1.8516, -2.3652, -2.6016, -2.6055, -2.8008, -2.8809, -2.7012,
+                    -3.0293, -2.9863, -3.3477, -3.1641, -2.8906, -3.1367, -3.3398, -3.4160,
+            ...
+                    -2.3105, -2.2109, -2.3320], device='cuda:0', dtype=torch.float16,
+                   grad_fn=<SliceBackward0>)
+            '''
+            # print("T c_inds--5:", infoTensor(c_inds))  #only ph2, 很多次数，大小经常变化 T c_inds--5: _Size([72, 1])_int64_cuda:0_
+            # print("T c_truncated_reward--5:", infoTensor(c_truncated_reward)) #only ph2, 很多次数，大小不定 T c_truncated_reward--5: _Size([48])_float16_cuda:0_
+            # print("T check_divergence--5:", infoTensor(check_divergence))  #only ph2, 很多次数，大小不定 T check_divergence--5: _Size([0, 1])_int64_cuda:0_
+            # print("T r_truncated_reward--5:", infoTensor(r_truncated_reward)) #only ph2, 很多次数，大小不定 T r_truncated_reward--5: _Size([111])_float16_cuda:0_
+
+        # print("len of rejected_mean_scores", len(rejected_mean_scores))
+        # #len of rejected_mean_scores 8
 
         loss = loss / bs
         chosen_mean_scores = torch.stack(chosen_mean_scores)
         rejected_mean_scores = torch.stack(rejected_mean_scores)
+
+        # print("chosen_mean_scores", chosen_mean_scores)
+        # print("rejected_mean_scores", rejected_mean_scores)
+        '''
+        chosen_mean_scores tensor([-0.2749,  0.4365,  0.0247,  0.9805,  1.0439,  1.0908, -0.4592,  0.3604],
+                device='cuda:0', dtype=torch.float16, grad_fn=<StackBackward0>)
+        rejected_mean_scores tensor([-0.3792,  1.2471,  0.5435, -1.0049,  0.5679, -0.0025,  0.4866,  1.1855],
+               device='cuda:1', dtype=torch.float16, grad_fn=<StackBackward0>)
+        '''
+        # print("T chosen_mean_scores--5:", infoTensor(chosen_mean_scores))
+        # print("T rejected_mean_scores--5:", infoTensor(rejected_mean_scores))
+        # only ph2
+        #T chosen_mean_scores--5: _Size([8])_float16_cuda:1_
+        #T rejected_mean_scores--5: _Size([8])_float16_cuda:1_
 
         # 返回损失和参考分值
         return {
@@ -276,6 +400,7 @@ class RewardModel(nn.Module):
             "chosen_mean_scores": chosen_mean_scores,
             "rejected_mean_scores": rejected_mean_scores,
         }
+
 
     '''
     在训练强化学习的过程中，会用到reward model（critic model，再次提醒，critic model和reward model是同一个模型的两个副本）的推理过程，
@@ -297,6 +422,7 @@ class RewardModel(nn.Module):
         而forward_value只需要考虑一个输入，然后返回分值
         :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
         """
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 经过主干网络正向传播得到输出
         transformer_outputs = self.rwtranrsformer(

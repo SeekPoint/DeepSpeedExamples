@@ -1,0 +1,272 @@
+T OGP:0-params-0:_Size([50272, 768])_float32_cpu_
+T OGP:0-params-1:_Size([2050, 768])_float32_cpu_
+T OGP:0-params-2:_Size([768])_float32_cpu_
+T OGP:0-params-3:_Size([768])_float32_cpu_
+T OGP:0-params-4:_Size([768])_float32_cpu_
+T OGP:0-params-5:_Size([768])_float32_cpu_
+T OGP:0-params-6:_Size([768])_float32_cpu_
+T OGP:0-params-7:_Size([768])_float32_cpu_
+T OGP:0-params-8:_Size([768])_float32_cpu_
+T OGP:0-params-9:_Size([768])_float32_cpu_
+T OGP:0-params-10:_Size([768])_float32_cpu_
+T OGP:0-params-11:_Size([768])_float32_cpu_
+T OGP:0-params-12:_Size([768])_float32_cpu_
+T OGP:0-params-13:_Size([768])_float32_cpu_
+T OGP:0-params-14:_Size([768])_float32_cpu_
+T OGP:0-params-15:_Size([768])_float32_cpu_
+T OGP:0-params-16:_Size([768])_float32_cpu_
+T OGP:0-params-17:_Size([768])_float32_cpu_
+T OGP:0-params-18:_Size([768])_float32_cpu_
+T OGP:0-params-19:_Size([768])_float32_cpu_
+T OGP:0-params-20:_Size([768])_float32_cpu_
+T OGP:0-params-21:_Size([768])_float32_cpu_
+T OGP:0-params-22:_Size([768])_float32_cpu_
+T OGP:0-params-23:_Size([768])_float32_cpu_
+T OGP:0-params-24:_Size([768])_float32_cpu_
+T OGP:0-params-25:_Size([768])_float32_cpu_
+T OGP:0-params-26:_Size([768])_float32_cpu_
+T OGP:0-weight_decay:0.0
+T OGP:1-params-0:_Size([768, 1])_float32_cpu_
+T OGP:1-params-1:_Size([1, 768])_float32_cpu_
+T OGP:1-params-2:_Size([768, 1])_float32_cpu_
+T OGP:1-params-3:_Size([1, 768])_float32_cpu_
+T OGP:1-params-4:_Size([768, 1])_float32_cpu_
+T OGP:1-params-5:_Size([1, 768])_float32_cpu_
+T OGP:1-params-6:_Size([768, 1])_float32_cpu_
+T OGP:1-params-7:_Size([1, 768])_float32_cpu_
+T OGP:1-params-8:_Size([768, 1])_float32_cpu_
+T OGP:1-params-9:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-10:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-11:_Size([1, 768])_float32_cpu_
+T OGP:1-params-12:_Size([768, 1])_float32_cpu_
+T OGP:1-params-13:_Size([1, 768])_float32_cpu_
+T OGP:1-params-14:_Size([768, 1])_float32_cpu_
+T OGP:1-params-15:_Size([1, 768])_float32_cpu_
+T OGP:1-params-16:_Size([768, 1])_float32_cpu_
+T OGP:1-params-17:_Size([1, 768])_float32_cpu_
+T OGP:1-params-18:_Size([768, 1])_float32_cpu_
+T OGP:1-params-19:_Size([1, 768])_float32_cpu_
+T OGP:1-params-20:_Size([768, 1])_float32_cpu_
+T OGP:1-params-21:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-22:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-23:_Size([1, 768])_float32_cpu_
+T OGP:1-params-24:_Size([768, 1])_float32_cpu_
+T OGP:1-params-25:_Size([1, 768])_float32_cpu_
+T OGP:1-params-26:_Size([768, 1])_float32_cpu_
+T OGP:1-params-27:_Size([1, 768])_float32_cpu_
+T OGP:1-params-28:_Size([768, 1])_float32_cpu_
+T OGP:1-params-29:_Size([1, 768])_float32_cpu_
+T OGP:1-params-30:_Size([768, 1])_float32_cpu_
+T OGP:1-params-31:_Size([1, 768])_float32_cpu_
+T OGP:1-params-32:_Size([768, 1])_float32_cpu_
+T OGP:1-params-33:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-34:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-35:_Size([1, 768])_float32_cpu_
+T OGP:1-params-36:_Size([768, 1])_float32_cpu_
+T OGP:1-params-37:_Size([1, 768])_float32_cpu_
+T OGP:1-params-38:_Size([768, 1])_float32_cpu_
+T OGP:1-params-39:_Size([1, 768])_float32_cpu_
+T OGP:1-params-40:_Size([768, 1])_float32_cpu_
+T OGP:1-params-41:_Size([1, 768])_float32_cpu_
+T OGP:1-params-42:_Size([768, 1])_float32_cpu_
+T OGP:1-params-43:_Size([1, 768])_float32_cpu_
+T OGP:1-params-44:_Size([768, 1])_float32_cpu_
+T OGP:1-params-45:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-46:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-47:_Size([1, 768])_float32_cpu_
+T OGP:1-params-48:_Size([768, 1])_float32_cpu_
+T OGP:1-params-49:_Size([1, 768])_float32_cpu_
+T OGP:1-params-50:_Size([768, 1])_float32_cpu_
+T OGP:1-params-51:_Size([1, 768])_float32_cpu_
+T OGP:1-params-52:_Size([768, 1])_float32_cpu_
+T OGP:1-params-53:_Size([1, 768])_float32_cpu_
+T OGP:1-params-54:_Size([768, 1])_float32_cpu_
+T OGP:1-params-55:_Size([1, 768])_float32_cpu_
+T OGP:1-params-56:_Size([768, 1])_float32_cpu_
+T OGP:1-params-57:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-58:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-59:_Size([1, 768])_float32_cpu_
+T OGP:1-params-60:_Size([768, 1])_float32_cpu_
+T OGP:1-params-61:_Size([1, 768])_float32_cpu_
+T OGP:1-params-62:_Size([768, 1])_float32_cpu_
+T OGP:1-params-63:_Size([1, 768])_float32_cpu_
+T OGP:1-params-64:_Size([768, 1])_float32_cpu_
+T OGP:1-params-65:_Size([1, 768])_float32_cpu_
+T OGP:1-params-66:_Size([768, 1])_float32_cpu_
+T OGP:1-params-67:_Size([1, 768])_float32_cpu_
+T OGP:1-params-68:_Size([768, 1])_float32_cpu_
+T OGP:1-params-69:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-70:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-71:_Size([1, 768])_float32_cpu_
+T OGP:1-params-72:_Size([768, 1])_float32_cpu_
+T OGP:1-params-73:_Size([1, 768])_float32_cpu_
+T OGP:1-params-74:_Size([768, 1])_float32_cpu_
+T OGP:1-params-75:_Size([1, 768])_float32_cpu_
+T OGP:1-params-76:_Size([768, 1])_float32_cpu_
+T OGP:1-params-77:_Size([1, 768])_float32_cpu_
+T OGP:1-params-78:_Size([768, 1])_float32_cpu_
+T OGP:1-params-79:_Size([1, 768])_float32_cpu_
+T OGP:1-params-80:_Size([768, 1])_float32_cpu_
+T OGP:1-params-81:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-82:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-83:_Size([1, 768])_float32_cpu_
+T OGP:1-params-84:_Size([768, 1])_float32_cpu_
+T OGP:1-params-85:_Size([1, 768])_float32_cpu_
+T OGP:1-params-86:_Size([768, 1])_float32_cpu_
+T OGP:1-params-87:_Size([1, 768])_float32_cpu_
+T OGP:1-params-88:_Size([768, 1])_float32_cpu_
+T OGP:1-params-89:_Size([1, 768])_float32_cpu_
+T OGP:1-params-90:_Size([768, 1])_float32_cpu_
+T OGP:1-params-91:_Size([1, 768])_float32_cpu_
+T OGP:1-params-92:_Size([768, 1])_float32_cpu_
+T OGP:1-params-93:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-94:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-95:_Size([1, 768])_float32_cpu_
+T OGP:1-params-96:_Size([768, 1])_float32_cpu_
+T OGP:1-params-97:_Size([1, 768])_float32_cpu_
+T OGP:1-params-98:_Size([768, 1])_float32_cpu_
+T OGP:1-params-99:_Size([1, 768])_float32_cpu_
+T OGP:1-params-100:_Size([768, 1])_float32_cpu_
+T OGP:1-params-101:_Size([1, 768])_float32_cpu_
+T OGP:1-params-102:_Size([768, 1])_float32_cpu_
+T OGP:1-params-103:_Size([1, 768])_float32_cpu_
+T OGP:1-params-104:_Size([768, 1])_float32_cpu_
+T OGP:1-params-105:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-106:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-107:_Size([1, 768])_float32_cpu_
+T OGP:1-params-108:_Size([768, 1])_float32_cpu_
+T OGP:1-params-109:_Size([1, 768])_float32_cpu_
+T OGP:1-params-110:_Size([768, 1])_float32_cpu_
+T OGP:1-params-111:_Size([1, 768])_float32_cpu_
+T OGP:1-params-112:_Size([768, 1])_float32_cpu_
+T OGP:1-params-113:_Size([1, 768])_float32_cpu_
+T OGP:1-params-114:_Size([768, 1])_float32_cpu_
+T OGP:1-params-115:_Size([1, 768])_float32_cpu_
+T OGP:1-params-116:_Size([768, 1])_float32_cpu_
+T OGP:1-params-117:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-118:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-119:_Size([1, 768])_float32_cpu_
+T OGP:1-params-120:_Size([768, 1])_float32_cpu_
+T OGP:1-params-121:_Size([1, 768])_float32_cpu_
+T OGP:1-params-122:_Size([768, 1])_float32_cpu_
+T OGP:1-params-123:_Size([1, 768])_float32_cpu_
+T OGP:1-params-124:_Size([768, 1])_float32_cpu_
+T OGP:1-params-125:_Size([1, 768])_float32_cpu_
+T OGP:1-params-126:_Size([768, 1])_float32_cpu_
+T OGP:1-params-127:_Size([1, 768])_float32_cpu_
+T OGP:1-params-128:_Size([768, 1])_float32_cpu_
+T OGP:1-params-129:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-130:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-131:_Size([1, 768])_float32_cpu_
+T OGP:1-params-132:_Size([768, 1])_float32_cpu_
+T OGP:1-params-133:_Size([1, 768])_float32_cpu_
+T OGP:1-params-134:_Size([768, 1])_float32_cpu_
+T OGP:1-params-135:_Size([1, 768])_float32_cpu_
+T OGP:1-params-136:_Size([768, 1])_float32_cpu_
+T OGP:1-params-137:_Size([1, 768])_float32_cpu_
+T OGP:1-params-138:_Size([768, 1])_float32_cpu_
+T OGP:1-params-139:_Size([1, 768])_float32_cpu_
+T OGP:1-params-140:_Size([768, 1])_float32_cpu_
+T OGP:1-params-141:_Size([1, 3072])_float32_cpu_
+T OGP:1-params-142:_Size([3072, 1])_float32_cpu_
+T OGP:1-params-143:_Size([1, 768])_float32_cpu_
+T OGP:1-weight_decay:0.0
+T OGP:1-lr:0.0005
+T OGP:2-params-0:_Size([768])_float32_cpu_
+T OGP:2-params-1:_Size([768])_float32_cpu_
+T OGP:2-params-2:_Size([768])_float32_cpu_
+T OGP:2-params-3:_Size([768])_float32_cpu_
+T OGP:2-params-4:_Size([768])_float32_cpu_
+T OGP:2-params-5:_Size([768])_float32_cpu_
+T OGP:2-params-6:_Size([3072])_float32_cpu_
+T OGP:2-params-7:_Size([768])_float32_cpu_
+T OGP:2-params-8:_Size([768])_float32_cpu_
+T OGP:2-params-9:_Size([768])_float32_cpu_
+T OGP:2-params-10:_Size([768])_float32_cpu_
+T OGP:2-params-11:_Size([768])_float32_cpu_
+T OGP:2-params-12:_Size([768])_float32_cpu_
+T OGP:2-params-13:_Size([768])_float32_cpu_
+T OGP:2-params-14:_Size([3072])_float32_cpu_
+T OGP:2-params-15:_Size([768])_float32_cpu_
+T OGP:2-params-16:_Size([768])_float32_cpu_
+T OGP:2-params-17:_Size([768])_float32_cpu_
+T OGP:2-params-18:_Size([768])_float32_cpu_
+T OGP:2-params-19:_Size([768])_float32_cpu_
+T OGP:2-params-20:_Size([768])_float32_cpu_
+T OGP:2-params-21:_Size([768])_float32_cpu_
+T OGP:2-params-22:_Size([3072])_float32_cpu_
+T OGP:2-params-23:_Size([768])_float32_cpu_
+T OGP:2-params-24:_Size([768])_float32_cpu_
+T OGP:2-params-25:_Size([768])_float32_cpu_
+T OGP:2-params-26:_Size([768])_float32_cpu_
+T OGP:2-params-27:_Size([768])_float32_cpu_
+T OGP:2-params-28:_Size([768])_float32_cpu_
+T OGP:2-params-29:_Size([768])_float32_cpu_
+T OGP:2-params-30:_Size([3072])_float32_cpu_
+T OGP:2-params-31:_Size([768])_float32_cpu_
+T OGP:2-params-32:_Size([768])_float32_cpu_
+T OGP:2-params-33:_Size([768])_float32_cpu_
+T OGP:2-params-34:_Size([768])_float32_cpu_
+T OGP:2-params-35:_Size([768])_float32_cpu_
+T OGP:2-params-36:_Size([768])_float32_cpu_
+T OGP:2-params-37:_Size([768])_float32_cpu_
+T OGP:2-params-38:_Size([3072])_float32_cpu_
+T OGP:2-params-39:_Size([768])_float32_cpu_
+T OGP:2-params-40:_Size([768])_float32_cpu_
+T OGP:2-params-41:_Size([768])_float32_cpu_
+T OGP:2-params-42:_Size([768])_float32_cpu_
+T OGP:2-params-43:_Size([768])_float32_cpu_
+T OGP:2-params-44:_Size([768])_float32_cpu_
+T OGP:2-params-45:_Size([768])_float32_cpu_
+T OGP:2-params-46:_Size([3072])_float32_cpu_
+T OGP:2-params-47:_Size([768])_float32_cpu_
+T OGP:2-params-48:_Size([768])_float32_cpu_
+T OGP:2-params-49:_Size([768])_float32_cpu_
+T OGP:2-params-50:_Size([768])_float32_cpu_
+T OGP:2-params-51:_Size([768])_float32_cpu_
+T OGP:2-params-52:_Size([768])_float32_cpu_
+T OGP:2-params-53:_Size([768])_float32_cpu_
+T OGP:2-params-54:_Size([3072])_float32_cpu_
+T OGP:2-params-55:_Size([768])_float32_cpu_
+T OGP:2-params-56:_Size([768])_float32_cpu_
+T OGP:2-params-57:_Size([768])_float32_cpu_
+T OGP:2-params-58:_Size([768])_float32_cpu_
+T OGP:2-params-59:_Size([768])_float32_cpu_
+T OGP:2-params-60:_Size([768])_float32_cpu_
+T OGP:2-params-61:_Size([768])_float32_cpu_
+T OGP:2-params-62:_Size([3072])_float32_cpu_
+T OGP:2-params-63:_Size([768])_float32_cpu_
+T OGP:2-params-64:_Size([768])_float32_cpu_
+T OGP:2-params-65:_Size([768])_float32_cpu_
+T OGP:2-params-66:_Size([768])_float32_cpu_
+T OGP:2-params-67:_Size([768])_float32_cpu_
+T OGP:2-params-68:_Size([768])_float32_cpu_
+T OGP:2-params-69:_Size([768])_float32_cpu_
+T OGP:2-params-70:_Size([3072])_float32_cpu_
+T OGP:2-params-71:_Size([768])_float32_cpu_
+T OGP:2-params-72:_Size([768])_float32_cpu_
+T OGP:2-params-73:_Size([768])_float32_cpu_
+T OGP:2-params-74:_Size([768])_float32_cpu_
+T OGP:2-params-75:_Size([768])_float32_cpu_
+T OGP:2-params-76:_Size([768])_float32_cpu_
+T OGP:2-params-77:_Size([768])_float32_cpu_
+T OGP:2-params-78:_Size([3072])_float32_cpu_
+T OGP:2-params-79:_Size([768])_float32_cpu_
+T OGP:2-params-80:_Size([768])_float32_cpu_
+T OGP:2-params-81:_Size([768])_float32_cpu_
+T OGP:2-params-82:_Size([768])_float32_cpu_
+T OGP:2-params-83:_Size([768])_float32_cpu_
+T OGP:2-params-84:_Size([768])_float32_cpu_
+T OGP:2-params-85:_Size([768])_float32_cpu_
+T OGP:2-params-86:_Size([3072])_float32_cpu_
+T OGP:2-params-87:_Size([768])_float32_cpu_
+T OGP:2-params-88:_Size([768])_float32_cpu_
+T OGP:2-params-89:_Size([768])_float32_cpu_
+T OGP:2-params-90:_Size([768])_float32_cpu_
+T OGP:2-params-91:_Size([768])_float32_cpu_
+T OGP:2-params-92:_Size([768])_float32_cpu_
+T OGP:2-params-93:_Size([768])_float32_cpu_
+T OGP:2-params-94:_Size([3072])_float32_cpu_
+T OGP:2-params-95:_Size([768])_float32_cpu_
+T OGP:2-params-96:_Size([768])_float32_cpu_
+T OGP:2-weight_decay:0.0

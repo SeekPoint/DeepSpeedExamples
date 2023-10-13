@@ -17,4 +17,5 @@ mkdir -p $OUTPUT
 export CUDA_VISIBLE_DEVICES=1
 deepspeed --num_gpus 1 main.py --model_name_or_path /home/amd00/hf_model/opt-125m \
    --gradient_accumulation_steps 2 --lora_dim 8 --zero_stage $ZERO_STAGE \
-   --deepspeed --output_dir $OUTPUT &> $OUTPUT/training-opt-125m.log
+   --deepspeed --output_dir $OUTPUT  \
+   2>&1 | tee $OUTPUT/single_gpu_training-opt-125m-ZERO_STAGE$ZERO_STAGE.log

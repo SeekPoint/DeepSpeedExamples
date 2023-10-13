@@ -13,12 +13,13 @@ if [ "$ZERO_STAGE" == "" ]; then
 fi
 mkdir -p $OUTPUT
 
+# --data_path  可以接入多个数据集
 deepspeed --hostfile /hostfile --master_addr=192.168.1.7 --master_port=29701 main.py \
-   --data_path Dahoas/rm-static Dahoas/full-hh-rlhf Dahoas/synthetic-instruct-gptj-pairwise yitingxie/rlhf-reward-datasets \
+   --data_path Dahoas/rm-static \
    --data_split 2,4,4 \
    --model_name_or_path facebook/opt-125m \
-   --per_device_train_batch_size 128 \
-   --per_device_eval_batch_size 128 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
    --max_seq_len 128 \
    --learning_rate 1e-4 \
    --weight_decay 0.1 \
@@ -33,4 +34,4 @@ deepspeed --hostfile /hostfile --master_addr=192.168.1.7 --master_port=29701 mai
    --lora_module_name decoder.layers. \
    --deepspeed \
    --output_dir $OUTPUT \
-   &> $OUTPUT/training-step1-2nodes2gpus-125m-2ndnode-ZERO_STAGE$ZERO_STAGE.log
+    2>&1 | tee $OUTPUT/training-ph1-2nodes2gpus-125m-2ndnode-ZERO_STAGE$ZERO_STAGE.log

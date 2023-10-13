@@ -9,6 +9,9 @@ import torch.nn.functional as F
 from deepspeed.compression.helper import recursive_getattr, recursive_setattr
 import deepspeed
 
+from pydebug import debuginfo, infoTensor
+
+
 '''
 经过LoRA改造后，原始基座模型（此处的基座模型为“facebook/opt-125m”）的结构如下所示，
 可见模型中除了输出头部分的线性层基本都被改成了LoRA结构，
@@ -68,6 +71,7 @@ class LinearLayer_LoRA(nn.Module):
                  lora_scaling=1,
                  lora_droppout=0,
                  bias=None):
+        # debuginfo(prj='ds-chat', info=self.__class__.__name__)
         super(LinearLayer_LoRA, self).__init__()
 
         """此处的weight和bias即为原始结构中的参数"""
@@ -114,6 +118,7 @@ class LinearLayer_LoRA(nn.Module):
     #   self.fuse_lora_weight()
 
     def train(self, mode=True):
+        # debuginfo(prj='ds-chat', info=f"mode is {mode}")
         self.lora_dropout.train(mode) # 将模型设置为训练模式，这时候 Dropout 层会开始工作。
         # self.unfuse_lora_weight()
 

@@ -15,6 +15,8 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
+from pydebug import debuginfo, infoTensor
+
 # 接下来，它导入了Hugging Face的transformers库的一些模块，包括用于因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），默认的数据整理函数（default_data_collator）和获取优化器调度器的函数（get_scheduler）。
 from transformers import (
     AutoModelForCausalLM,
@@ -34,11 +36,19 @@ sys.path.append(
 # 模型保存函数（save_hf_format），随机种子设置函数（set_random_seed），求平均函数（get_all_reduce_mean），
 # 获取优化器参数组的函数（get_optimizer_grouped_parameters），保存和加载模型的函数（save_zero_three_model和load_hf_tokenizer），
 # 以及创建模型和处理模型的函数（create_hf_model）。这些函数在脚本中的后续部分都将被使用。
-print("1===", os.path.pardir)
-print("2===", os.path.dirname(__file__))
-print("3===", os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+
+
+# print("1===", os.path.pardir)
+# print("2===", os.path.dirname(__file__))
+# print("3===", os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+#
+# 1=== ..
+# 2=== /home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning
+# 3=== /home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training
+
+
 from utils.data.data_utils import create_prompt_dataset
-from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
+from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer, debugOGP
 from utils.ds_utils import get_train_ds_config
 from utils.module.lora import convert_linear_layer_to_lora, convert_lora_to_linear_layer, only_optimize_lora_parameters
 from utils.model.model_utils import create_hf_model
@@ -187,13 +197,13 @@ def parse_args():
                         action='store_true',
                         help='Prints loss at each step.')
 
-    from calltrace import CallTrace
-    ct_ds_addconfig = CallTrace(tag='ds_addconfig')
-    ct_ds_addconfig.startrecord()
+    # from calltrace import CallTrace
+    # ct_ds_addconfig = CallTrace(tag='ds_addconfig')
+    # ct_ds_addconfig.startrecord()
 
     # 这一行将DeepSpeed的配置参数添加到解析器中。
     parser = deepspeed.add_config_arguments(parser)
-    ct_ds_addconfig.endRecord()
+    # ct_ds_addconfig.endRecord()
 
     # 这一行解析命令行参数并将它们存储在args对象中
     args = parser.parse_args()
@@ -213,6 +223,7 @@ def parse_args():
 def main():
     # 解析命令行参数。
     args = parse_args()
+    print("args is:", args)
 
     # 如果本地排名为-1，说明不在分布式训练环境下，设备设置为"cuda"；
     # 否则根据args.local_rank设置对应的cuda设备，并初始化分布式训练。
@@ -227,7 +238,12 @@ def main():
 
     # 获取全局rank。
     args.global_rank = torch.distributed.get_rank()
-    print("args.global_rank is:", args.global_rank)
+    # print("args.global_rank is:", args.global_rank)
+    '''
+    两张卡
+    args.global_rank is: 1
+    args.global_rank is: 0
+    '''
 
     # 获取deepspeed的训练配置。
     ds_config = get_train_ds_config(offload=args.offload,
@@ -235,6 +251,7 @@ def main():
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step1_model")
+
     # 在配置中设置训练时每个GPU的微批次大小和总的批次大小。
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
@@ -242,20 +259,62 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
     ) * args.gradient_accumulation_steps
 
-    print("ds_config['train_batch_size']is:", ds_config['train_batch_size'])
-    print("args.per_device_train_batch_size is:", args.per_device_train_batch_size)
+    # print("ds_config is--1:", ds_config)
+    # print("ds_config['train_batch_size']is:", ds_config['train_batch_size'])
+    # print("args.per_device_train_batch_size is:", args.per_device_train_batch_size)
+    #
+    '''
+    ds_config is--1: {'train_batch_size': 32, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10, 
+    'zero_optimization': {'stage': 2, 'offload_param': {'device': 'none'}, 'offload_optimizer': {'device': 'none'}, 
+    'stage3_param_persistence_threshold': 10000.0, 'stage3_max_live_parameters': 30000000.0, 
+    'stage3_prefetch_bucket_size': 30000000.0, 'memory_efficient_linear': False}, 
+    'fp16': {'enabled': True, 'loss_scale_window': 100}, 'gradient_clipping': 1.0, 
+    'prescale_gradients': False, 'wall_clock_breakdown': False, 
+    'hybrid_engine': {'enabled': False, 'max_out_tokens': 512, 'inference_tp_size': 1, 'release_inference_cache': False, 
+    'pin_parameters': True, 'tp_gather_partition_size': 8}, 
+    'tensorboard': {'enabled': False, 'output_path': 'step1_tensorboard/ds_tensorboard_logs/', 
+    'job_name': 'step1_model_tensorboard'}}
+    
+    ds_config['train_batch_size']is: 8
+    args.per_device_train_batch_size is: 4
+    '''
+
     # If passed along, set the training seed now.
     # 设置随机种子以保证结果的可复现性。
     set_random_seed(args.seed)
 
     # 在此处添加一个barrier操作，确保所有进程都执行到这一点后再继续执行后续操作。
     torch.distributed.barrier()
+
     # 加载预训练模型对应的分词器。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
-    print("tokenizer :", tokenizer)
+    # print("0--tokenizer :", tokenizer)
+
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
     tokenizer.padding_side = 'right'
+
+    # print("1--tokenizer :", tokenizer)
+    # print("ds_config is--2:", ds_config)
+
+    '''
+    0--tokenizer : GPT2TokenizerFast(name_or_path='facebook/opt-125m', vocab_size=50265, model_max_length=1000000000000000019884624838656, is_fast=True, padding_side='right', truncation_side='right', special_tokens={'bos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'eos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'unk_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'pad_token': AddedToken("<pad>", rstrip=False, lstrip=False, single_word=False, normalized=True)}, clean_up_tokenization_spaces=True)
+    1--tokenizer : GPT2TokenizerFast(name_or_path='facebook/opt-125m', vocab_size=50265, model_max_length=1000000000000000019884624838656, is_fast=True, padding_side='right', truncation_side='right', special_tokens={'bos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'eos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'unk_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'pad_token': '</s>'}, clean_up_tokenization_spaces=True)
+    
+    ds_config is--2: 
+    {'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10, 
+    'zero_optimization': {'stage': 2, 'offload_param': {'device': 'none'}, 'offload_optimizer': {'device': 'none'}, 
+    'stage3_param_persistence_threshold': 10000.0, 'stage3_max_live_parameters': 30000000.0, 
+    'stage3_prefetch_bucket_size': 30000000.0, 'memory_efficient_linear': False}, 
+    'fp16': {'enabled': True, 'loss_scale_window': 100}, 'gradient_clipping': 1.0, 
+    'prescale_gradients': False, 'wall_clock_breakdown': False, 
+    'hybrid_engine': {'enabled': False, 'max_out_tokens': 512, 'inference_tp_size': 1, 'release_inference_cache': False,
+     'pin_parameters': True, 'tp_gather_partition_size': 8}, 
+     'tensorboard': {'enabled': False, 'output_path': 'step1_tensorboard/ds_tensorboard_logs/',
+      'job_name': 'step1_model_tensorboard'}}
+    '''
+
+
     # 创建预训练模型。
     model = create_hf_model(AutoModelForCausalLM,
                             args.model_name_or_path,
@@ -263,7 +322,34 @@ def main():
                             ds_config,
                             disable_dropout=args.disable_dropout)
 
-    print("model---1 :", model)
+    #print("model---1 :", model)
+    '''
+    model---1 : OPTForCausalLM(
+                  (model): OPTModel(
+                    (decoder): OPTDecoder(
+                      (embed_tokens): Embedding(50272, 768, padding_idx=1)
+                      (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                      (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      (layers): ModuleList(
+                        (0-11): 12 x OPTDecoderLayer(
+                          (self_attn): OPTAttention(
+                            (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                            (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                            (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                            (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                          )
+                          (activation_fn): ReLU()
+                          (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                          (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                          (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                          (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        )
+                      )
+                    )
+                  )
+                  (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+                )   
+    '''
     # 判断是否启用LoRA模式
     # 如果参数lora_dim大于0，将模型的线性层转换为LoRa层；如果只优化LoRa参数，关闭其他参数的梯度。
     if args.lora_dim > 0:
@@ -281,6 +367,7 @@ def main():
     # Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
     train_phase = 1
+
     train_dataset, eval_dataset = create_prompt_dataset(
         args.local_rank,
         args.data_path,
@@ -292,8 +379,8 @@ def main():
         args.max_seq_len,
         sft_only_data_path=args.sft_only_data_path)
 
-    print("train_dataset :", train_dataset)
-    print("eval_dataset :", eval_dataset)
+    # print("train_dataset :", train_dataset)
+    # print("eval_dataset :", eval_dataset)
 
     # DataLoaders creation:
     if args.local_rank == -1:
@@ -303,8 +390,9 @@ def main():
         train_sampler = DistributedSampler(train_dataset)
         eval_sampler = DistributedSampler(eval_dataset)
 
-    print("train_sampler :", train_sampler)
-    print("eval_sampler :", eval_sampler)
+    # print("train_sampler :", train_sampler)
+    # print("eval_sampler :", eval_sampler)
+
     train_dataloader = DataLoader(train_dataset,
                                   collate_fn=default_data_collator,
                                   sampler=train_sampler,
@@ -314,8 +402,16 @@ def main():
                                  sampler=eval_sampler,
                                  batch_size=args.per_device_eval_batch_size)
 
-    print("train_dataloader :", train_dataloader)
-    print("eval_dataloader :", eval_dataloader)
+    # print("train_dataloader :", train_dataloader)
+    # print("eval_dataloader :", eval_dataloader)
+    '''
+    train_dataset : <utils.data.data_utils.PromptDataset object at 0x7f147c395c10>
+    eval_dataset : <utils.data.data_utils.PromptDataset object at 0x7f14920c5af0>
+    train_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f147c456ee0>
+    eval_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f14753f2580>
+    train_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f14753f2460>
+    eval_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f149210d190>
+    '''
 
     '''
     1.3.3 phase1的指标评估
@@ -390,21 +486,66 @@ def main():
     # Split weights in two groups, one with weight decay and the other not.
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(
         model, args.weight_decay)
-    print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
+    # print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
+    # debugOGP(optimizer_grouped_parameters) #因为在cpu上，即使使用print_rank0也打印了两次！
+    print("len of optimizer_grouped_parameters:", len(optimizer_grouped_parameters))
+    '''
+    Parameter containing Pytorch   https://zhuanlan.zhihu.com/p/119305088
+    The PyTorch parameter is a layer made up of nn or a module. 
+    A parameter that is assigned as an attribute inside a custom model is registered as a model parameter and 
+    is thus returned by the caller model. parameters(). 
+    We can say that a Parameter is a wrapper over Variables that are formed.
+
+    optimizer_grouped_parameters : [{'params': [Parameter containing:
+    tensor([[ 0.1150, -0.1438,  0.0555,  ...,  0.2146,  0.0833,  0.0669],
+    ...
+            [ 0.1156, -0.1437,  0.0577,  ...,  0.2139,  0.0833,  0.0650]],
+           requires_grad=True), Parameter containing:
+    tensor([[ 1.8272e-03,  9.0599e-04,  4.4289e-03,  ...,  1.6693e-02,
+              1.7462e-03, -4.9057e-03],
+        
+    '''
+
     # 选择优化器类型，如果启用了梯度Offload，使用DeepSpeedCPUAdam，否则使用FusedAdam。
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
-    print("AdamOptimizer :", AdamOptimizer)
+    # print("AdamOptimizer :", AdamOptimizer)
+    # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
 
-    from calltrace import CallTrace
-    ct_ds_AdamOptimizer = CallTrace(tag='ds_AdamOptimizer')
-    ct_ds_AdamOptimizer.startrecord()
+    # from calltrace import CallTrace
+    # ct_ds_AdamOptimizer = CallTrace(tag='ds_AdamOptimizer')
+    # ct_ds_AdamOptimizer.startrecord()
     # 创建优化器。
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
-    ct_ds_AdamOptimizer.endRecord()
+    # print("optimizer :", optimizer)
+    '''
+    optimizer : FusedAdam (
+                Parameter Group 0
+                    betas: (0.9, 0.95)
+                    bias_correction: True
+                    eps: 1e-08
+                    lr: 9.65e-06
+                    weight_decay: 0.0
+                
+                Parameter Group 1
+                    betas: (0.9, 0.95)
+                    bias_correction: True
+                    eps: 1e-08
+                    lr: 0.0005
+                    weight_decay: 0.0
+                
+                Parameter Group 2
+                    betas: (0.9, 0.95)
+                    bias_correction: True
+                    eps: 1e-08
+                    lr: 9.65e-06
+                    weight_decay: 0.0
+                )
+    '''
 
-    print("optimizer :", optimizer)
+    # ct_ds_AdamOptimizer.endRecord()
+
     # 计算每个epoch的更新步数。
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
@@ -417,12 +558,14 @@ def main():
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,
     )
 
-    print("lr_scheduler :", lr_scheduler)
+    # print("lr_scheduler :", lr_scheduler)
+    # lr_scheduler : <torch.optim.lr_scheduler.LambdaLR object at 0x7f469aea9fd0>
 
-    from calltrace import CallTrace
+    # from calltrace import CallTrace
 
-    ct_ds_init = CallTrace(tag='ds_init')
-    ct_ds_init.startrecord()
+    # ct_ds_init = CallTrace(tag='ds_init')
+    # ct_ds_init.startrecord()
+
     # 使用deepspeed初始化模型、优化器和学习率调度器。
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
@@ -431,11 +574,54 @@ def main():
         config=ds_config,
         lr_scheduler=lr_scheduler,
         dist_init_required=True)
-    ct_ds_init.endRecord()
+    # ct_ds_init.endRecord()
 
-    print("model---3 :", model)
-    print("optimizer---3 :", optimizer)
-    print("lr_scheduler---3 :", lr_scheduler)
+    # print("model---3 :", model)
+    # print("optimizer---3 :", optimizer)
+    # print("lr_scheduler---3 :", lr_scheduler)
+    '''
+    model---3 : DeepSpeedEngine(
+      (module): OPTForCausalLM(
+        (model): OPTModel(
+          (decoder): OPTDecoder(
+            (embed_tokens): Embedding(50272, 768, padding_idx=1)
+            (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+            (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+            (layers): ModuleList(
+              (0-11): 12 x OPTDecoderLayer(
+                (self_attn): OPTAttention(
+                  (k_proj): LinearLayer_LoRA(
+                    (lora_dropout): Identity()
+                  )
+                  (v_proj): LinearLayer_LoRA(
+                    (lora_dropout): Identity()
+                  )
+                  (q_proj): LinearLayer_LoRA(
+                    (lora_dropout): Identity()
+                  )
+                  (out_proj): LinearLayer_LoRA(
+                    (lora_dropout): Identity()
+                  )
+                )
+                (activation_fn): ReLU()
+                (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (fc1): LinearLayer_LoRA(
+                  (lora_dropout): Identity()
+                )
+                (fc2): LinearLayer_LoRA(
+                  (lora_dropout): Identity()
+                )
+                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              )
+            )
+          )
+        )
+        (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+      )
+    )
+    optimizer---3 : <deepspeed.runtime.zero.stage_1_and_2.DeepSpeedZeroOptimizer object at 0x7f1469d45760>
+    lr_scheduler---3 : <torch.optim.lr_scheduler.LambdaLR object at 0x7f1492128040>
+    '''
 
     # 如果启用了梯度检查点，那么在模型中也启用梯度检查点。
     if args.gradient_checkpointing:
@@ -450,8 +636,9 @@ def main():
         args.global_rank)
     # 调用 evaluation 函数对模型进行评估，得到模型的困惑度。
     perplexity = evaluation(model, eval_dataloader)
+
     # 在主节点打印模型的困惑度。
-    print_rank_0(f"ppl: {perplexity}", args.global_rank)
+    print_rank_0(f"ppl(perplexity): {perplexity}", args.global_rank)
 
     # 循环 args.num_train_epochs 轮进行训练。
     for epoch in range(args.num_train_epochs):
@@ -488,7 +675,48 @@ def main():
         print_rank_0('saving the final model ...', args.global_rank)
         # 将模型中的LoRA层转换为线性层。
         model = convert_lora_to_linear_layer(model)
-        print("model---4 :", model)
+        #print("model---4 :", model)
+        '''
+        model---4 : DeepSpeedEngine(
+          (module): OPTForCausalLM(
+            (model): OPTModel(
+              (decoder): OPTDecoder(
+                (embed_tokens): Embedding(50272, 768, padding_idx=1)
+                (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (layers): ModuleList(
+                  (0-11): 12 x OPTDecoderLayer(
+                    (self_attn): OPTAttention(
+                      (k_proj): LinearLayer_LoRA(
+                        (lora_dropout): Identity()
+                      )
+                      (v_proj): LinearLayer_LoRA(
+                        (lora_dropout): Identity()
+                      )
+                      (q_proj): LinearLayer_LoRA(
+                        (lora_dropout): Identity()
+                      )
+                      (out_proj): LinearLayer_LoRA(
+                        (lora_dropout): Identity()
+                      )
+                    )
+                    (activation_fn): ReLU()
+                    (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (fc1): LinearLayer_LoRA(
+                      (lora_dropout): Identity()
+                    )
+                    (fc2): LinearLayer_LoRA(
+                      (lora_dropout): Identity()
+                    )
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  )
+                )
+              )
+            )
+            (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+          )
+        )
+        '''
         # 如果是主节点，进行以下操作。
         if args.global_rank == 0:
             # 以Hugging Face的模型格式保存模型。

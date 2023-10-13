@@ -13,6 +13,9 @@ from utils.ds_utils import get_train_ds_config, get_eval_ds_config
 from utils.module.lora import convert_linear_layer_to_lora, only_optimize_lora_parameters
 from utils.model.model_utils import create_hf_model, create_critic_model
 from utils.utils import get_optimizer_grouped_parameters
+
+from pydebug import debuginfo, infoTensor
+
 """
 TODOs:
   * support HF models for critic (for debugging), must be a previously saved ckpt from step-2
@@ -65,6 +68,7 @@ class DeepSpeedRLHFEngine():
         2. critic与reward通常都初始化自phase2训练所得的模型。
         根据它们的入参就能知道。
         """
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         self.args = args
         self.num_total_iters = num_total_iters
         self.tokenizer = tokenizer
@@ -74,29 +78,155 @@ class DeepSpeedRLHFEngine():
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
 
+        print("self.actor is:", self.actor)
+
         # 用训练好的SFT模型初始化SFT模型
         #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.ref = self._init_ref(
             actor_model_name_or_path=actor_model_name_or_path)
-        self.actor_ema = None
+        # print("self.ref is:", self.ref)
+        '''
+        self.ref is: DeepSpeedEngine(
+              (module): OPTForCausalLM(
+                (model): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+                (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+              )
+            )
+        '''
 
+        self.actor_ema = None
         #如果开启了ema，则初始化并封装ema
         if self.args.enable_ema:
             #此处的ema是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
             self.actor_ema = self._init_ema(
                 actor_model_name_or_path=actor_model_name_or_path)
+        # print("self.actor_ema is:", self.actor_ema)
+        '''
+        self.actor_ema is: DeepSpeedEngine(
+              (module): OPTForCausalLM(
+                (model): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+                (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+              )
+            )
+        '''
 
         # 用训练好的RW初始化Critic模型
         # 此处的critic是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.critic = self._init_critic(
             critic_model_name_or_path=critic_model_name_or_path)
+        # print("self.critic is:", self.critic)
+        '''
+        self.critic is: DeepSpeedEngine(
+              (module): RewardModel(
+                (v_head): Linear(in_features=768, out_features=1, bias=False)
+                (rwtranrsformer): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+              )
+            )       
+        '''
 
         # 用训练好的RW初始化reward模型
         # 此处的reward是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
         self.reward = self._init_reward(
             critic_model_name_or_path=critic_model_name_or_path)
+        # print("self.reward is:", self.reward)
+        '''
+        self.reward is: DeepSpeedEngine(
+              (module): RewardModel(
+                (v_head): Linear(in_features=768, out_features=1, bias=False)
+                (rwtranrsformer): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+              )
+            )
+        '''
+
         if self.args.critic_gradient_checkpointing:
             self.critic.gradient_checkpointing_enable()
+
+
+
 
     def _init_actor(self, actor_model_name_or_path):
         """
@@ -113,7 +243,7 @@ class DeepSpeedRLHFEngine():
         同时享有训练与推理的优化，
         这对于既需要进行推理生成、又需要进行训练的actor来说是有增益作用的。
         """
-
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Actor")
 
         # DS Config
@@ -137,6 +267,20 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
+        #print("_init_actor ds_config:", ds_config)
+        '''
+        _init_actor ds_config: {'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10, 
+        'zero_optimization': {'stage': 2, 'offload_param': {'device': 'none'}, 'offload_optimizer': {'device': 'none'}, 
+        'stage3_param_persistence_threshold': 10000.0, 'stage3_max_live_parameters': 30000000.0, 
+        'stage3_prefetch_bucket_size': 30000000.0, 'memory_efficient_linear': False}, 
+        'fp16': {'enabled': True, 'loss_scale_window': 100}, 'gradient_clipping': 1.0, 
+        'prescale_gradients': False, 'wall_clock_breakdown': False, 
+        'hybrid_engine': {'enabled': True, 'max_out_tokens': 512, 'inference_tp_size': 1, 
+        'release_inference_cache': False, 'pin_parameters': True, 'tp_gather_partition_size': 8}, 
+        'tensorboard': {'enabled': False, 'output_path': 'step3_tensorboard/ds_tensorboard_logs/', 
+        'job_name': 'step3_actor_tensorboard'}}
+        '''
+
         # Model 使用CausalLM结构载入模型及权重，实例化actor
         actor_model = create_hf_model(
             model_class=AutoModelForCausalLM,
@@ -148,10 +292,12 @@ class DeepSpeedRLHFEngine():
         # LoRA
         # 如果开启LoRA训练则添加LoRA旁路
         if self.args.actor_lora_dim > 0:
+            debuginfo(prj='ds-chat')
             actor_model = convert_linear_layer_to_lora(
                 actor_model, self.args.actor_lora_module_name,
                 self.args.actor_lora_dim)
             if self.args.only_optimize_lora:
+                debuginfo(prj='ds-chat')
                 actor_model = only_optimize_lora_parameters(actor_model)
 
         # Optimizer
@@ -159,6 +305,7 @@ class DeepSpeedRLHFEngine():
         AdamOptimizer = DeepSpeedCPUAdam if self.args.offload else FusedAdam
         optim_params = get_optimizer_grouped_parameters(
             actor_model, self.args.actor_weight_decay)
+
         optim = AdamOptimizer(optim_params,
                               lr=self.args.actor_learning_rate,
                               betas=(0.9, 0.95))
@@ -186,6 +333,92 @@ class DeepSpeedRLHFEngine():
 
         log_init("Actor", stime=stime)
 
+        # print("optim_params is:", optim_params)
+        # print("optim is:", optim)
+        # print("lr_scheduler is:", lr_scheduler)
+        #
+        # print("actor_model is:", actor_model)
+        # print("actor_engine is:", actor_engine)
+        '''
+        optim_params is: [{'params': [tensor([-0.0078, -0.0563, -0.0166,  ...,  0.3953,  0.3679,  0.5161],
+                device='cuda:1', requires_grad=True)], 'weight_decay': 0.0, 'lr': 0.0, 'bias_correction': True, 'betas': (0.9, 0.95), 'eps': 1e-08, 'initial_lr': 9.65e-06, 'step': 0}, {'params': [tensor([ 0.0646,  0.0148,  0.0143,  ..., -0.0972, -0.0310, -0.0812],
+                device='cuda:1', requires_grad=True)], 'weight_decay': 0.0, 'lr': 0.0, 'bias_correction': True, 'betas': (0.9, 0.95), 'eps': 1e-08, 'initial_lr': 9.65e-06, 'step': 0}]
+        optim is: FusedAdam (
+        Parameter Group 0
+            betas: (0.9, 0.95)
+            bias_correction: True
+            eps: 1e-08
+            initial_lr: 9.65e-06
+            lr: 0.0
+            step: 0
+            weight_decay: 0.0
+        
+        Parameter Group 1
+            betas: (0.9, 0.95)
+            bias_correction: True
+            eps: 1e-08
+            initial_lr: 9.65e-06
+            lr: 0.0
+            step: 0
+            weight_decay: 0.0
+        )
+        lr_scheduler is: <torch.optim.lr_scheduler.LambdaLR object at 0x7f77d29c2e20>
+        
+        
+        actor_model is: OPTForCausalLM(
+          (model): OPTModel(
+            (decoder): OPTDecoder(
+              (embed_tokens): Embedding(50272, 768, padding_idx=2)
+              (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (layers): ModuleList(
+                (0-11): 12 x OPTDecoderLayer(
+                  (self_attn): OPTAttention(
+                    (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                  )
+                  (activation_fn): ReLU()
+                  (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                  (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                  (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                )
+              )
+            )
+          )
+          (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+        )
+        actor_engine is: DeepSpeedHybridEngine(
+          (module): OPTForCausalLM(
+            (model): OPTModel(
+              (decoder): OPTDecoder(
+                (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (layers): ModuleList(
+                  (0-11): 12 x OPTDecoderLayer(
+                    (self_attn): OPTAttention(
+                      (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                    )
+                    (activation_fn): ReLU()
+                    (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                    (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  )
+                )
+              )
+            )
+            (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+          )
+        )
+        '''
+
         return actor_engine
 
     """
@@ -194,12 +427,15 @@ class DeepSpeedRLHFEngine():
     """
 
     def _init_ref(self, actor_model_name_or_path):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Ref")
+
         # DS Config
         zero_stage = self.args.actor_zero_stage
         if zero_stage != 3:
             # If actor is ZeRO-3 then we use it for everything, otherwise assume we have enough memory for ref model
             zero_stage = 0
+
         ds_config = get_eval_ds_config(self.args.offload_reference_model,
                                        zero_stage)
         ds_config[
@@ -208,6 +444,14 @@ class DeepSpeedRLHFEngine():
         ds_config[
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
+
+        # print("_init_ref ds_config is:", ds_config)
+        '''
+        _init_ref ds_config is: {'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10,
+         'zero_optimization': {'stage': 0, 'stage3_param_persistence_threshold': 10000.0, 
+         'offload_param': {'device': 'none'}, 'memory_efficient_linear': False}, 'fp16': {'enabled': True}, 
+         'gradient_clipping': 1.0, 'prescale_gradients': False, 'wall_clock_breakdown': False}
+        '''
 
         ## 往往会再定义一个ref model，为原始的actor_model，用来计算KL避免生成的内容与原始模型差太远【怕训飞】。
         ## ref_model 不会进行参数更新
@@ -218,10 +462,68 @@ class DeepSpeedRLHFEngine():
         ref_engine, *_ = deepspeed.initialize(model=ref_model,
                                               config=ds_config)
 
+        # print("ref_model is:", ref_model)
+        # print("ref_engine is:", ref_engine)
+        '''
+        ref_model is: OPTForCausalLM(
+          (model): OPTModel(
+            (decoder): OPTDecoder(
+              (embed_tokens): Embedding(50272, 768, padding_idx=2)
+              (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (layers): ModuleList(
+                (0-11): 12 x OPTDecoderLayer(
+                  (self_attn): OPTAttention(
+                    (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                    (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                  )
+                  (activation_fn): ReLU()
+                  (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                  (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                  (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                )
+              )
+            )
+          )
+          (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+        )
+        ref_engine is: DeepSpeedEngine(
+          (module): OPTForCausalLM(
+            (model): OPTModel(
+              (decoder): OPTDecoder(
+                (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                (layers): ModuleList(
+                  (0-11): 12 x OPTDecoderLayer(
+                    (self_attn): OPTAttention(
+                      (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                      (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                    )
+                    (activation_fn): ReLU()
+                    (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                    (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  )
+                )
+              )
+            )
+            (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+          )
+        )
+        '''
+
         log_init("Ref", stime=stime)
         return ref_engine
 
     def _init_ema(self, actor_model_name_or_path):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("EMA")
         # DS Config
         zero_stage = self.args.actor_zero_stage
@@ -237,10 +539,19 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
+        # print("_init_ema ds_config is:", ds_config)
+        '''
+        _init_ema ds_config is: {'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10,
+         'zero_optimization': {'stage': 0, 'stage3_param_persistence_threshold': 10000.0, 
+         'offload_param': {'device': 'none'}, 'memory_efficient_linear': False}, 'fp16': {'enabled': True}, 
+         'gradient_clipping': 1.0, 'prescale_gradients': False, 'wall_clock_breakdown': False}
+        '''
+
         actor_model_ema = create_hf_model(AutoModelForCausalLM,
                                           actor_model_name_or_path,
                                           self.tokenizer, ds_config)
         if self.args.actor_lora_dim > 0:
+            debuginfo(prj="ds-chat")
             actor_model_ema = convert_linear_layer_to_lora(
                 actor_model_ema, self.args.actor_lora_module_name,
                 self.args.actor_lora_dim)
@@ -248,10 +559,68 @@ class DeepSpeedRLHFEngine():
         ema_engine, *_ = deepspeed.initialize(model=actor_model_ema,
                                               config=ds_config)
 
+        # print("ema_engine is:", ema_engine)
+        # print("actor_model_ema is:", actor_model_ema)
+        '''
+        ema_engine is: DeepSpeedEngine(
+              (module): OPTForCausalLM(
+                (model): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+                (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+              )
+            )
+        actor_model_ema is: OPTForCausalLM(
+              (model): OPTModel(
+                (decoder): OPTDecoder(
+                  (embed_tokens): Embedding(50272, 768, padding_idx=2)
+                  (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                  (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                  (layers): ModuleList(
+                    (0-11): 12 x OPTDecoderLayer(
+                      (self_attn): OPTAttention(
+                        (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                        (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                        (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                        (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                      )
+                      (activation_fn): ReLU()
+                      (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                      (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                      (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    )
+                  )
+                )
+              )
+              (lm_head): Linear(in_features=768, out_features=50272, bias=False)
+            )
+        '''
+
         log_init("EMA", stime=stime)
         return ema_engine
 
     def _init_critic(self, critic_model_name_or_path):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Critic")
         ds_config = get_train_ds_config(
             offload=self.args.offload,
@@ -269,6 +638,8 @@ class DeepSpeedRLHFEngine():
         #TODO(jeff): should not be needed, we should be able to use ds_config above
         #TODO(jeff): it means we never create the critic w. zero.init context if we are using ZeRO-3
         ds_eval_config = get_eval_ds_config(offload=False, stage=0)
+
+        print("_init_critic ds_config is:", ds_config)
 
         # Model
         critic_model = create_critic_model(
@@ -313,6 +684,7 @@ class DeepSpeedRLHFEngine():
         return critic_engine
 
     def _init_reward(self, critic_model_name_or_path):
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Reward")
         # DS Config
         zero_stage = self.args.critic_zero_stage
@@ -327,6 +699,14 @@ class DeepSpeedRLHFEngine():
         ds_config[
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps
+
+        #print("_init_reward ds_config is:", ds_config)
+        '''
+        _init_reward ds_config is: {'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 
+        'steps_per_print': 10, 'zero_optimization': {'stage': 0, 'stage3_param_persistence_threshold': 10000.0, 
+        'offload_param': {'device': 'none'}, 'memory_efficient_linear': False}, 'fp16': {'enabled': True}, 
+        'gradient_clipping': 1.0, 'prescale_gradients': False, 'wall_clock_breakdown': False}
+        '''
 
         #TODO(jeff): should not be needed, we should be able to use ds_config above
         #TODO(jeff): it means we never create the critic w. zero.init context if we are using ZeRO-3
