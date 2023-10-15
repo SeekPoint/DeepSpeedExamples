@@ -88,6 +88,8 @@ RLHF-PPO算法代码解析
 https://zhuanlan.zhihu.com/p/108571246
 ZeRO+DeepSpeed:微软发布的高效大规模训练套件(含详细分布式训练流程)
 
+https://github.com/julycoding/ChatGPT_principle_fine-tuning_code_paper
+july笔记！
 
 https://zhuanlan.zhihu.com/p/633593024
 Chatglm-6B+Deepspeed+PTuningv2 多卡高效微调
