@@ -8,8 +8,7 @@ DeepSpeed配置参数 - 快速上手
 https://blog.csdn.net/yanqianglifei/article/details/130141730?spm=1001.2101.3001.6661.1&utm_medium=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130141730-blog-131312099.235%5Ev38%5Epc_relevant_default_base&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130141730-blog-131312099.235%5Ev38%5Epc_relevant_default_base&utm_relevant_index=1
 DeepSpeed-Chat：最强ChatGPT训练框架，一键完成RLHF训练！
 
-https://myblog.blog.csdn.net/article/details/131312099?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-131312099-blog-130576255.235%5Ev38%5Epc_relevant_default_base&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-131312099-blog-130576255.235%5Ev38%5Epc_relevant_default_base&utm_relevant_index=2
-DeepSpeed-Chat 代码分析及使用详解
+
 
 
 https://zhuanlan.zhihu.com/p/634851738 
@@ -26,7 +25,8 @@ https://zhuanlan.zhihu.com/p/610587671
 深度学习大模型训练--DeepSpeed 源码解读
 https://zhuanlan.zhihu.com/p/576673548
 
-
+https://myblog.blog.csdn.net/article/details/131312099?spm=1001.2101.3001.6650.1&utm_medium=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-131312099-blog-130576255.235%5Ev38%5Epc_relevant_default_base&depth_1-utm_source=distribute.pc_relevant.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-131312099-blog-130576255.235%5Ev38%5Epc_relevant_default_base&utm_relevant_index=2
+DeepSpeed-Chat 代码分析及使用详解  ==就是https://techdiylife.github.io/
 https://techdiylife.github.io/big-model-training/deepspeed/deepspeed-chat-code.html
 大模型训练入门实战
 
@@ -34,7 +34,7 @@ DeepSpeed-Chat全流程训练实战
 https://mathmach.com/ff7e0546/
 
 https://zhuanlan.zhihu.com/p/591474085
-从零实现ChatGPT——RLHF技术笔记
+从零实现ChatGPT——RLHF技术笔记 ===只有公式，不详细！
 
 
 ChatGPT量化分析（一） - 模型参数分析
@@ -52,9 +52,13 @@ DeepSpeed-chat：民主化LLM全攻略
 
 https://zhuanlan.zhihu.com/p/643642174
 DeepSpeed-Chat强化学习策略
+
 https://zhuanlan.zhihu.com/p/643643325
 DeepSpeed-Chat全流程训练实战
 
+
+https://zhuanlan.zhihu.com/p/656635899
+HFRL代码解析   ==TBD，借鉴改进PPO
 
 https://zhuanlan.zhihu.com/p/640758965
 深度学习训练方法实操(DP/DDP/DeepSpeed)
@@ -75,16 +79,14 @@ https://zhuanlan.zhihu.com/p/626420999
 deepspeed chat代码解读
 https://zhuanlan.zhihu.com/p/646186242
 通过DeepSpeed框架结合Peft对chatglm进行微调代码解析
-https://zhuanlan.zhihu.com/p/642819809
-Deepspeed多卡多机ZeRo-3训练踩的坑
+
 https://zhuanlan.zhihu.com/p/639002087
 DeepSpeed ZeRO++：降低4倍网络通信，显著提高大模型及类ChatGPT模型训练效率
+
 https://zhuanlan.zhihu.com/p/636640427
 DeepSpeed Chat: 一键式RLHF训练，让你的类ChatGPT千亿大模型提速省钱15倍
-https://zhuanlan.zhihu.com/p/639927499
-DeepSpeed - 用ZeRO训练大模型原理解析
-https://zhuanlan.zhihu.com/p/650505023
-RLHF-PPO算法代码解析
+
+
 https://zhuanlan.zhihu.com/p/108571246
 ZeRO+DeepSpeed:微软发布的高效大规模训练套件(含详细分布式训练流程)
 
@@ -96,3 +98,17 @@ Chatglm-6B+Deepspeed+PTuningv2 多卡高效微调
 https://blog.csdn.net/v_JULY_v/article/details/129996493
 从零实现带RLHF的类ChatGPT：从TRL/ChatLLaMA/ColossalChat到DeepSpeed Chat
 
+https://zhuanlan.zhihu.com/p/650505023
+RLHF-PPO算法代码解析  ==意义不大
+
+https://zhuanlan.zhihu.com/p/660836610
+Deepspeed PPO代码注释  ==意义不大
+
+https://zhuanlan.zhihu.com/p/639927499
+DeepSpeed - 用ZeRO训练大模型原理解析  ===主要是z3的动画！
+
+从零实现带RLHF的类ChatGPT：逐行解析微软DeepSpeed Chat
+https://blog.csdn.net/v_JULY_v/article/details/132939877  ==和 ‘InstructGPT高效实践’ 恒很相似！
+
+https://zhuanlan.zhihu.com/p/642819809
+Deepspeed多卡多机ZeRo-3训练踩的坑  ==done,信息少

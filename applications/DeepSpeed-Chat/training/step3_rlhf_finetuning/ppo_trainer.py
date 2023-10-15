@@ -167,10 +167,13 @@ class DeepSpeedPPOTrainer():
         self.reward_model = self.rlhf_engine.reward # reward模型，用于计算奖励
         self.tokenizer = self.rlhf_engine.tokenizer # tokenizer，用于文本的编码和解码
 
-        self.args = args
-        self.max_answer_seq_len = args.max_answer_seq_len # 回答的最大序列长度
-        self.end_of_conversation_token_id = self.tokenizer( # 定义了会话结束的标志
-            args.end_of_conversation_token)['input_ids'][-1]
+        self.args = args  # 传入的参数
+
+        # 执行生成答案时，最大的答案序列长度
+        self.max_answer_seq_len = args.max_answer_seq_len
+		
+        # 定义了会话结束的标志 # 对话结束的 token 索引
+        self.end_of_conversation_token_id = self.tokenizer(args.end_of_conversation_token)['input_ids'][-1] 
         self.z3_enabled = args.actor_zero_stage == 3
 
         # Those value can be changed

@@ -359,20 +359,6 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
 				# 将这个分词后的结果加入到被选择的数据集列表中
                 chosen_dataset.append(chosen_token)
                 #print("chosen_token--ph1:", chosen_token)
-            '''
-            chosen_sentence--ph1:
-            
-            Human: Can you tell me how often I should be changing my sheets?
-            
-            Assistant: A good rule of thumb is to change the sheets on your bed once a week.  It can depend on how many people sleep in your bed, and how many wet spots and smells accumulate on your sheets.
-            chosen_token--ph1: {
-            'input_ids': tensor([    2, 50118, 50118, 33837,    35,  2615,    47,  1137,   162,   141,
-                        ...
-                        2,     2,     2,     2,     2,     2,     2,     2]), 
-            'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        ...
-                    0, 0, 0, 0, 0, 0, 0, 0])}
-            '''
 
             # print("T chosen_token['input_ids']-1:", infoTensor(chosen_token['input_ids']))
             # print("T chosen_token['attention_mask']-1:", infoTensor(chosen_token['attention_mask']))
@@ -447,35 +433,6 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 # print("reject_token--ph2:", reject_token)
                 # print("chosen_token--ph2:", chosen_token)
 
-            '''
-            chosen_sentence--ph2:
-    
-                Human: are crunches or sit-ups better?
-                
-                Assistant: I would recommend both! They can help you stay healthy and are also helpful if you want to lose weight.
-                
-            reject_sentence--ph2:
-            
-                Human: are crunches or sit-ups better?
-                
-                Assistant: What are you looking for exactly?
-            
-            reject_token--ph2: {
-                'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
-                        ...
-                         2,     2,     2,     2,     2,     2,     2,     2]]), 
-                'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        ...
-                     0, 0, 0, 0, 0, 0, 0, 0]])}
-                     
-            chosen_token--ph2: {
-                'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
-                        ...
-                         2,     2,     2,     2,     2,     2,     2,     2]]), 
-                'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                    ...
-                     0, 0, 0, 0, 0, 0, 0, 0]])}
-            '''
             # print("T reject_token['input_ids']--ph2:", infoTensor(reject_token['input_ids']))
             # print("T reject_token['attention_mask']--ph2:", infoTensor(reject_token['attention_mask']))
             # print("T chosen_token['input_ids']--ph2:", infoTensor(chosen_token['input_ids']))
@@ -523,18 +480,16 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                     # 获取当前文本token的实际长度
                     length = prompt_token[key_word].size()[-1]
                     # phase3此处的max_seq_len其实是max_prompt_len，默认只有256
+
+                    print("prompt_token[key_word].squeeze(0) is:", prompt_token[key_word].squeeze(0))
                     if length > max_seq_len:
                         # 如果当前文本token长度比max_prompt_len还长
                         # 那么就截断文本前面的部分，保留后面max_prompt_len长度的部分文本
                         # 然后将token进行flip（翻转/倒序），之后在data_collator中再将其flip回来
-
-                        # 先将正常的token序列的顺序倒序排列，（会在datacollator中再次倒序恢复原始排列）
 						
 						# 这个截断的操作是取后面的部分（最新的部分），因为在聊天对话中，最近的对话内容通常比较重要。
                         # 然后，使用flip(0)将结果反转，也就是将时间顺序倒过来。这样，输入的第一个元素会是最新的，最后一个元素会是最早的。
-                        y = prompt_token[key_word].squeeze(0)[length -
-                                                              (max_seq_len -
-                                                               1):].flip(0)
+                        y = prompt_token[key_word].squeeze(0)[length -(max_seq_len -1):].flip(0)
                     else:
                         # 将token进行flip（翻转/倒序），之后在data_collator中再将其flip回来
                         # 先将正常的token序列的顺序倒序排列，（会在datacollator中再次倒序恢复原始排列）
@@ -545,36 +500,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 prompt_dataset.append(prompt_token)
 
                 #print("prompt_token--ph3:", prompt_token)
-                '''
-                prompt--ph3:
-                
-                Human: Can you recommend some ways to propose marriage to my girlfriend?
-                
-                Assistant: Sure, how about if you had a romantic vacation planned, and then when you got there you surprised her with a ring?
-                
-                Human: That's a great suggestion! Should I propose in a specific location?
-                
-                Assistant: Definitely in a location that means something to the two of you, and you've found a place that represents something important to you both, like a spot where you both first kissed or talked about marriage.
-                
-                Human: Good plan. We could go to Greece, where we first met.
-                
-                Assistant: Oh, that sounds perfect!
-                
-                Human: Is it very expensive to buy an engagement ring?
-                
-                Assistant: It might be if you aren't very careful about the type of ring and where you buy it.  For instance, if the ring isn't sized right and the wrong type, it will need to be re-sized later.  And the larger the diamond, the more you'll pay.  So it's best to choose a simple ring, if it's what the two of you really want.  Keep in mind that you don't need a diamond ring to be engaged!
-                
-                Human: Right, got it, thanks.
-                
-                Assistant:
-                prompt_token--ph3: {
-                    'input_ids': tensor([   35, 46184, 50118, 50118,     4,  2446,     6,    24,   300,     6,
-                        ...
-                         6096,   127,     7,  3397, 15393]), 
-                    'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                        ...
-                        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])}
-                '''
+
                 # print("T prompt_token['input_ids']--H:", infoTensor(prompt_token['input_ids']))
                 # print("T prompt_token['attention_mask']--H:", infoTensor(prompt_token['attention_mask']))
                 '''
@@ -1135,7 +1061,6 @@ def get_unsupervised_data(args, tokenizer):
     3 free():清空获取到的batch数据并返回ppo_batch数据。
 
 '''
-
 class MiniDataset:
 
     def __init__(self, max_size, small_batch_size):
@@ -1224,3 +1149,80 @@ class MiniDataset:
     def free(self):
         # 清空self.dataset中的数据
         self.dataset = []
+
+
+'''
+chosen_sentence--ph1:
+
+Human: Can you tell me how often I should be changing my sheets?
+
+Assistant: A good rule of thumb is to change the sheets on your bed once a week.  It can depend on how many people sleep in your bed, and how many wet spots and smells accumulate on your sheets.
+chosen_token--ph1: {
+'input_ids': tensor([    2, 50118, 50118, 33837,    35,  2615,    47,  1137,   162,   141,
+            ...
+            2,     2,     2,     2,     2,     2,     2,     2]), 
+'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            ...
+        0, 0, 0, 0, 0, 0, 0, 0])}
+'''
+
+'''
+chosen_sentence--ph2:
+
+    Human: are crunches or sit-ups better?
+
+    Assistant: I would recommend both! They can help you stay healthy and are also helpful if you want to lose weight.
+
+reject_sentence--ph2:
+
+    Human: are crunches or sit-ups better?
+
+    Assistant: What are you looking for exactly?
+
+reject_token--ph2: {
+    'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
+            ...
+             2,     2,     2,     2,     2,     2,     2,     2]]), 
+    'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+            ...
+         0, 0, 0, 0, 0, 0, 0, 0]])}
+
+chosen_token--ph2: {
+    'input_ids': tensor([[    2, 50118, 50118, 33837,    35,    32,  3977,   879,  5559,    50,
+            ...
+             2,     2,     2,     2,     2,     2,     2,     2]]), 
+    'attention_mask': tensor([[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        ...
+         0, 0, 0, 0, 0, 0, 0, 0]])}
+'''
+
+'''
+prompt--ph3:
+
+Human: Can you recommend some ways to propose marriage to my girlfriend?
+
+Assistant: Sure, how about if you had a romantic vacation planned, and then when you got there you surprised her with a ring?
+
+Human: That's a great suggestion! Should I propose in a specific location?
+
+Assistant: Definitely in a location that means something to the two of you, and you've found a place that represents something important to you both, like a spot where you both first kissed or talked about marriage.
+
+Human: Good plan. We could go to Greece, where we first met.
+
+Assistant: Oh, that sounds perfect!
+
+Human: Is it very expensive to buy an engagement ring?
+
+Assistant: It might be if you aren't very careful about the type of ring and where you buy it.  For instance, if the ring isn't sized right and the wrong type, it will need to be re-sized later.  And the larger the diamond, the more you'll pay.  So it's best to choose a simple ring, if it's what the two of you really want.  Keep in mind that you don't need a diamond ring to be engaged!
+
+Human: Right, got it, thanks.
+
+Assistant:
+prompt_token--ph3: {
+    'input_ids': tensor([   35, 46184, 50118, 50118,     4,  2446,     6,    24,   300,     6,
+        ...
+         6096,   127,     7,  3397, 15393]), 
+    'attention_mask': tensor([1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+        ...
+        1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1])}
+'''
