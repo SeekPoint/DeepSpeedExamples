@@ -5,7 +5,7 @@
 from datasets import load_dataset
 from torch.utils.data import Subset
 import re
-
+from pydebug import debuginfo, infoTensor
 
 # The template prompt dataset class that all new dataset porting needs to
 # follow in order to have a unified API and unified data format.
@@ -38,6 +38,7 @@ class PromptRawDataset(object):
     # local_rank（本地等级）和dataset_name（数据集名称）。
     # 在构造函数中，如果数据集名称不是'local/jsonfile'，
     # 那么会使用Hugging Face的datasets库的load_dataset函数来加载数据集。
+	'''该类是一个模板，它定义了一套统一的API和数据格式，所有新的数据集都需要按照这个模板来进行适配。'''
     def __init__(self, output_path, seed, local_rank, dataset_name):
         """
         初始化
@@ -46,12 +47,41 @@ class PromptRawDataset(object):
         :param local_rank: 当前进程序号。
         :param dataset_name: 数据集名称，后续指定所需读取的数据集时将以名称为准。
         """
-        self.output_path = output_path
-        self.seed = seed
-        self.local_rank = local_rank
+        self.output_path = output_path # 数据集存储的路径
+        self.seed = seed # 随机种子
+        self.local_rank = local_rank # 用于分布式训练中确定当前进程使用哪部分数据
+        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        debuginfo(prj='ds-chat', info=f'dataset_name is {dataset_name}')
+
         if not dataset_name == 'local/jsonfile':
+            debuginfo(prj='ds-chat', info=" not  local/jsonfile ")
+            # 加载数据集
+			
             # load_dataset源自datasets库，该方法支持读取csv/json/text等多种文件格式的数据
-            self.raw_datasets = load_dataset(dataset_name)
+            '''
+            https://stackoverflow.com/questions/77020278/how-to-load-a-huggingface-dataset-from-local-path
+                        
+            ll ~/hf_model/rm-static/data
+            total 71312
+            drwxrwxr-x 2 amd00 amd00     4096 10月  7 21:46 ./
+            drwxrwxr-x 4 amd00 amd00     4096 10月  7 21:46 ../
+            -rw-rw-r-- 1 amd00 amd00  4609580 10月  7 21:14 test-00000-of-00001-8c7c51afc6d45980.parquet
+            -rw-rw-r-- 1 amd00 amd00 68396955 10月  7 21:15 train-00000-of-00001-2a1df75c6bce91ab.parquet
+            
+            '''
+            # data_files = {"train":"train-00000-of-00001-2a1df75c6bce91ab.parquet",
+            #               "test": "test-00000-of-00001-8c7c51afc6d45980.parquet"}
+            #
+            # self.raw_datasets = load_dataset("parquet", data_dir ='~/hf_model/rm-static/data/',
+            #                         data_files = data_files)
+
+            s_data_files = {"train":"train-small.parquet",
+                          "test": "test-small.parquet"}
+
+            self.raw_datasets = load_dataset("parquet", data_dir ='~/hf_model/rm-static/data/',
+                                    data_files = s_data_files)
+            print("self.raw_datasets is:", self.raw_datasets)
+
 
     # 然后，这个类定义了一些方法，这些方法在默认情况下并没有实现（只是返回None或者空操作），
     # 这是因为这个类只是一个模板类，这些方法需要在实际使用时在子类中具体实现。
@@ -129,28 +159,36 @@ class DahoasRmstaticDataset(PromptRawDataset):
 
     def __init__(self, output_path, seed, local_rank, dataset_name):
         super().__init__(output_path, seed, local_rank, dataset_name)
-        self.dataset_name = "Dahoas/rm-static"
-        self.dataset_name_clean = "Dahoas_rm_static"
+        self.dataset_name = "Dahoas/rm-static" # 数据集名称
+        self.dataset_name_clean = "Dahoas_rm_static"  # 数据集名称
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
+        # 返回训练数据
         return self.raw_datasets["train"]
 
     def get_eval_data(self):
+        # 返回验证数据
         return self.raw_datasets["test"]
 
     def get_prompt(self, sample):
+        # 从样本中提取prompt，也就是输入的初始提示。
         return sample['prompt']
 
     def get_chosen(self, sample):
+        # 从样本中提取chosen，可能表示由模型选中或者用户接受的回复。
         return sample['chosen']
 
     def get_rejected(self, sample):
+        # 从样本中提取rejected，可能表示被模型拒绝或者用户不接受的回复。
         return sample['rejected']
 
     def get_prompt_and_chosen(self, sample):
+        # 从样本中提取prompt和chosen，并将它们拼接在一起。
         return sample['prompt'] + sample['chosen']
 
     def get_prompt_and_rejected(self, sample):
+        # 从样本中提取prompt和rejected，并将它们拼接在一起。
         return sample['prompt'] + sample['rejected']
 
 
@@ -161,6 +199,7 @@ class DahoasFullhhrlhfDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "Dahoas/full-hh-rlhf"
         self.dataset_name_clean = "Dahoas_full_hh_rlhf"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -191,6 +230,7 @@ class DahoasSyntheticinstructgptjpairwiseDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "Dahoas/synthetic-instruct-gptj-pairwise"
         self.dataset_name_clean = "Dahoas_synthetic_instruct_gptj_pairwise"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
@@ -246,6 +286,7 @@ class YitingxieRlhfrewarddatasetsDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "yitingxie/rlhf-reward-datasets"
         self.dataset_name_clean = "yitingxie_rlhf_reward_datasets"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -280,6 +321,7 @@ class OpenaiWebgptcomparisonsDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "openai/webgpt_comparisons"
         self.dataset_name_clean = "openai_webgpt_comparisons"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     # get_train_data和get_eval_data方法分别从raw_datasets中获取训练数据和测试数据。
     # 它们与之前的DahoasRmstaticDataset类不同之处在于，它们使用get_raw_dataset_split_index
@@ -366,6 +408,7 @@ class StanfordnlpSHPDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "stanfordnlp/SHP"
         self.dataset_name_clean = "stanfordnlp_SHP"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -412,6 +455,7 @@ class PvduySharegptalpacaoavicunaformatDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "pvduy/sharegpt_alpaca_oa_vicuna_format"
         self.dataset_name_clean = "pvduy_sharegpt_alpaca_oa_vicuna_format"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -456,6 +500,8 @@ class LocalJsonFileDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "local/jsonfile"
         self.dataset_name_clean = "jsonfile"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
+
         self.raw_datasets = load_dataset('json',
                                          data_files={
                                              "train":
@@ -511,6 +557,7 @@ class Wangrui6ZhihuKOLDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "wangrui6/Zhihu-KOL"
         self.dataset_name_clean = "wangrui6_Zhihu_KOL"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
@@ -568,6 +615,7 @@ class CohereMiraclzhqueries2212Dataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "Cohere/miracl-zh-queries-22-12"
         self.dataset_name_clean = "Cohere_miracl_zh_queries_22_12"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -600,6 +648,7 @@ class HelloSimpleAIHC3ChineseDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "Hello-SimpleAI/HC3-Chinese"
         self.dataset_name_clean = "Hello_SimpleAI_HC3_Chinese"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
@@ -658,6 +707,7 @@ class MkqaChineseDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "mkqa-Chinese"
         self.dataset_name_clean = "mkqa"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
@@ -717,6 +767,7 @@ class MkqaJapaneseDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "mkqa-Japanese"
         self.dataset_name_clean = "mkqa"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         from .data_utils import get_raw_dataset_split_index
@@ -775,6 +826,7 @@ class CohereMiracljaqueries2212Dataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "Cohere/miracl-ja-queries-22-12"
         self.dataset_name_clean = "Cohere_miracl_ja_queries_22_12"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -809,6 +861,7 @@ class LmqgQgjaquadDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "lmqg/qg_jaquad"
         self.dataset_name_clean = "lmqg_qg_jaquad"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]
@@ -846,6 +899,7 @@ class LmqgQagjaquadDataset(PromptRawDataset):
         super().__init__(output_path, seed, local_rank, dataset_name)
         self.dataset_name = "lmqg/qag_jaquad"
         self.dataset_name_clean = "lmqg_qag_jaquad"
+        debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
         return self.raw_datasets["train"]

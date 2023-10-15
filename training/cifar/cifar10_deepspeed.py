@@ -2,12 +2,12 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import argparse
-from pydebug import debuginfo
-print('1')
+from pydebug import debuginfo, infoTensor
+
 import deepspeed
-print('4')
+
 #除了主文件，不建议在其他文件中导入ct（大量的import），而是在具体的函数中使用（也要避开import）！！！
-from calltrace import g_ct
+# from calltrace import g_ct
 print('5')
 
 def add_argument():

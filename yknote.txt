@@ -4,3 +4,35 @@ https://wjn1996.blog.csdn.net/article/details/130227305
     通过编辑页面
     删除 ***user-select 实现
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   ---可以跟上多个数据集
+
+   ---有多少数据集，就会生成多少个对应的npy文件applications/DeepSpeed-Chat/training/step1_supervised_finetuning/data_files/目录下
+   get_raw_dataset
+
+
+   ---已经生成了，下次训练不会重新触发dataset相关代码,因为仅仅考名称和位置判定
+  即使数据集大小变化也不会检测道，所以需要删除再来！！！！
+
+
+  不同阶段都有不同算子，可能被cache
+  /home/amd00/.cache/torch_extensions/py39_cu121
+
+
+
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat$
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat$
+python3 training/step1_supervised_finetuning/prompt_eval.py \
+--model_name_or_path_baseline ~/hf_model/opt-125m  \
+--model_name_or_path_finetune output/actor-models/125m \
+2>&1 | tee output/actor-models/125m/eval-ph1-1ode2gpus-opt125.log
+
+
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat$
+python3 training/step2_reward_model_finetuning/rw_eval.py \
+    --model_name_or_path_baseline ~/hf_model/opt-125m \
+    --model_name_or_path_finetune output/reward-models/125m  \
+    2>&1 | tee output/reward-models/125m/eval-ph2-1node2gpus-opt125.log

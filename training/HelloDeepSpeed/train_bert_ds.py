@@ -670,13 +670,13 @@ def train(
         pathlib.Path: The final experiment directory
 
     """
-    from calltrace import CallTrace
+    # from calltrace import CallTrace
 
     flag_onlycnt = False 
 
-    ct_1 = CallTrace('No1') #局部生成的, 这个例子只有一个进程,适合学习
-
-    ct_1.startRecord(onlycnt = flag_onlycnt)
+    # ct_1 = CallTrace('No1') #局部生成的, 这个例子只有一个进程,适合学习
+    #
+    # ct_1.startRecord(onlycnt = flag_onlycnt)
 
     device = torch.device("cuda", 0) 
     #device = (torch.device("cuda", 0) if (local_rank > -1)
@@ -808,24 +808,24 @@ def train(
         }
     }
     
-    ct_1.endRecord()
-    
-    ds_ct = CallTrace('ds_init') 
-    ds_ct.startRecord(onlycnt = flag_onlycnt)
+    # ct_1.endRecord()
+    #
+    # ds_ct = CallTrace('ds_init')
+    # ds_ct.startRecord(onlycnt = flag_onlycnt)
 
     model, _, _, _ = deepspeed.initialize(model=model,
                                           model_parameters=model.parameters(),
                                           config=ds_config)
     
-    ds_ct.endRecord()
+    # ds_ct.endRecord()
 
     log_dist("DeepSpeed engine created", ranks=[0], level=logging.INFO)
     ################################
     #### Load Model checkpoint #####
     ################################
     
-    ct_2 = CallTrace('No2') 
-    ct_2.startRecord(onlycnt = flag_onlycnt)
+    # ct_2 = CallTrace('No2')
+    # ct_2.startRecord(onlycnt = flag_onlycnt)
 
     start_step = 1
     if load_checkpoint_dir is not None:
@@ -843,12 +843,12 @@ def train(
     model.train()
     losses = []
 
-    ct_2.endRecord()
+    # ct_2.endRecord()
 
     for step, batch in enumerate(data_iterator, start=start_step):
-        if step == start_step:
-            l_ct_loop = CallTrace('loop')
-            l_ct_loop.startRecord(onlycnt = flag_onlycnt)
+        # if step == start_step:
+        #     # l_ct_loop = CallTrace('loop')
+        #     # l_ct_loop.startRecord(onlycnt = flag_onlycnt)
 
         if step >= num_iterations:
             break
@@ -878,8 +878,8 @@ def train(
         if step == start_step:
             l_ct_loop.endRecord()
 
-    ct_save = CallTrace('save')
-    ct_save.startRecord(onlycnt = flag_onlycnt)
+    # ct_save = CallTrace('save')
+    # ct_save.startRecord(onlycnt = flag_onlycnt)
     # Save the last checkpoint if not saved yet
     if step % checkpoint_every != 0:
         model.save_checkpoint(save_dir=exp_dir,

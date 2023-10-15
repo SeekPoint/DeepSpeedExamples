@@ -5,8 +5,8 @@
 # DeepSpeed Team
 ACTOR_MODEL_PATH=$1
 CRITIC_MODEL_PATH=$2
-ACTOR_ZERO_STAGE=$3
-CRITIC_ZERO_STAGE=$4
+ACTOR_ZERO_STAGE=0
+CRITIC_ZERO_STAGE=0
 OUTPUT=$5
 if [ "$OUTPUT" == "" ]; then
     OUTPUT=./output
@@ -49,4 +49,4 @@ deepspeed --master_port 12346 main.py \
    --critic_zero_stage $CRITIC_ZERO_STAGE \
    --enable_ema \
    --output_dir $OUTPUT \
-   2>&1 | tee $OUTPUT/training-step3-125m-Snode.log
+   2>&1 | tee 2>&1 | tee $OUTPUT/training-ph3-1node2gpus-opt125-CrZ$CRITIC_ZERO_STAGE-AcZ$ACTOR_ZERO_STAGE.log

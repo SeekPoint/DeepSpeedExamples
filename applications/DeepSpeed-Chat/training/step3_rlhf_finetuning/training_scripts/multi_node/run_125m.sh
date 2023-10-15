@@ -55,4 +55,4 @@ deepspeed --hostfile /hostfile --master_addr=192.168.1.7 --master_port=29701 mai
    --actor_lora_dim 128 \
    --actor_lora_module_name decoder.layers. \
    --output_dir $OUTPUT \
-    2>&1 | tee $OUTPUT/training-step3-2nodes2gpus-125m-2ndnode-ACTOR_ZERO_STAGE$ACTOR_ZERO_STAGE-CRITIC_ZERO_STAGE$CRITIC_ZERO_STAGE.log
+    2>&1 | tee $OUTPUT/training-ph3-2nodes2gpus-125m-2ndnode-ACTOR_ZERO_STAGE$ACTOR_ZERO_STAGE-CRITIC_ZERO_STAGE$CRITIC_ZERO_STAGE.log

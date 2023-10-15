@@ -82,7 +82,7 @@ def init_processes(local_rank, args):
         print_rank_0(f"distributed framework {args.dist} not supported")
         exit(0)
 
-
+#only printed on rank 0 (master node)
 def print_rank_0(message):
     if dist.get_rank() == 0:
         print(message)
