@@ -35,12 +35,14 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=
         "Finetune a transformers model on a causal language modeling task")
+    # 1 训练数据集
     parser.add_argument('--data_path',
-                        nargs='*',
+                        nargs='*', # 可以接受任意数量的值，这些值将被收集到一个列表中。
                         default=['Dahoas/rm-static'],
                         help='Path to the training dataset. Accepted format:'
                         '1) a single data path, 2) multiple datasets in the'
                         'form: dataset1-path dataset2-path ...')
+    # 2 数据集在不同phase时的切分比例
     parser.add_argument('--data_split',
                         type=str,
                         default='2,4,4',
@@ -48,11 +50,13 @@ def parse_args():
                         'phase 1, 2, and 3 data. For example the split `2,4,4`'
                         'will use 60% of data for phase 1, 20% for phase 2'
                         'and 20% for phase 3.')
+    # 3 存储与数据相关的文件的位置
     parser.add_argument(
         '--data_output_path',
         type=str,
         default='/tmp/data_files/',
         help='Where to store the data-related files such as shuffle index.')
+    # 4 模型的预训练路径
     parser.add_argument(
         "--model_name_or_path",
         type=str,
@@ -60,6 +64,7 @@ def parse_args():
         "Path to pretrained model or model identifier from huggingface.co/models.",
         required=True,
     )
+    # 5 起始位置的填充数量
     parser.add_argument(
         "--num_padding_at_beginning",
         type=int,
@@ -68,24 +73,28 @@ def parse_args():
         "OPT model has a fixed number (1) of padding tokens at the beginning of the input. "
         "We did not see this in other models but keep it as an option for now.",
     )
+    # 6 train batch size
     parser.add_argument(
         "--per_device_train_batch_size",
         type=int,
         default=16,
         help="Batch size (per device) for the training dataloader.",
     )
+    # 7 eval batch size
     parser.add_argument(
         "--per_device_eval_batch_size",
         type=int,
         default=16,
         help="Batch size (per device) for the evaluation dataloader.",
     )
+    # 8 最大序列长度
     parser.add_argument(
         "--max_seq_len",
         type=int,
         default=512,
         help="The maximum sequence length.",
     )
+    # 9 学习率
     parser.add_argument(
         "--learning_rate",
         type=float,
@@ -93,14 +102,17 @@ def parse_args():
         help=
         "Initial learning rate (after the potential warmup period) to use.",
     )
+    # 10 权重损失
     parser.add_argument("--weight_decay",
                         type=float,
                         default=0.,
                         help="Weight decay to use.")
+    # 11 训练的轮数
     parser.add_argument("--num_train_epochs",
                         type=int,
                         default=1,
                         help="Total number of training epochs to perform.")
+    # 12 在执行反向传播之前累积的更新步骤数
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
@@ -108,6 +120,7 @@ def parse_args():
         help=
         "Number of updates steps to accumulate before performing a backward/update pass.",
     )
+    # 13 调度器类型
     parser.add_argument(
         "--lr_scheduler_type",
         type=SchedulerType,
@@ -118,48 +131,60 @@ def parse_args():
             "constant", "constant_with_warmup"
         ],
     )
+    # 14 学习率调度器中的warmup步骤数
     parser.add_argument(
         "--num_warmup_steps",
         type=int,
         default=0,
         help="Number of steps for the warmup in the lr scheduler.")
+    # 15 存储模型的位置
     parser.add_argument("--output_dir",
                         type=str,
                         default=None,
                         help="Where to store the model.")
+    # 16 用于可复制训练的seed
     parser.add_argument("--seed",
                         type=int,
                         default=1234,
                         help="A seed for reproducible training.")
+    # 17 用于在GPU上进行分布式训练的local rank
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
                         help="local_rank for distributed training on gpus")
+    # 18 是否启用梯度checkpoint
     parser.add_argument(
         '--gradient_checkpointing',
         action='store_true',
         help='Enable HF gradient checkpointing for Actor model.')
+    # 19 是否禁用模型的dropout
     parser.add_argument('--disable_dropout',
                         action='store_true',
                         help='Disable the dropout of the model.')
     # deepspeed features
+    # 是否启用ZeRO Offload技术
+    # 是否使用ZeRO Offload技术。如果为True，那么将模型参数和优化器状态offload到CPU，否则不使用offload。
     parser.add_argument('--offload',
                         action='store_true',
                         help='Enable ZeRO Offload techniques.')
+    # 20 用于Actor模型（和clones）的ZeRO优化阶段
     parser.add_argument(
         '--zero_stage',
         type=int,
         default=0,
         help='ZeRO optimization stage for Actor model (and clones).')
     ## LoRA for efficient training setting
+    # 21 如果大于0，使用LoRA进行高效训练
     parser.add_argument("--lora_dim",
                         type=int,
                         default=0,
                         help="If > 0, use LoRA for efficient training.")
+    # 22 LoRA的范围
     parser.add_argument("--lora_module_name",
                         type=str,
                         default="decoder.layers.",
                         help="The scope of LoRA.")
+    # 23 只优化LoRA参数
     parser.add_argument('--only_optimize_lora',
                         action='store_true',
                         help='Only optimize the LoRA parameters.')
@@ -174,6 +199,8 @@ def parse_args():
     args = parser.parse_args()
 
     # Validate settings
+    # 如果启用了gradient_checkpointing并且lora_dim大于0，那么必须禁用只优化LoRA参数。
+    # 这是因为梯度检查点和只优化LoRA参数这两个选项在同时启用时可能会引发冲突
     if args.gradient_checkpointing and args.lora_dim > 0:
         assert (
             not args.only_optimize_lora
@@ -183,28 +210,37 @@ def parse_args():
 
 
 def main():
+    # 第1步：超参数配置
     args = parse_args()
 
     if args.local_rank == -1:
+        # 单机版的CUDA
         device = torch.device("cuda")
     else:
+        # 分布式训练
         torch.cuda.set_device(args.local_rank)
         device = torch.device("cuda", args.local_rank)
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
-        # torch.distributed.init_process_group(backend='nccl')
+        # torch.distributed.init_process_group(ba  ckend='nccl')
+        # 初始化分布式训练环境
         deepspeed.init_distributed()
-
+    # 获取当前运行device在分布式训练环境中的rank
     args.global_rank = torch.distributed.get_rank()
     print("args.global_rank :", args.global_rank)
-
+	
+    # 根据输入参数返回一个训练数据集的配置字典
     ds_config = get_train_ds_config(offload=args.offload,
                                     stage=args.zero_stage,
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step2_model")
+									
+    # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应GPU的内存限制
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
 
+    # 每个训练步骤中处理的数据总量
+    # gradient_accumulation(梯度积累)是另一种应对内存限制的技术，它会在多个步骤中积累梯度，然后再一次性更新模型参数。
     ds_config[
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
         ) * args.gradient_accumulation_steps
@@ -216,17 +252,27 @@ def main():
 
     # If passed along, set the training seed now.
     set_random_seed(args.seed)
-    torch.distributed.barrier()
 
+    # PyTorch分布式训练中的一个同步工具，它确保所有分布式进程都达到了这个阻塞点，
+    # 然后再继续执行后面的代码，以避免出现某些进程快于其他进程的情况。
+    torch.distributed.barrier()
+	
+    # 加载预训练模型tokenizer，fast_tokenizer=True表示使用优化过的、速度更快的tokenizer。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
     print("tokenizer---1 :", tokenizer)
+	
+    # 将tokenizer的pad_token设置为eos_token，意味着模型将认为这些填充部分是句子的结束。
     tokenizer.pad_token = tokenizer.eos_token
+	
     # make sure tokenizer is right pad in our logic
+	# 将tokenizer的填充方向设置为'right'，表示在序列的右侧（末尾）添加填充符号。
     tokenizer.padding_side = 'right'
+	
     """
     rm_model调用了create_critic_model进行载入
     默认情况下rm_model是不启用dropout的
     """
+    # 第2步：创建reward模型
     rm_model = create_critic_model(args.model_name_or_path,
                                    tokenizer,
                                    ds_config,
@@ -234,46 +280,26 @@ def main():
                                    disable_dropout=args.disable_dropout)
 
     # print("rm_model---1 :", rm_model)
-    '''
-    
-    rm_model---1 : RewardModel(
-      (v_head): Linear(in_features=768, out_features=1, bias=False)
-      (rwtranrsformer): OPTModel(
-        (decoder): OPTDecoder(
-          (embed_tokens): Embedding(50272, 768, padding_idx=1)
-          (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-          (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (layers): ModuleList(
-            (0-11): 12 x OPTDecoderLayer(
-              (self_attn): OPTAttention(
-                (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                (out_proj): Linear(in_features=768, out_features=768, bias=True)
-              )
-              (activation_fn): ReLU()
-              (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              (fc1): Linear(in_features=768, out_features=3072, bias=True)
-              (fc2): Linear(in_features=3072, out_features=768, bias=True)
-              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-            )
-          )
-        )
-      )
-    )
-    '''
+
 
     if args.lora_dim > 0:
+        # 将模型中指定的线性层转换为LoRA层
+        # lora_module_name指定了要转换的模块的名称
+        # lora_dim指定了LoRA的维度
         rm_model = convert_linear_layer_to_lora(rm_model,
                                                 args.lora_module_name,
                                                 args.lora_dim)
         print("rm_model---2 :", rm_model)
 
         if args.only_optimize_lora:
+            # 只优化LoRA层的参数
+            # 将模型中非LoRA层的参数的requires_grad属性设为False，这样在训练过程中只有LoRA层的参数会被更新。
             rm_model = only_optimize_lora_parameters(rm_model)
             print("rm_model---3 :", rm_model)
 
+    # 第3步：准备数据集（训练集和验证集）
     train_phase = 2
+    # 1. 创建训练集和验证集
     train_dataset, eval_dataset = create_prompt_dataset(
         args.local_rank, args.data_path, args.data_split,
         args.data_output_path, train_phase, args.seed, tokenizer,
@@ -293,18 +319,22 @@ def main():
     因此实际上1个batch真正输入模型的数据量大小应当为“batch_size * 2”。
     """
     # phase2使用的data_collator为DataCollatorReward()
+	# 2. 将批次数据整理成模型需要的形式
     data_collator = DataCollatorReward()
     print("data_collator :", data_collator)
 
     if args.local_rank == -1:
+        # 不使用分布式训练，那么就使用RandomSampler对数据进行随机采样
         train_sampler = RandomSampler(train_dataset)
         eval_sampler = SequentialSampler(eval_dataset)
     else:
+        # 使用分布式训练，那么就使用DistributedSampler进行分布式采样
         train_sampler = DistributedSampler(train_dataset)
         eval_sampler = DistributedSampler(eval_dataset)
 
     # print("train_sampler :", train_sampler)
     # print("eval_sampler :", eval_sampler)
+	# 3. 创建训练数据加载器和验证数据加载器
     train_dataloader = DataLoader(train_dataset,
                                   collate_fn=data_collator,
                                   sampler=train_sampler,
@@ -343,57 +373,117 @@ def main():
         
         4此外评估过程中还将统计平均的chosen_sentence分值“scores”供参考。
         '''
+
+    # Split weights in two groups, one with weight decay and the other not.
+    # 第4步：将模型参数分组、创建优化器 和 学习率调度器
+    # 模型参数被分为两组：一组应用权重衰减，另一组不应用。
+    # 权重衰减是防止模型过拟合的一种策略，通常只对模型的权重参数应用。
+    optimizer_grouped_parameters = get_optimizer_grouped_parameters(rm_model, args.weight_decay)
+    # print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
+
+    # 根据是否使用DeepSpeed的CPU offload功能来选择优化器，优化器定义了如何更新模型的参数以最小化损失函数。
+    # DeepSpeedCPUAdam :
+    #   为了配合DeepSpeed的CPU offload功能设计的，在DeepSpeed中，CPU offload可以将模型参数、
+    #   优化器状态和梯度数据在CPU和GPU之间进行切换，以减轻GPU的内存压力。
+    # FusedAdam :
+    #   它将一些计算操作融合在一起（fused），以减少计算时间和内存使用量。
+    #   FusedAdam主要是为了提高在GPU上的运算效率。
+    AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
+	
+    # print("AdamOptimizer :", AdamOptimizer)
+    # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
+    # 优化器被初始化时，指定了模型参数、学习率和优化器的betas参数。
+    optimizer = AdamOptimizer(optimizer_grouped_parameters,
+                              lr=args.learning_rate,
+                              betas=(0.9, 0.95))
+    # print("optimizer :", optimizer)
+
+    # 计算每个epoch的更新步骤数
+    # 这个数量等于训练数据的批次数除以梯度积累步骤数。
+    num_update_steps_per_epoch = math.ceil(
+        len(train_dataloader) / args.gradient_accumulation_steps)
+    print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
+
+    # 创建学习率调度器，学习率调度器可以动态地在训练过程中改变学习率以得到最优的学习效果。
+    lr_scheduler = get_scheduler(
+        name=args.lr_scheduler_type, # 调度器的类型
+        optimizer=optimizer, # 优化器，在每个训练步骤调整其学习率
+        num_warmup_steps=args.num_warmup_steps, # 预热步骤数，在训练开始的一段时间内，
+                                                # 学习率从0线性增加到预设的初始学习率，预热过程有助于模型的稳定训练。
+        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch, # 总的训练步骤数
+    )
+    # print("lr_scheduler---2 :", lr_scheduler)
+    # lr_scheduler---2 : <torch.optim.lr_scheduler.LambdaLR object at 0x7f1c900786a0>
+	
+    '''--- 知识点补充 ---
+    调度器类型有哪些？
+    LINEAR：线性调度器，学习率将在训练过程中线性递减。
+    COSINE：余弦调度器，学习率将在训练过程中按照余弦函数递减。
+    COSINE_WITH_RESTARTS：带重启的余弦调度器，学习率将按照余弦函数递减，但在每个周期结束时重启。
+    POLYNOMIAL：多项式调度器，学习率将在训练过程中按照多项式函数递减。
+    CONSTANT：常数调度器，学习率在训练过程中保持不变。
+    CONSTANT_WITH_WARMUP：带预热的常数调度器，学习率在一开始的一段时间内线性增加，然后保持不变。
+    '''
+    # 第5步：deepspeed初始化
+    rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
+        model=rm_model, # 模型
+        optimizer=optimizer, # 优化器
+        args=args, # 参数对象
+        config=ds_config, # DeepSpeed 配置文件
+        lr_scheduler=lr_scheduler, # 学习率调度器
+        dist_init_required=True # 在初始化时需要设置分布式训练的环境
+    )
+
+    # print("rm_model---4 :", rm_model)
+    # print("optimizer---4 :", optimizer)
+    # print("lr_scheduler---4 :", lr_scheduler)
+
+
+    if args.gradient_checkpointing:
+        # 在模型中启用梯度检查点
+        # 梯度检查点是一种内存优化技术，可以减少训练大模型时所需的GPU显存，但可能会增加一些计算时间。
+        rm_model.gradient_checkpointing_enable()
+
+    # 第6步：模型验证   yknote---改变位置
     def evaluation_reward(model, eval_dataloader):
         debuginfo(prj='ds-chat')
+        # 评估模式
         model.eval()
-        # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数
+        # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数  # 预测正确的数量
         correct_predictions = 0
 
-        # 统计预测总数
+        # 统计预测总数 # 总预测数量
         total_predictions = 0
         scores = 0
-        debuginfo(prj='ds-chat', info = len(eval_dataloader))
+        debuginfo(prj='ds-chat', info=len(eval_dataloader))
         for step, batch in enumerate(eval_dataloader):
             # print("batch---C is:", batch)
-            #print("T batch['input_ids']--C:", infoTensor(batch['input_ids'])) #only ph2 T batch['input_ids']--C: _Size([16, 128])_int64_cpu_
-            #print("T batch['attention_mask']--C:", infoTensor(batch['attention_mask'])) #pnly ph2 T batch['attention_mask']--C: _Size([16, 128])_int64_cpu_
-            '''
-            batch---C is: 
-            {'input_ids': tensor([[    2, 50118, 50118,  ...,   533,     7, 28616],
-                ...,
-                [    2, 50118, 50118,  ...,  1328,     5,   183]]), 
-            'attention_mask': tensor([[1, 1, 1,  ..., 1, 1, 1],
-            ...
-                [1, 1, 1,  ..., 1, 1, 1]])}
-            '''
+            # print("T batch['input_ids']--C:", infoTensor(batch['input_ids']))
+            # #only ph2 T batch['input_ids']--C: _Size([16, 128])_int64_cpu_
+            # print("T batch['attention_mask']--C:", infoTensor(batch['attention_mask']))
+            # #pnly ph2 T batch['attention_mask']--C: _Size([16, 128])_int64_cpu_
+
             batch = to_device(batch, device)
 
+            # 禁用梯度计算
             with torch.no_grad():
                 """
                 outputs: {'loss':tensor(), 
                             'chosen_mean_scores':tensor(bs,), 
                             'rejected_mean_scores':tensor(bs,)}
                 """
+                # 前向传播
                 outputs = model(**batch)
                 # print("outputs--C", outputs)
                 # print("T outputs['loss']--A:", infoTensor(outputs['loss']))
                 # print("T outputs['chosen_mean_scores']--A:", infoTensor(outputs['chosen_mean_scores']))
                 # print("T outputs['rejected_mean_scores']--A:", infoTensor(outputs['rejected_mean_scores']))
-                '''
-                outputs--C {'loss': tensor(0.7271, device='cuda:0', dtype=torch.float16), 
-                        'chosen_mean_scores': tensor([-0.4062,  0.5601, -0.3333, -0.2805, -0.9033, -1.0156, -0.5679, -1.1670],
-                                    device='cuda:0', dtype=torch.float16), 
-                        'rejected_mean_scores': tensor([-0.4143,  0.5601,  0.6343, -0.2805, -0.9736, -1.0156, -0.5679,  0.4614],
-                                    device='cuda:0', dtype=torch.float16)}
-                T outputs['loss']--A: _Size([])_float16_cuda:0_
-                T outputs['chosen_mean_scores']--A: _Size([8])_float16_cuda:0_
-                T outputs['rejected_mean_scores']--A: _Size([8])_float16_cuda:0_
-                '''
 
+            # 获取预测得分
             # chosen.shape: (bs,)
             chosen = outputs["chosen_mean_scores"]
 
-            #rejected.shape: (bs,)
+            # rejected.shape: (bs,)
             rejected = outputs["rejected_mean_scores"]
 
             # print("chosen--C", chosen)
@@ -409,7 +499,8 @@ def main():
             T rejected---C: _Size([8])_float16_cuda:1_
             '''
 
-            #赋分正确"即为chosen分值大于rejected分值
+            # 赋分正确"即为chosen分值大于rejected分值
+            # 更新正确预测数量和总预测数量
             correct_predictions += (chosen > rejected).sum()
             total_predictions += chosen.shape[0]
 
@@ -417,21 +508,22 @@ def main():
             # print("correct_predictions--C", infoTensor(correct_predictions))
             # correct_predictions--C _Size([])_int64_cuda:0_  only ph2
 
-            #print("total_predictions--C", total_predictions)  #total_predictions--C 672
+            # print("total_predictions--C", total_predictions)  #total_predictions--C 672
 
-            #累加每个step的平均chosen分值
+            # 累加每个step的平均chosen分值
+            # 计算并累计得分
             scores += outputs["chosen_mean_scores"].mean().float()
 
             if step == 99:  # For faster evaluation and debugging
                 break
 
-        # 计算acc指标
+        # 计算准确率acc指标
         acc = correct_predictions / total_predictions
 
-        #计算当前step的平均chosen分值
+        # 计算平均得分, 当前step的平均chosen分值
         scores = scores / (step + 1)
         try:
-            # 多进程结果求和求平均
+            # 多进程结果求和求平均  # 使用分布式计算的平均准确率和得分
             acc = get_all_reduce_mean(acc).item()
             scores = get_all_reduce_mean(scores).item()
         except:
@@ -440,67 +532,190 @@ def main():
         print("acc:", acc)
         return scores, acc
 
-    # Split weights in two groups, one with weight decay and the other not.
-    optimizer_grouped_parameters = get_optimizer_grouped_parameters(
-        rm_model, args.weight_decay)
-    # print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
 
-    AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
-    # print("AdamOptimizer :", AdamOptimizer)
-    # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
+    # Train!  # 第7步：模型训练
+    print_rank_0("***** Running training *****", args.global_rank)
 
-    optimizer = AdamOptimizer(optimizer_grouped_parameters,
-                              lr=args.learning_rate,
-                              betas=(0.9, 0.95))
-    # print("optimizer :", optimizer)
+    print_rank_0(
+        f"***** Evaluating reward, Epoch {0}/{args.num_train_epochs} *****",
+        args.global_rank)
+
+    # 在训练集上评估模型的奖励值
+    reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
+    print_rank_0(
+        f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
+        args.global_rank)
+
+    # 模型训练
+    for epoch in range(args.num_train_epochs):
+        print_rank_0(
+            f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
+            args.global_rank)
+
+        # 训练模式
+        rm_model.train()
+        print(" :", )
+
+        mean_loss = 0
+        for step, batch in enumerate(train_dataloader):
+            batch = to_device(batch, device)
+			
+            # 将批数据输入模型并获取输出
+            outputs = rm_model(**batch, use_cache=False)
+			
+            # 从模型输出中提取损失
+            loss = outputs["loss"]
+            # print容易引起打错过多的显示错位！！！
+            # print_rank_0("batch :", batch)
+            # print_rank_0("outputs :", outputs)
+            # print_rank_0("loss :", loss)
+
+            # print("T batch['input_ids']--D:", infoTensor(batch['input_ids']))
+            # print("T batch['attention_mask']--D:", infoTensor(batch['attention_mask']))
+            # print("T outputs['loss']--D:", infoTensor(outputs['loss']))
+            # print("T outputs['chosen_mean_scores']--D:", infoTensor(outputs['chosen_mean_scores']))
+            # print("T outputs['rejected_mean_scores']--D:", infoTensor(outputs['rejected_mean_scores']))
+            # print("T loss--D:", infoTensor(loss))
+            '''
+            T batch['input_ids']--D: _Size([16, 128])_int64_cuda:1_
+            T batch['attention_mask']--D: _Size([16, 128])_int64_cuda:1_
+            T outputs['loss']--D: _Size([])_float16_cuda:1_
+            T outputs['chosen_mean_scores']--D: _Size([8])_float16_cuda:1_
+            T outputs['rejected_mean_scores']--D: _Size([8])_float16_cuda:1_
+            T loss--D: _Size([])_float16_cuda:1_
+            '''
+            # 计算损失的梯度
+            rm_model.backward(loss)
+
+            # 用计算的梯度更新模型的权重
+            rm_model.step()
+
+            # 计算所有批次的平均损失
+            mean_loss += loss.item()
+
+        print_rank_0(
+            f"Epoch {epoch+1}/{args.num_train_epochs} with loss {mean_loss/(step+1)}",
+            args.global_rank)
+
+        # Evaluate reward_loss on the validation set.
+        print_rank_0(
+            f"***** Evaluating reward, Epoch {epoch+1}/{args.num_train_epochs} *****",
+            args.global_rank)
+
+        # 在每个epoch结束后，模型在验证数据集上进行评估。
+        reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
+
+        print_rank_0(
+            f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
+            args.global_rank)
+
+        # 更新模型的吞吐量计时器以记录完成的epoch数
+        rm_model.tput_timer.update_epoch_count()
+
+    # 第8步：训练结束后保存模型
+    if args.output_dir is not None:
+        print_rank_0('saving model ...', args.global_rank)
+        # 将模型中的LoRA层转换为全连接层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
+        rm_model = convert_lora_to_linear_layer(rm_model)
+        # print("rm_model---5 :", rm_model)
+
+        # 是否在主进程中
+        if args.global_rank == 0:
+            save_hf_format(rm_model, tokenizer, args)
+
+        # 是否使用了Zero Redundancy Optimizer的第三阶段（ZeRO-3）
+        # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
+        # 当使用DeepSpeed的Zero Stage 3优化时，每个GPU只拥有模型的一部分，因此需要在每个GPU上分别保存模型。
+        if args.zero_stage == 3:
+            debuginfo(prj='ds-chat')
+            # for zero stage 3, each gpu only has a part of the model,
+            # so we need to save the model on each gpu by using DS-Engine
+            save_zero_three_model(rm_model,
+                                  args.global_rank,
+                                  args.output_dir,
+                                  zero_stage=args.zero_stage)
+
+
+if __name__ == "__main__":
+    main()
+
+
+
     '''
-    optimizer : FusedAdam (
-        Parameter Group 0
-            betas: (0.9, 0.95)
-            bias_correction: True
-            eps: 1e-08
-            lr: 9.65e-06
-            weight_decay: 0.0
-        
-        Parameter Group 1
-            betas: (0.9, 0.95)
-            bias_correction: True
-            eps: 1e-08
-            lr: 0.0005
-            weight_decay: 0.0
-        
-        Parameter Group 2
-            betas: (0.9, 0.95)
-            bias_correction: True
-            eps: 1e-08
-            lr: 9.65e-06
-            weight_decay: 0.0
+    
+    rm_model---1 : RewardModel(
+      (v_head): Linear(in_features=768, out_features=1, bias=False)
+      (rwtranrsformer): OPTModel(
+        (decoder): OPTDecoder(
+          (embed_tokens): Embedding(50272, 768, padding_idx=1)
+          (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+          (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+          (layers): ModuleList(
+            (0-11): 12 x OPTDecoderLayer(
+              (self_attn): OPTAttention(
+                (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                (out_proj): Linear(in_features=768, out_features=768, bias=True)
+              )
+              (activation_fn): ReLU()
+              (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+              (fc1): Linear(in_features=768, out_features=3072, bias=True)
+              (fc2): Linear(in_features=3072, out_features=768, bias=True)
+              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+            )
+          )
         )
-    '''
-
-    num_update_steps_per_epoch = math.ceil(
-        len(train_dataloader) / args.gradient_accumulation_steps)
-    print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
-
-    lr_scheduler = get_scheduler(
-        name=args.lr_scheduler_type,
-        optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps,
-        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch,
+      )
     )
-    # print("lr_scheduler---2 :", lr_scheduler)
-    # lr_scheduler---2 : <torch.optim.lr_scheduler.LambdaLR object at 0x7f1c900786a0>
-
-    rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
-        model=rm_model,
-        optimizer=optimizer,
-        args=args,
-        config=ds_config,
-        lr_scheduler=lr_scheduler,
-        dist_init_required=True)
-    # print("rm_model---4 :", rm_model)
-    # print("optimizer---4 :", optimizer)
-    # print("lr_scheduler---4 :", lr_scheduler)
+    '''
+        '''
+        rm_model---5 :  DeepSpeedEngine(
+              (module): RewardModel(
+                (v_head): Linear(in_features=768, out_features=1, bias=False)
+                (rwtranrsformer): OPTModel(
+                  (decoder): OPTDecoder(
+                    (embed_tokens): Embedding(50272, 768, padding_idx=1)
+                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
+                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                    (layers): ModuleList(
+                      (0-11): 12 x OPTDecoderLayer(
+                        (self_attn): OPTAttention(
+                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
+                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
+                        )
+                        (activation_fn): ReLU()
+                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
+                      )
+                    )
+                  )
+                )
+              )
+            )
+        '''
+		
+            '''
+            batch : {'input_ids': tensor([[    2, 50118, 50118,  ...,     2,     2,     2],
+                    ...,
+                    [    2, 50118, 50118,  ...,     8,    24,    17]], device='cuda:0'),
+                     'attention_mask': tensor([[1, 1, 1,  ..., 0, 0, 0],
+                    ...,
+                    [1, 1, 1,  ..., 1, 1, 1]], device='cuda:0')}
+                    
+            outputs : {
+            'loss': tensor(0.7422, device='cuda:0', dtype=torch.float16, grad_fn=<DivBackward0>),
+            'chosen_mean_scores': tensor([-0.4436,  0.2378,  0.6147,  0.7080,  0.5176, -0.6152,  0.3547, -0.4399], device='cuda:0', dtype=torch.float16, grad_fn=<StackBackward0>),
+            'rejected_mean_scores': tensor([-1.0381,  0.2378,  0.6147,  0.7080,  0.5176, -0.1653,  0.3547, -0.4399], device='cuda:0', dtype=torch.float16, grad_fn=<StackBackward0>)}
+                   
+            loss : tensor(0.7334, device='cuda:1', dtype=torch.float16, grad_fn=<DivBackward0>)
+            '''		
+			
+			
     '''
     rm_model---4 : DeepSpeedEngine(
           (module): RewardModel(
@@ -550,129 +765,50 @@ def main():
         )
         lr_scheduler---4 : <torch.optim.lr_scheduler.LambdaLR object at 0x7f1c900786a0>
 
+    '''	
+	
     '''
-
-    if args.gradient_checkpointing:
-        rm_model.gradient_checkpointing_enable()
-
-    # Train!
-    print_rank_0("***** Running training *****", args.global_rank)
-
-    print_rank_0(
-        f"***** Evaluating reward, Epoch {0}/{args.num_train_epochs} *****",
-        args.global_rank)
-    reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
-    print_rank_0(
-        f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
-        args.global_rank)
-
-    for epoch in range(args.num_train_epochs):
-        print_rank_0(
-            f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
-            args.global_rank)
-        rm_model.train()
-        print(" :", )
-
-        mean_loss = 0
-        for step, batch in enumerate(train_dataloader):
-            batch = to_device(batch, device)
-            outputs = rm_model(**batch, use_cache=False)
-            loss = outputs["loss"]
-            # print容易引起打错过多的显示错位！！！
-            # print_rank_0("batch :", batch)
-            # print_rank_0("outputs :", outputs)
-            # print_rank_0("loss :", loss)
+    optimizer : FusedAdam (
+        Parameter Group 0
+            betas: (0.9, 0.95)
+            bias_correction: True
+            eps: 1e-08
+            lr: 9.65e-06
+            weight_decay: 0.0
+        
+        Parameter Group 1
+            betas: (0.9, 0.95)
+            bias_correction: True
+            eps: 1e-08
+            lr: 0.0005
+            weight_decay: 0.0
+        
+        Parameter Group 2
+            betas: (0.9, 0.95)
+            bias_correction: True
+            eps: 1e-08
+            lr: 9.65e-06
+            weight_decay: 0.0
+        )
+    '''	
+	
+                '''
+                outputs--C {'loss': tensor(0.7271, device='cuda:0', dtype=torch.float16), 
+                        'chosen_mean_scores': tensor([-0.4062,  0.5601, -0.3333, -0.2805, -0.9033, -1.0156, -0.5679, -1.1670],
+                                    device='cuda:0', dtype=torch.float16), 
+                        'rejected_mean_scores': tensor([-0.4143,  0.5601,  0.6343, -0.2805, -0.9736, -1.0156, -0.5679,  0.4614],
+                                    device='cuda:0', dtype=torch.float16)}
+                T outputs['loss']--A: _Size([])_float16_cuda:0_
+                T outputs['chosen_mean_scores']--A: _Size([8])_float16_cuda:0_
+                T outputs['rejected_mean_scores']--A: _Size([8])_float16_cuda:0_
+                '''	
+	
             '''
-            batch : {'input_ids': tensor([[    2, 50118, 50118,  ...,     2,     2,     2],
-                    ...,
-                    [    2, 50118, 50118,  ...,     8,    24,    17]], device='cuda:0'),
-                     'attention_mask': tensor([[1, 1, 1,  ..., 0, 0, 0],
-                    ...,
-                    [1, 1, 1,  ..., 1, 1, 1]], device='cuda:0')}
-                    
-            outputs : {
-            'loss': tensor(0.7422, device='cuda:0', dtype=torch.float16, grad_fn=<DivBackward0>),
-            'chosen_mean_scores': tensor([-0.4436,  0.2378,  0.6147,  0.7080,  0.5176, -0.6152,  0.3547, -0.4399], device='cuda:0', dtype=torch.float16, grad_fn=<StackBackward0>),
-            'rejected_mean_scores': tensor([-1.0381,  0.2378,  0.6147,  0.7080,  0.5176, -0.1653,  0.3547, -0.4399], device='cuda:0', dtype=torch.float16, grad_fn=<StackBackward0>)}
-                   
-            loss : tensor(0.7334, device='cuda:1', dtype=torch.float16, grad_fn=<DivBackward0>)
-            '''
-            # print("T batch['input_ids']--D:", infoTensor(batch['input_ids']))
-            # print("T batch['attention_mask']--D:", infoTensor(batch['attention_mask']))
-            # print("T outputs['loss']--D:", infoTensor(outputs['loss']))
-            # print("T outputs['chosen_mean_scores']--D:", infoTensor(outputs['chosen_mean_scores']))
-            # print("T outputs['rejected_mean_scores']--D:", infoTensor(outputs['rejected_mean_scores']))
-            # print("T loss--D:", infoTensor(loss))
-            '''
-            T batch['input_ids']--D: _Size([16, 128])_int64_cuda:1_
-            T batch['attention_mask']--D: _Size([16, 128])_int64_cuda:1_
-            T outputs['loss']--D: _Size([])_float16_cuda:1_
-            T outputs['chosen_mean_scores']--D: _Size([8])_float16_cuda:1_
-            T outputs['rejected_mean_scores']--D: _Size([8])_float16_cuda:1_
-            T loss--D: _Size([])_float16_cuda:1_
-            '''
-
-            rm_model.backward(loss)
-            rm_model.step()
-            mean_loss += loss.item()
-        print_rank_0(
-            f"Epoch {epoch+1}/{args.num_train_epochs} with loss {mean_loss/(step+1)}",
-            args.global_rank)
-        # Evaluate reward_loss on the validation set.
-        print_rank_0(
-            f"***** Evaluating reward, Epoch {epoch+1}/{args.num_train_epochs} *****",
-            args.global_rank)
-        reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
-        print_rank_0(
-            f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
-            args.global_rank)
-        rm_model.tput_timer.update_epoch_count()
-
-    if args.output_dir is not None:
-        print_rank_0('saving model ...', args.global_rank)
-        rm_model = convert_lora_to_linear_layer(rm_model)
-        # print("rm_model---5 :", rm_model)
-        '''
-        rm_model---5 :  DeepSpeedEngine(
-              (module): RewardModel(
-                (v_head): Linear(in_features=768, out_features=1, bias=False)
-                (rwtranrsformer): OPTModel(
-                  (decoder): OPTDecoder(
-                    (embed_tokens): Embedding(50272, 768, padding_idx=1)
-                    (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-                    (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                    (layers): ModuleList(
-                      (0-11): 12 x OPTDecoderLayer(
-                        (self_attn): OPTAttention(
-                          (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                          (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                          (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                          (out_proj): Linear(in_features=768, out_features=768, bias=True)
-                        )
-                        (activation_fn): ReLU()
-                        (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                        (fc1): Linear(in_features=768, out_features=3072, bias=True)
-                        (fc2): Linear(in_features=3072, out_features=768, bias=True)
-                        (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                      )
-                    )
-                  )
-                )
-              )
-            )
-        '''
-
-        if args.global_rank == 0:
-            save_hf_format(rm_model, tokenizer, args)
-
-        if args.zero_stage == 3:
-            debuginfo(prj='ds-chat')
-            # for zero stage 3, each gpu only has a part of the model, so we need to save the model on each gpu by using DS-Engine
-            save_zero_three_model(rm_model,
-                                  args.global_rank,
-                                  args.output_dir,
-                                  zero_stage=args.zero_stage)
-
-
-if __name__ == "__main__":
-    main()
+            batch---C is: 
+            {'input_ids': tensor([[    2, 50118, 50118,  ...,   533,     7, 28616],
+                ...,
+                [    2, 50118, 50118,  ...,  1328,     5,   183]]), 
+            'attention_mask': tensor([[1, 1, 1,  ..., 1, 1, 1],
+            ...
+                [1, 1, 1,  ..., 1, 1, 1]])}
+            '''			

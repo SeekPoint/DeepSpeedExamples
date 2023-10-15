@@ -4,6 +4,9 @@ applications/DeepSpeed-Chat/training/step1_supervised_finetuning/data_files/
 *.py[cod]
 *$py.class
 
+*.pt
+output/
+
 .idea/
 training/cifar/data/
 training/gan/runs/
@@ -45,7 +48,7 @@ MANIFEST
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
-
+training/HelloDeepSpeed/print-log.txt
 # Unit test / coverage reports
 htmlcov/
 .tox/

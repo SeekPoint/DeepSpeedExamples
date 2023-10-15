@@ -1,0 +1,48 @@
+{
+  "train_batch_size": 16,
+  "steps_per_print": 2000,
+  "optimizer": { 定义优化器的类型和参数
+    "type": "Adam",
+    "params": {
+      "lr": 0.001, 学习率决定了参数更新的速度，学习率过大可能会导致模型无法收敛，过小则可能导致训练过程过慢。
+      "betas": [ 分别控制梯度的指数移动平均和平方梯度的指数移动平均
+        0.8,
+        0.999
+      ],
+      "eps": 1e-8, 用于防止除0错误
+      "weight_decay": 3e-7, 权重衰减项，也叫正则化项，用于防止模型过拟合
+    }
+  },
+  "scheduler": { 定义学习率调度器的类型和参数,
+    热身学习率，即在训练初期使用较低的学习率，经过一定的训练步骤后，学习率逐渐提升至预设的最大学习率。
+    这样做的目的是为了在训练初期避免参数更新过快导致的不稳定。
+    "type": "WarmupLR",
+    "params": {
+      "warmup_min_lr": 0,  训练开始时的学习率
+      "warmup_max_lr": 0.001, 热身阶段结束时的学习率
+      "warmup_num_steps": 1000, 热身阶段持续的步数
+    }
+  },
+  "gradient_clipping": 1.0, 防止训练过程中出现梯度爆炸
+  "prescale_gradients": false, 是否在进行梯度计算前预先缩放
+  "fp16": {
+      "enabled": true, 开启半精度训练
+      "fp16_master_weights_and_grads": false, 不在主参数和梯度中使用半精度浮点数
+      "loss_scale": 0, 使用动态损失缩放
+      "loss_scale_window": 500,
+      "hysteresis": 2,
+      "min_loss_scale": 1,
+      "initial_scale_power": 15
+  },
+  "wall_clock_breakdown": false, 是否输出训练过程中各部分（如数据加载、前向传播、反向传播、参数更新等）的耗时
+  "zero_optimization": { 使用ZeRO（零冗余优化器）的相关参数
+      "stage": 0,
+      "allgather_partitions": true,
+      "reduce_scatter": true,
+      "allgather_bucket_size": 50000000, 数据块大小
+      "reduce_bucket_size": 50000000,
+      "overlap_comm": true, 在计算和通信之间进行重叠
+      "contiguous_gradients": true, 将梯度存储为连续的内存块
+      "cpu_offload": false, 不使用CPU进行额外的存储
+  }
+}

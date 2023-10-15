@@ -38,6 +38,7 @@ class PromptRawDataset(object):
     # local_rank（本地等级）和dataset_name（数据集名称）。
     # 在构造函数中，如果数据集名称不是'local/jsonfile'，
     # 那么会使用Hugging Face的datasets库的load_dataset函数来加载数据集。
+	'''该类是一个模板，它定义了一套统一的API和数据格式，所有新的数据集都需要按照这个模板来进行适配。'''
     def __init__(self, output_path, seed, local_rank, dataset_name):
         """
         初始化
@@ -46,15 +47,16 @@ class PromptRawDataset(object):
         :param local_rank: 当前进程序号。
         :param dataset_name: 数据集名称，后续指定所需读取的数据集时将以名称为准。
         """
-        self.output_path = output_path
-        self.seed = seed
-        self.local_rank = local_rank
+        self.output_path = output_path # 数据集存储的路径
+        self.seed = seed # 随机种子
+        self.local_rank = local_rank # 用于分布式训练中确定当前进程使用哪部分数据
         debuginfo(prj='ds-chat', info=self.__class__.__name__)
         debuginfo(prj='ds-chat', info=f'dataset_name is {dataset_name}')
 
         if not dataset_name == 'local/jsonfile':
             debuginfo(prj='ds-chat', info=" not  local/jsonfile ")
-
+            # 加载数据集
+			
             # load_dataset源自datasets库，该方法支持读取csv/json/text等多种文件格式的数据
             '''
             https://stackoverflow.com/questions/77020278/how-to-load-a-huggingface-dataset-from-local-path
@@ -157,30 +159,36 @@ class DahoasRmstaticDataset(PromptRawDataset):
 
     def __init__(self, output_path, seed, local_rank, dataset_name):
         super().__init__(output_path, seed, local_rank, dataset_name)
-        self.dataset_name = "Dahoas/rm-static"
-        self.dataset_name_clean = "Dahoas_rm_static"
+        self.dataset_name = "Dahoas/rm-static" # 数据集名称
+        self.dataset_name_clean = "Dahoas_rm_static"  # 数据集名称
         debuginfo(prj='ds-chat', info=self.__class__.__name__ + '__' + self.dataset_name_clean)
 
     def get_train_data(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__ if self else '')
+        # 返回训练数据
         return self.raw_datasets["train"]
 
     def get_eval_data(self):
+        # 返回验证数据
         return self.raw_datasets["test"]
 
     def get_prompt(self, sample):
+        # 从样本中提取prompt，也就是输入的初始提示。
         return sample['prompt']
 
     def get_chosen(self, sample):
+        # 从样本中提取chosen，可能表示由模型选中或者用户接受的回复。
         return sample['chosen']
 
     def get_rejected(self, sample):
+        # 从样本中提取rejected，可能表示被模型拒绝或者用户不接受的回复。
         return sample['rejected']
 
     def get_prompt_and_chosen(self, sample):
+        # 从样本中提取prompt和chosen，并将它们拼接在一起。
         return sample['prompt'] + sample['chosen']
 
     def get_prompt_and_rejected(self, sample):
+        # 从样本中提取prompt和rejected，并将它们拼接在一起。
         return sample['prompt'] + sample['rejected']
 
 
