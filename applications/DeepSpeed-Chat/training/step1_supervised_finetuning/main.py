@@ -658,7 +658,7 @@ def main():
             args.global_rank)
 
         # 将模型设置为训练模式。
-		model.train()  
+        model.train()
 		
         # 对于训练数据集中的每一个batch。
         for step, batch in enumerate(train_dataloader):  

@@ -38,7 +38,7 @@ class PromptRawDataset(object):
     # local_rank（本地等级）和dataset_name（数据集名称）。
     # 在构造函数中，如果数据集名称不是'local/jsonfile'，
     # 那么会使用Hugging Face的datasets库的load_dataset函数来加载数据集。
-	'''该类是一个模板，它定义了一套统一的API和数据格式，所有新的数据集都需要按照这个模板来进行适配。'''
+    # 该类是一个模板，它定义了一套统一的API和数据格式，所有新的数据集都需要按照这个模板来进行适配。
     def __init__(self, output_path, seed, local_rank, dataset_name):
         """
         初始化

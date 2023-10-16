@@ -56,9 +56,11 @@ DeepSpeed-Chat强化学习策略
 https://zhuanlan.zhihu.com/p/643643325
 DeepSpeed-Chat全流程训练实战
 
-
 https://zhuanlan.zhihu.com/p/656635899
 HFRL代码解析   ==TBD，借鉴改进PPO
+
+https://zhuanlan.zhihu.com/p/658535987
+HFRL代码解析-LLaMA-Efficient-Tuning   ==TBD，借鉴改进PPO
 
 https://zhuanlan.zhihu.com/p/640758965
 深度学习训练方法实操(DP/DDP/DeepSpeed)
@@ -81,11 +83,16 @@ https://zhuanlan.zhihu.com/p/646186242
 通过DeepSpeed框架结合Peft对chatglm进行微调代码解析
 
 https://zhuanlan.zhihu.com/p/639002087
-DeepSpeed ZeRO++：降低4倍网络通信，显著提高大模型及类ChatGPT模型训练效率
+DeepSpeed ZeRO++：降低4倍网络通信，显著提高大模型及类ChatGPT模型训练效率  ===记住结论即可！！
 
 https://zhuanlan.zhihu.com/p/636640427
 DeepSpeed Chat: 一键式RLHF训练，让你的类ChatGPT千亿大模型提速省钱15倍
 
+
+https://github.com/bobo0810/LearnDeepSpeed
+DeepSpeed训练配置 https://zhuanlan.zhihu.com/p/654925843
+DeepSpeed训练Tricks https://zhuanlan.zhihu.com/p/654923210
+内容不多
 
 https://zhuanlan.zhihu.com/p/108571246
 ZeRO+DeepSpeed:微软发布的高效大规模训练套件(含详细分布式训练流程)
@@ -95,8 +102,23 @@ july笔记！
 
 https://zhuanlan.zhihu.com/p/633593024
 Chatglm-6B+Deepspeed+PTuningv2 多卡高效微调
+
+https://blog.csdn.net/v_JULY_v/article/details/132462452
+大模型并行训练指南：通俗理解Megatron-DeepSpeed之模型并行与数据并行
+
+https://blog.csdn.net/v_JULY_v/article/details/130090649
+从零实现Transformer的简易版与强大版：从300多行到3000多行
+
 https://blog.csdn.net/v_JULY_v/article/details/129996493
-从零实现带RLHF的类ChatGPT：从TRL/ChatLLaMA/ColossalChat到DeepSpeed Chat
+详解带RLHF的类ChatGPT：从TRL、ChatLLaMA到ColossalChat、DSC
+
+从零实现带RLHF的类ChatGPT：逐行解析微软DeepSpeed Chat    ===已添加
+https://blog.csdn.net/v_JULY_v/article/details/132939877  ==和 ‘InstructGPT高效实践’ 恒很相似！
+
+https://zhuanlan.zhihu.com/p/661195130  == 基于DeepDpeed训练chatGLM2-6B  TBD！
+
+RLHF训练 DeepSpeed Chat实践(保姆式教程)
+https://zhuanlan.zhihu.com/p/658047809  ===信息少，意义不大
 
 https://zhuanlan.zhihu.com/p/650505023
 RLHF-PPO算法代码解析  ==意义不大
@@ -107,8 +129,6 @@ Deepspeed PPO代码注释  ==意义不大
 https://zhuanlan.zhihu.com/p/639927499
 DeepSpeed - 用ZeRO训练大模型原理解析  ===主要是z3的动画！
 
-从零实现带RLHF的类ChatGPT：逐行解析微软DeepSpeed Chat
-https://blog.csdn.net/v_JULY_v/article/details/132939877  ==和 ‘InstructGPT高效实践’ 恒很相似！
 
 https://zhuanlan.zhihu.com/p/642819809
 Deepspeed多卡多机ZeRo-3训练踩的坑  ==done,信息少
