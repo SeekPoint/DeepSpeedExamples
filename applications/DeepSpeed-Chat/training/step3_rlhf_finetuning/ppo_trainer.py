@@ -66,10 +66,13 @@ def get_model_norm(model):
                 'ds_id') and param.ds_status == ZeroParamStatus.NOT_AVAILABLE
 
             # 如果参数在当前进程中不可用（即ds_status为NOT_AVAILABLE），则需要收集（gather）它
+            print("####### 1- with deepspeed.zero.GatheredParameters #####################")
             with deepspeed.zero.GatheredParameters(param,
                                                    enabled=should_gather):
+                print("####### 2- with deepspeed.zero.GatheredParameters #####################")
                 # 计算参数的范数并累加到total中
                 total += float(param.float().norm())
+            print("####### 3- with deepspeed.zero.GatheredParameters #####################")
 
     return total
 
@@ -223,7 +226,7 @@ class DeepSpeedPPOTrainer():
         debuginfo(prj='ds-chat', info=self.__class__.__name__)
         # 最大答案序列长度加上给定提问的长度
         max_min_length = self.max_answer_seq_len + prompts.shape[1]
-        #print("max_min_length--2 is:", max_min_length)
+        # print("max_min_length--2 is:", max_min_length)
         # max_min_length--2 is: 512
 
         ## 首先inference获取对应的模型输出
@@ -249,23 +252,23 @@ class DeepSpeedPPOTrainer():
         # NOTE: this will causes each GPU has different number of examples
 		# 批处理的大小
         batch_size = seq.shape[0]
-        #print("batch_size--2 is:", batch_size)
+        # print("batch_size--2 is:", batch_size)
 
         #prompt长度：实际上就是max_prompt_len
 		# 提问的长度
         prompt_length = prompts.shape[1]
         self.prompt_length = prompt_length
-        #print("prompt_length--2 is:", prompt_length)
+        # print("prompt_length--2 is:", prompt_length)
 
         #取出answer部分，此时还含有pad token
 		# 去掉了输入的提问部分，只保留了模型生成的答案部分。
         ans = seq[:, prompt_length:]
-        #print("ans--2 is:", ans)
+        # print("ans--2 is:", ans)
 
         #统计answer的有效长度（去掉pad token后的长度）
 		# 每个答案的有效长度，即非填充部分的长度。
         valid_ans_len = (ans != self.tokenizer.pad_token_id).sum(dim=-1)
-        #print("valid_ans_len--2 is:", valid_ans_len)
+        # print("valid_ans_len--2 is:", valid_ans_len)
 
 
         # print("T ans--2 :", infoTensor(ans))  #only ph3 x1
@@ -622,7 +625,7 @@ class DeepSpeedPPOTrainer():
         batch_size = log_probs.shape[0]
         # print("batch_size is:", batch_size)
         # print("reward_clip is:", reward_clip)
-        #print("T reward_clip--A:", infoTensor(reward_clip))
+        # print("T reward_clip--A:", infoTensor(reward_clip))
         '''
         T reward_clip--A: _Size([4])_float16_cuda:0_
         
@@ -649,8 +652,8 @@ class DeepSpeedPPOTrainer():
             rewards[j, start:ends[j]][-1] += reward_clip[j]
 
         """返回KL rewards"""
-        #print("return rewards is:", rewards)
-        #print("T reward_clip--B:", infoTensor(rewards))
+        # print("return rewards is:", rewards)
+        # print("T reward_clip--B:", infoTensor(rewards))
         '''
         
         T reward_clip--B: _Size([4, 511])_float16_cuda:1_

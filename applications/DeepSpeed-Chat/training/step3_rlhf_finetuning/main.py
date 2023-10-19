@@ -50,10 +50,11 @@ writer = None
 
 def parse_args():
     global writer
-    # 基于RLHF(人工强化学习)
+
     parser = argparse.ArgumentParser(
         description="(Step 3) RLHF training arguments")
-    # 1. 数据路径
+
+    # 1. 训练数据集的路径
     parser.add_argument(
         '--data_path',
         nargs='*',
@@ -61,7 +62,8 @@ def parse_args():
         help=
         'Path to the training dataset. Accepted format: 1) a single data path, 2) multiple datasets in the form: dataset1-path dataset2-path ...'
     )
-    # 2. 每个step阶段，数据分割比例
+
+    # 2. 数据分割比例
     parser.add_argument(
         '--data_split',
         type=str,
@@ -70,7 +72,8 @@ def parse_args():
         'Comma-separated list of proportions for training phase 1, 2, and 3 data. For example the split `2,4,4` '
         'will use 60% of data for phase 1, 20% for phase 2 and 20% for phase 3.'
     )
-    # 3. 数据保存路径
+
+    # 3. 数据相关文件的存储路径
     parser.add_argument(
         '--data_output_path',
         type=str,
@@ -78,12 +81,14 @@ def parse_args():
         help=
         'Where to store the data-related files such as shuffle index. This needs to be on a local storage of a node (not on a shared storage)'
     )
-    # 4. 无监督数据集
+	
+    # 4. 无监督数据集  ===TBD找例子！
     parser.add_argument(
         "--unsupervised_dataset_name",
         type=str,
         default=None,
         help="The name of the dataset to use (via the datasets library).")
+		
     # 5. 无监督数据集配置名称
     parser.add_argument(
         "--unsupervised_dataset_config_name",
@@ -92,11 +97,13 @@ def parse_args():
         help=
         "The configuration name of the dataset to use (via the datasets library)."
     )
-    # 6. 用于调整训练过程中的无监督学习部分的权重
+	
+    # 6.调整训练过程中的无监督学习部分的权重
     parser.add_argument("--unsup_coef",
                         type=float,
                         default=27.8,
                         help='''gamma in Equation 2 from InstructGPT paper''')
+						
     # 7. actor模型名称或路径
     parser.add_argument(
         "--actor_model_name_or_path",
@@ -104,6 +111,7 @@ def parse_args():
         help=
         "Path to pretrained model or model identifier from huggingface.co/models.",
         required=True)
+		
     # 8. critic模型名称或路径
     parser.add_argument(
         "--critic_model_name_or_path",
@@ -111,6 +119,7 @@ def parse_args():
         help=
         "Path to pretrained model or model identifier from huggingface.co/models.",
         required=True)
+		
     # 9. 起始位padding的数量
     parser.add_argument(
         "--num_padding_at_beginning",
@@ -119,6 +128,7 @@ def parse_args():
         help=
         "OPT model has a fixed number (1) of padding tokens at the beginning of the input. We did not see this in other models but keep it as an option for now."
     )
+	
     # 10. train batch size
     parser.add_argument(
         "--per_device_train_batch_size",
@@ -127,6 +137,7 @@ def parse_args():
         help=
         "Batch size (per device) for the training dataloader and generation purpose."
     )
+	
     # 11. min train batch size
     parser.add_argument(
         "--per_device_mini_train_batch_size",
@@ -135,28 +146,32 @@ def parse_args():
         help=
         "Mini Batch size (per device) for the training dataloader and training purpose."
     )
-    # 12. 控制了进入训练模式前要生成的批次数
+	
+    # 12. yknote？？？就是batch size
     parser.add_argument("--generation_batch_numbers",
                         type=int,
                         default=1,
                         help="Generate x batches to go to training mode.")
+						
     # 13. 控制对生成的数据运行多少个PPO（Proximal Policy Optimization，近端策略优化）训练周期
-    # PPO是一种强化学习算法，用于优化模型的策略
     parser.add_argument(
         "--ppo_epochs",
         type=int,
         default=1,
         help="For generated data, how many ppo training epochs to run.")
+		
     # 14. 最大prompt序列长度
     parser.add_argument("--max_prompt_seq_len",
                         type=int,
                         default=256,
                         help="The maximum sequence length.")
+						
     # 15. 最大answer序列长度
     parser.add_argument("--max_answer_seq_len",
                         type=int,
                         default=256,
                         help="The maximum sequence length.")
+						
     # 16. actor学习率
     parser.add_argument(
         "--actor_learning_rate",
@@ -164,6 +179,7 @@ def parse_args():
         default=9.65e-6,
         help="Initial learning rate (after the potential warmup period) to use."
     )
+	
     # 17. critic学习率
     parser.add_argument(
         "--critic_learning_rate",
@@ -171,11 +187,13 @@ def parse_args():
         default=5e-6,
         help="Initial learning rate (after the potential warmup period) to use."
     )
+
     # 18. actor权重衰减
     parser.add_argument("--actor_weight_decay",
                         type=float,
                         default=0.,
                         help="Weight decay to use.")
+
     # 19. critic权重衰减
     parser.add_argument("--critic_weight_decay",
                         type=float,
@@ -186,6 +204,7 @@ def parse_args():
                         type=int,
                         default=1,
                         help="Total number of training epochs to perform.")
+
     # 21. 学习率调度器类型
     parser.add_argument(
         "--lr_scheduler_type",
@@ -197,28 +216,33 @@ def parse_args():
             "constant", "constant_with_warmup"
         ],
     )
+
     # 22. 梯度累计步骤数
     parser.add_argument(
         "--gradient_accumulation_steps",
         type=int,
         default=1,
         help="Number of steps for the warmup in the lr scheduler.")
+
     # 23. warmup步骤数
     parser.add_argument(
         "--num_warmup_steps",
         type=int,
         default=100,
         help="Number of steps for the warmup in the lr scheduler.")
+
     # 24. 输出路径
     parser.add_argument("--output_dir",
                         type=str,
                         default=None,
                         help="Where to store the model.")
+
     # 25. 随机种子
     parser.add_argument("--seed",
                         type=int,
                         default=None,
                         help="A seed for reproducible training.")
+
     # 26. 预处理线程数
     parser.add_argument(
         "--preprocessing_num_workers",
@@ -226,6 +250,7 @@ def parse_args():
         default=None,
         help="The number of processes to use for the preprocessing.",
     )
+
     # 27.当前的进程在所有分布式进程中的位置（排名）
     # 这对于在多GPU环境下进行分布式训练时来说是非常重要的，
     # 如果--local_rank的值为-1，那么程序会认为当前环境不是分布式训练环境，将执行单机训练代码。
@@ -234,15 +259,14 @@ def parse_args():
                         default=-1,
                         help="local_rank for distributed training on gpus")
 
-    # DeepSpeed
     # 28.是否开启DeepSpeed的混合引擎
-    # 这个引擎可以优化模型在inference和training两种情况下的性能
     parser.add_argument(
         "--enable_hybrid_engine",
         action='store_true',
         help=
         "Enable hybrid engine for actor model to optimize both inference and training through DeepSpeed."
     )
+
     # 29.在生成过程中取消锁定（unpin）actor（生成模型）的参数
     # 开启此选项可能会使生成速度变慢，但可以减少内存的使用。
     parser.add_argument(
@@ -251,16 +275,19 @@ def parse_args():
         help=
         "Unpin actor's parameters during generation. This makes generation slower but requires less memory."
     )
+
     # 30.释放用于推理的内存缓存
     # 开启此选项可能会使生成准备阶段的速度变慢，但可能会通过使用更大的batch size来提高端到端的吞吐量。
     parser.add_argument(
         "--release_inference_cache",
         action='store_true',
         help=
-        "Release the memory cache used for inference. This makes generation preparation slower but might increase e2e throughput by using larger batch size."
+        "Release the memory cache used for inference. \
+        This makes generation preparation slower but might increase e2e throughput by using larger batch size."
     )
+
     # 31.用于推理优化的张量并行度
-    # 如果命令行中指定了该参数，那么就会使用相应的值作为并行度，使用此功能时需要启用混合引擎。
+    # 如果命令行中指定了该参数，那么就会使用相应的值作为并行度，使用此功能时必须启用混合引擎。
     parser.add_argument(
         "--inference_tp_size",
         type=int,
@@ -268,8 +295,9 @@ def parse_args():
         help=
         "Tensor-parallelism degree used for the inference-optimization. Please note hybrid-engine need to be enabled when using this feature."
     )
+
     # 32.用于在混合引擎内进行张量并行（TP）划分的粒度
-    # 如果命令行中指定了该参数，那么就会使用相应的值作为划分粒度，使用此功能时需要启用混合引擎。
+    # 如果命令行中指定了该参数，那么就会使用相应的值作为划分粒度，使用此功能时必须启用混合引擎。
     parser.add_argument(
         "--tp_gather_partition_size",
         type=int,
@@ -277,41 +305,47 @@ def parse_args():
         help=
         "Granularity to bring in layers for TP sharding inside the hybrid engine. Please note hybrid-engine and tp_inference_size > 1 need to be true when using this feature."
     )
+
     # 33.启用ZeRO Offload 技术
-    # ZeRO Offload是一种在深度学习训练中用于节省GPU内存的技术，
     # 它将部分模型参数和优化器状态在CPU和GPU之间交换，以降低GPU内存的占用。
     parser.add_argument('--offload',
                         action='store_true',
                         help='Enable ZeRO Offload techniques.')
+
     # 34.为reference模型启用ZeRO Offload技术
     parser.add_argument(
         '--offload_reference_model',
         action='store_true',
         help='Enable ZeRO Offload techniques for reference model')
+
     # 35. actor模型: zero优化阶段
     parser.add_argument(
         '--actor_zero_stage',
         type=int,
         default=0,
         help='ZeRO optimization stage for Actor model (and clones).')
+
     # 36.critic模型: zero优化阶段
     parser.add_argument(
         '--critic_zero_stage',
         type=int,
         default=0,
         help='ZeRO optimization stage for Critic model (and reward).')
-    # 37.启用HuggingFace梯度检查点（gradient checkpointing）技术用于Actor模型
+
+    # 37.启用梯度检查点（gradient checkpointing）技术用于Actor模型
     # 梯度检查点技术是一种内存优化策略，它通过减少存储在训练过程中的激活值来节省内存，
     # 但这会增加计算的复杂性，因为需要重新计算这些激活值。
     parser.add_argument(
         '--actor_gradient_checkpointing',
         action='store_true',
         help='Enable HF gradient checkpointing for Actor model.')
-    # 38.与actor模型作用一样
+
+    # 38.启用梯度检查点（gradient checkpointing）技术用于Critic模型
     parser.add_argument(
         '--critic_gradient_checkpointing',
         action='store_true',
         help='Enable HF gradient checkpointing for Critic model.')
+
     # 39.用于禁用Actor模型的dropout
     # Dropout是一种正则化技术，它通过随机关闭一部分神经元来防止模型过拟合。
     parser.add_argument('--disable_actor_dropout',
@@ -323,6 +357,7 @@ def parse_args():
                         help='Disable the dropout of the critical model.')
 
     ## LoRA for efficient training setting
+
     # 41.设置Actor模型的LoRA（Low Rank Adaptation）维度
     # LoRA是一种新的训练技术，它可以有效地适应新任务，同时保持预训练模型的参数不变。
     # LoRA通过在原有的模型参数上添加一组低秩参数来实现这个目标
@@ -330,17 +365,20 @@ def parse_args():
                         type=int,
                         default=0,
                         help="If > 0, use LoRA for efficient training.")
+
     # 42.指定在Actor模型中使用LoRA的模块名称
     parser.add_argument("--actor_lora_module_name",
                         type=str,
                         default="decoder.layers.",
                         help="The scope of LoRA.")
-    # 43.与actor一样
+
+    # 43.41.设置Critic模型的LoRA（Low Rank Adaptation）维度
     parser.add_argument("--critic_lora_dim",
                         type=int,
                         default=0,
                         help="If > 0, use LoRA for efficient training.")
-    # 44.与actor一样
+
+    # 44.指定在Critic模型中使用LoRA的模块名称
     parser.add_argument("--critic_lora_module_name",
                         type=str,
                         default="decoder.layers.",
@@ -349,37 +387,44 @@ def parse_args():
     parser.add_argument('--only_optimize_lora',
                         action='store_true',
                         help='Only optimize the LoRA parameters.')
+
     ## Make EMA as an optional feature
+
     # 46.是否为模型使用指数移动平均（EMA）检查点
     # 指数移动平均（EMA）是一种常用的技术，用于平滑时间序列数据，特别是在处理噪音数据时。
     # EMA可以用于维护模型的参数，它会记录模型在训练过程中参数的移动平均，可以稳定训练过程并可能提高模型的泛化能力。
     parser.add_argument('--enable_ema',
                         action='store_true',
                         help='Enable EMA checkpoint for the model.')
+
     ## Tensorboard logging
     parser.add_argument('--enable_tensorboard',
                         action='store_true',
                         help='Enable tensorboard logging')
+
     parser.add_argument('--tensorboard_path',
                         type=str,
                         default="step3_tensorboard")
+
     ## Actor/critic model overflow alignment
     parser.add_argument(
         '--align_overflow',
         action='store_true',
         help='Align loss scale overflow between actor and critic')
+
     ## Print actor model answers during training
     parser.add_argument('--print_answers',
                         action='store_true',
                         help='Print prompt and answers during training')
 
     parser = deepspeed.add_config_arguments(parser)
+    print("ph3 parser is:", parser)
+
     args = parser.parse_args()
+    print("ph3 args is:", args)
 
     if args.enable_tensorboard:
-        print(
-            f"Tensorboard logs going to: {args.tensorboard_path}/step3_tensorboard_logs"
-        )
+        print(f"Tensorboard logs going to: {args.tensorboard_path}/step3_tensorboard_logs")
         writer = SummaryWriter(
             f"{args.tensorboard_path}/step3_tensorboard_logs")
 
@@ -399,9 +444,8 @@ def parse_args():
     if args.inference_tp_size > 1:
         # 要使用张量并行技术，必须在模型的分布式训练中启用ZeRO第三阶段
         # 第三阶段（ZeRO-3）可以同时减少GPU上的模型状态、优化器状态和梯度的存储量，从而允许训练更大的模型。
-        assert (
-            args.actor_zero_stage == 3
-        ), "Zero stage 3 must be used to do Tensor sharding in the hybrid engine"
+        assert (args.actor_zero_stage == 3), \
+            "Zero stage 3 must be used to do Tensor sharding in the hybrid engine"
 
     return args
 
@@ -476,7 +520,7 @@ def create_datasets(args, tokenizer, train_phase=3):
         if unsupervised_training_enabled:
             unsupervised_train_sampler = DistributedSampler(unsupervised_train_dataset)
 
-    #print('prompt_train_sampler is', prompt_train_sampler)
+    # print('prompt_train_sampler is', prompt_train_sampler)
     #prompt_train_sampler is <torch.utils.data.distributed.DistributedSampler object at 0x7fda5203deb0>
 
     """
@@ -520,7 +564,7 @@ def create_datasets(args, tokenizer, train_phase=3):
     # prompt_train_dataloader is <torch.utils.data.dataloader.DataLoader object at 0x7fda5203dbb0>
 
     # unsupervised_train_dataloader is [None, None, None, None, None, None, None, None, None, ...]
-    #print('unsupervised_train_dataloader is', unsupervised_train_dataloader)
+    # print('unsupervised_train_dataloader is', unsupervised_train_dataloader)
     print('len of unsupervised_train_dataloader is', len(unsupervised_train_dataloader))
 
     print('num_update_steps_per_epoch is', num_update_steps_per_epoch)
@@ -531,33 +575,45 @@ def create_datasets(args, tokenizer, train_phase=3):
 
 def main():
     args = parse_args()
-    # 不进行分布式训练
+
+    # 非分布式训练
     if args.local_rank == -1:
         device = torch.device("cuda")
     else:
         # 进行分布式训练
         # local_rank在这里表示当前进程在分布式训练中使用的GPU的ID
         torch.cuda.set_device(args.local_rank)
+
         device = torch.device("cuda", args.local_rank)
+
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # 初始化分布式环境
+        print("#######ph3 deepspeed.init_distributed() ################################################")
         deepspeed.init_distributed()
+        print("#######ph3 deepspeed.init_distributed() ################################################")
 
     # 在分布式训练环境中获取当前进程的全局唯一标识符，即全局进程ID。
     # torch.distributed.get_rank()返回的是一个整数，这个整数在整个分布式训练环境中是唯一的，用于表示当前进程。
     # 对于非分布式训练环境，这个函数默认返回0。
     args.global_rank = torch.distributed.get_rank()
+    print("args.global_rank is:", args.global_rank )
 
     unsupervised_training_enabled = args.unsupervised_dataset_name and args.unsupervised_dataset_config_name
+    print("unsupervised_training_enabled is:", unsupervised_training_enabled)
+
     # 如果启用无监督训练
     if unsupervised_training_enabled:
+        debuginfo(prj='ds-chat')
         # if we enable unsupervised training, we need to double the batch size for actor model
         # actor模型的梯度积累步数将设置为原始梯度积累步数的两倍
         # 这是因为在无监督训练中，需要处理更多的数据（即，每个批次的数据量将加倍），因此需要更多的梯度积累步数来平衡更新。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps * 2
     else:
+        debuginfo(prj='ds-chat')
         # 如果未启用无监督训练，actor模型的梯度积累步数将与原始梯度积累步数相同。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps
+
+    print("args.gradient_accumulation_steps_actor is:", args.gradient_accumulation_steps_actor)
 
     # If passed along, set the training seed now.
     # 设置训练的随机种子
@@ -572,17 +628,21 @@ def main():
     # 创建了一个基于actor模型的分词器
     tokenizer = load_hf_tokenizer(args.actor_model_name_or_path,
                                   fast_tokenizer=True)
+    print("ph3 tokenizer -1 is:", tokenizer)
 
-    # 设置tokenizer的pad_token为eos_token，这样在进行序列填充时，超出原序列长度的部分就会被填充为eos_token。
+    # 超出原序列长度的部分就会被填充为eos_token。
     tokenizer.pad_token = tokenizer.eos_token
 
     # make sure tokenizer is right pad in our logic
     # 填充方式为右填充
     tokenizer.padding_side = 'right'
 
+    print("ph3 tokenizer -2 is:", tokenizer)
+
     # 创建数据集，并获取训练数据dataloader以及总的迭代次数
     prompt_train_dataloader, unsupervised_train_dataloader, num_total_iters = create_datasets(
         args=args, tokenizer=tokenizer, train_phase=3)
+
 
     # RLHF engine is responsible for creating models,
     # loading checkpoints, ds-initialize models/optims/lr-schedulers
@@ -603,6 +663,7 @@ def main():
 
     # print("rlhf_engine is:", rlhf_engine)
     # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
+
     # 该字段的值为一个空字符串，用于表示一个对话的结束
     args.end_of_conversation_token = "<|endoftext|>"
 
@@ -611,6 +672,7 @@ def main():
     # ② 没有启用无监督 : 一个更通用的PPO训练器
     ppo_trainer = DeepSpeedPPOTrainerUnsupervised if unsupervised_training_enabled else DeepSpeedPPOTrainer
     trainer = ppo_trainer(rlhf_engine, args)
+
 
     # print("ppo_trainer is:", ppo_trainer)
     # print("trainer is:", trainer)
@@ -636,6 +698,7 @@ def main():
         print_rank_0(
             f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Generation Batches {min(len(prompt_train_dataloader), len(unsupervised_train_dataloader))}",
             args.global_rank)
+
         # 遍历每一个Batch
         for step, (batch_prompt, batch_unsupervised) in enumerate(
                 zip(prompt_train_dataloader, unsupervised_train_dataloader)):
@@ -651,7 +714,7 @@ def main():
                     [[None] * args.per_device_train_batch_size])
             # print("len of unsup_dataset", len(unsup_dataset))
             #len of unsup_dataset 1
-            #print("unsup_dataset", unsup_dataset)
+            # print("unsup_dataset", unsup_dataset)
             # unsup_dataset [[[None, None, None, None]]]
 
 
@@ -686,10 +749,8 @@ def main():
             '''
 
             exp_dataset = exp_mini_dataset.add(out)
-            #print("exp_dataset is:", exp_dataset)
+            # print("exp_dataset is:", exp_dataset)
             # print("len of exp_dataset", len(exp_dataset))
-            # len of exp_dataset
-
 
             # print("T exp_dataset[0]['prompts']:", infoTensor(exp_dataset[0]['prompts']))
             # print("T exp_dataset[0]['logprobs']:", infoTensor(exp_dataset[0]['logprobs']))
@@ -713,6 +774,7 @@ def main():
                 average_reward = 0
 
                 if args.actor_gradient_checkpointing:
+                    debuginfo(prj='ds-chat')
                     rlhf_engine.actor.gradient_checkpointing_enable()
 
                 '''
@@ -802,15 +864,14 @@ def main():
                 print_rank_0(
                     f'epoch: {epoch}|step: {step}|ppo_ep: {ppo_ep+1}|act_loss: {actor_loss_sum/inner_iter}|cri_loss: {critic_loss_sum/inner_iter}|unsuper_loss: {unsup_loss_sum/inner_iter}',
                     args.global_rank)
+
                 average_reward = get_all_reduce_mean(average_reward).item()
-                print_rank_0(
-                    f"average reward score: {average_reward/inner_iter}",
-                    args.global_rank)
-                print_rank_0(
-                    "-------------------------------------------------------------------------------------",
-                    args.global_rank)
-                if args.enable_tensorboard and torch.distributed.get_rank(
-                ) == 0:
+
+                print_rank_0(f"average reward score: {average_reward/inner_iter}",args.global_rank)
+                print_rank_0("--------------------------------------------------------",args.global_rank)
+
+                if args.enable_tensorboard and torch.distributed.get_rank() == 0:
+                    debuginfo(prj='ds-chat')
                     writer.add_scalar('reward',
                                       average_reward / inner_iter,
                                       global_step=step)
@@ -829,13 +890,22 @@ def main():
                     writer.flush()
 
             if args.actor_gradient_checkpointing:
+                debuginfo(prj='ds-chat')
                 rlhf_engine.actor.gradient_checkpointing_disable()
 
     if args.output_dir is not None:
         print_rank_0('saving model ...')
+
+        print("ph3 rlhf_engine.actor model:", rlhf_engine.actor)
         rlhf_engine.actor = convert_lora_to_linear_layer(rlhf_engine.actor)
+        print("ph3 actor convert_lora_to_linear_layer model:", rlhf_engine.actor)
+
+        print("ph3 rlhf_engine.critic model:", rlhf_engine.critic)
         rlhf_engine.critic = convert_lora_to_linear_layer(rlhf_engine.critic)
+        print("ph3 critic convert_lora_to_linear_layer model:", rlhf_engine.critic)
+
         if args.enable_ema:
+            debuginfo(prj='ds-chat')
             rlhf_engine.actor_ema = convert_lora_to_linear_layer(
                 rlhf_engine.actor_ema)
 
@@ -845,11 +915,14 @@ def main():
                            tokenizer,
                            args,
                            sub_folder='actor')
+
             save_hf_format(rlhf_engine.critic,
                            tokenizer,
                            args,
                            sub_folder='critic')
+
             if args.enable_ema:
+                debuginfo(prj='ds-chat')
                 save_hf_format(rlhf_engine.actor_ema,
                                tokenizer,
                                args,
@@ -863,6 +936,7 @@ def main():
                                       args.output_dir, 'actor'),
                                   zero_stage=args.actor_zero_stage)
             if args.enable_ema:
+                debuginfo(prj='ds-chat')
                 save_zero_three_model(rlhf_engine.actor_ema,
                                       global_rank=args.global_rank,
                                       save_dir=os.path.join(

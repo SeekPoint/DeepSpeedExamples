@@ -218,7 +218,7 @@ def get_raw_dataset_split_index(local_rank, output_path, dataset_name, seed,
 					
     # 加载刚刚保存的索引文件，转化为Python列表，并返回。
     index = np.load(index_file_name, allow_pickle=True)
-    #print("index is:", index)
+    # print("index is:", index)
     print("len of index is:", len(index))
 
     # 将索引数组转换为列表并返回。
@@ -334,7 +334,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             # 具体样例可参照“数据格式基本概念”中的样例
             chosen_sentence = raw_dataset.get_prompt_and_chosen(tmp_data)  # the accept response
 
-            #print("chosen_sentence--ph1:", chosen_sentence)
+            # print("chosen_sentence--ph1:", chosen_sentence)
             # 如果被选择的句子不为空，就给这个句子加上会话结束的标记
             # 如果接受的对话不为空，则将其分词并添加到chosen_dataset中。
             if chosen_sentence is not None:
@@ -358,14 +358,14 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 # 存储tokenize结果至列表chosen_dataset
 				# 将这个分词后的结果加入到被选择的数据集列表中
                 chosen_dataset.append(chosen_token)
-                #print("chosen_token--ph1:", chosen_token)
+                # print("chosen_token--ph1:", chosen_token)
 
             # print("T chosen_token['input_ids']-1:", infoTensor(chosen_token['input_ids']))
             # print("T chosen_token['attention_mask']-1:", infoTensor(chosen_token['attention_mask']))
             # T chosen_token['input_ids']-1: _Size([128])_int64_cpu_        #only ph1
             # T chosen_token['attention_mask']-1: _Size([128])_int64_cpu_   #only ph1
 
-        #print("chosen_dataset--ph1:", chosen_dataset) ===就是 chosen_token 的 list
+        # print("chosen_dataset--ph1:", chosen_dataset) ===就是 chosen_token 的 list
         print("len of chosen_dataset--ph1:", len(chosen_dataset))
 
         # ● 此时，一条样本可以表示为prompt+chosen，
@@ -444,7 +444,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             T chosen_token['attention_mask']--ph2: _Size([1, 128])_int64_cpu_
             '''
 
-        #print("reject_dataset--ph2:", reject_dataset)   就是 reject_token 的 list
+        # print("reject_dataset--ph2:", reject_dataset)   就是 reject_token 的 list
         print("len of reject_dataset--ph2:", len(reject_dataset))
 
         # print("chosen_dataset--ph2:", chosen_dataset)  就是 chosen_token 的 list
@@ -467,7 +467,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
             # 直接获取prompt
             # 具体样例可参照“数据格式基本概念”中的样例
             prompt = raw_dataset.get_prompt(tmp_data)
-            #print("prompt--ph3:", prompt)
+            # print("prompt--ph3:", prompt)
 
             if prompt is not None:
                 # 使用分词器对提示信息进行处理
@@ -499,7 +499,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 # 将处理后的提示信息字典加入到提示信息数据集列表prompt_dataset中
                 prompt_dataset.append(prompt_token)
 
-                #print("prompt_token--ph3:", prompt_token)
+                # print("prompt_token--ph3:", prompt_token)
 
                 # print("T prompt_token['input_ids']--H:", infoTensor(prompt_token['input_ids']))
                 # print("T prompt_token['attention_mask']--H:", infoTensor(prompt_token['attention_mask']))
@@ -509,7 +509,7 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                 T prompt_token['attention_mask']--H: _Size([134])_int64_cpu_
                 '''
 
-        #print("prompt_dataset--ph3:", prompt_dataset) 就是prompt_token的list
+        # print("prompt_dataset--ph3:", prompt_dataset) 就是prompt_token的list
         print("len of prompt_dataset--ph3:", len(prompt_dataset))
 
     # 返回PromptDataset实例，该实例相当于torch中的Dataset，可供DataLoader调用
@@ -536,8 +536,8 @@ def create_dataset(local_rank, dataset_name, data_split, output_path,
 								  
     # 2. 从原始数据集中获取训练数据								  
     train_dataset = raw_dataset.get_train_data()
-    #print("raw_dataset is:", raw_dataset)
-    #print("train_dataset---A is:", train_dataset)
+    # print("raw_dataset is:", raw_dataset)
+    # print("train_dataset---A is:", train_dataset)
     '''
         
     raw_dataset is: <utils.data.raw_datasets.DahoasRmstaticDataset object at 0x7fe83804ed00>
@@ -858,7 +858,7 @@ class DataCollatorReward:
                                             dim=0)
 
         """batch的具体样式可见下个代码块"""
-        #print("batch--D:", batch)
+        # print("batch--D:", batch)
         '''
         batch--D: {
             'input_ids': tensor([[    2, 50118, 50118,  ...,     2,     2,     2],

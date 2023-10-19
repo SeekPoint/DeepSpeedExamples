@@ -3,9 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # DeepSpeed Team
-# 首先，它导入了Python的标准库，如argparse（用于解析命令行参数），os和math。
-# 然后，它导入了PyTorch库，这是一个用于深度学习的开源库，
-# 同时也导入了一些PyTorch的辅助模块，如DataLoader（用于加载数据）、
+
 # RandomSampler和SequentialSampler（用于数据抽样）以及DistributedSampler（用于在分布式设置中进行数据抽样）。
 import argparse
 import os
@@ -18,8 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from pydebug import debuginfo, infoTensor
 
-# 接下来，它导入了Hugging Face的transformers库的一些模块，
-# 包括用于因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），
+# 因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），
 # 默认的数据整理函数（default_data_collator）和获取优化器调度器的函数（get_scheduler）。
 from transformers import (
     AutoModelForCausalLM,
@@ -28,19 +25,19 @@ from transformers import (
     get_scheduler,
 )
 
-# 导入了deepspeed库，这是一个为大规模模型训练优化的库。
-# 它也导入了deepspeed库中的一些模块，包括优化器类（DeepSpeedCPUAdam和FusedAdam）
 import deepspeed
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 
-# 之后，它将当前脚本的父目录添加到系统路径中，以便可以从该目录下的utils目录导入一些自定义函数和模块。
+# 将当前脚本的父目录添加到系统路径中，以便可以从该目录下的utils目录导入一些自定义函数和模块。
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
-# 最后，它从utils目录中导入了一些自定义模块和函数，
+# 从utils目录中导入了一些自定义模块和函数，
 # 包括数据处理函数（create_prompt_dataset），打印和设备转换函数（print_rank_0和to_device），
 # 模型保存函数（save_hf_format），随机种子设置函数（set_random_seed），求平均函数（get_all_reduce_mean），
-# 获取优化器参数组的函数（get_optimizer_grouped_parameters），保存和加载模型的函数（save_zero_three_model和load_hf_tokenizer），
-# 以及创建模型和处理模型的函数（create_hf_model）。这些函数在脚本中的后续部分都将被使用。
+# 获取优化器参数组的函数（get_optimizer_grouped_parameters），
+# 保存和加载模型的函数（save_zero_three_model和load_hf_tokenizer），
+# 以及创建模型和处理模型的函数（create_hf_model）。
+
 
 
 # print("1===", os.path.pardir)
@@ -60,10 +57,12 @@ from utils.model.model_utils import create_hf_model
 
 
 def parse_args():
-    # 创建一个argparse的解析器对象，这个对象可以添加命令行参数和处理它们。description参数提供了一个对程序的简单描述。
+    # 创建一个argparse的解析器对象，这个对象可以添加命令行参数和处理它们。
+    # description参数提供了一个对程序的简单描述。
     parser = argparse.ArgumentParser(
         description=
         "Finetune a transformers model on a causal language modeling task")
+
     # 1 训练数据集的路径
     parser.add_argument('--data_path',
                         nargs='*',
@@ -71,7 +70,8 @@ def parse_args():
                         help='Path to the training dataset. Accepted format:'
                         '1) a single data path, 2) multiple datasets in the'
                         'form: dataset1-path dataset2-path ...')
-    # 2 phase1/2/3数据的划分比例
+
+    # 2 数据集的切分比例
     parser.add_argument('--data_split',
                         type=str,
                         default='2,4,4',
@@ -79,21 +79,25 @@ def parse_args():
                              'phase 1, 2, and 3 data. For example the split `6,2,2`'
                              'will use 60% of data for phase 1, 20% for phase 2'
                              'and 20% for phase 3.')
-    # 3 只用于SFT阶段的数据集路径
+
+    # 3 只用于SFT阶段的数据集路径  yknote???
     parser.add_argument(
         '--sft_only_data_path',
         nargs='*',
         default=[],
         help='Path to the dataset for only using in SFT phase.')
+
     # 4 数据相关文件的存储路径
     parser.add_argument(
         '--data_output_path',
         type=str,
         default='./data_files/',
         help=
-        'Where to store the data-related files such as shuffle index. This needs to be on a local storage of a node (not on a shared storage)'
+        'Where to store the data-related files such as shuffle index. \
+        This needs to be on a local storage of a node (not on a shared storage)'
     )
-    # 5 预训练模型的路径
+
+    # 5 预训练模型的路径 或者来自 huggingface.co/models的 model identifier
     parser.add_argument(
         "--model_name_or_path",
         type=str,
@@ -101,6 +105,7 @@ def parse_args():
         "Path to pretrained model or model identifier from huggingface.co/models.",
         required=True,
     )
+
     # 6 每个设备上的训练批次大小
     parser.add_argument(
         "--per_device_train_batch_size",
@@ -108,6 +113,7 @@ def parse_args():
         default=8,
         help="Batch size (per device) for the training dataloader.",
     )
+
     # 7 每个设备上的评估批次大小
     parser.add_argument(
         "--per_device_eval_batch_size",
@@ -115,6 +121,7 @@ def parse_args():
         default=8,
         help="Batch size (per device) for the evaluation dataloader.",
     )
+
     # 8 最大序列长度
     parser.add_argument(
         "--max_seq_len",
@@ -122,7 +129,8 @@ def parse_args():
         default=512,
         help="The maximum sequence length.",
     )
-    # 9 初始学习率
+
+    # 9 warmup之后的初始学习率
     parser.add_argument(
         "--learning_rate",
         type=float,
@@ -130,16 +138,19 @@ def parse_args():
         help=
         "Initial learning rate (after the potential warmup period) to use.",
     )
-    # 10 权重衰减
+	
+    # 10 权重衰减率
     parser.add_argument("--weight_decay",
                         type=float,
                         default=0.,
                         help="Weight decay to use.")
-    # 11 进行的训练轮数
+
+    # 11 训练的次数epochs
     parser.add_argument("--num_train_epochs",
                         type=int,
                         default=1,
                         help="Total number of training epochs to perform.")
+
     # 12 在执行反向传播之前累积的更新步骤数
     parser.add_argument(
         "--gradient_accumulation_steps",
@@ -148,7 +159,8 @@ def parse_args():
         help=
         "Number of updates steps to accumulate before performing a backward/update pass.",
     )
-    # 13 调度器类型
+
+    # 学习率调度器类型
     # 作用：根据预设的策略来动态调整学习率
     # ① linear: 线性调度器在每个训练步骤中将学习率按线性规则降低。
     # ② cosine: 余弦调度器根据余弦退火调度来调整学习率。
@@ -169,31 +181,41 @@ def parse_args():
             "constant", "constant_with_warmup"
         ],
     )
+
     # 14 学习率调度器中的warmup步骤数
     parser.add_argument(
         "--num_warmup_steps",
         type=int,
         default=0,
         help="Number of steps for the warmup in the lr scheduler.")
+
     # 15 存储模型的位置
     parser.add_argument("--output_dir",
                         type=str,
                         default=None,
                         help="Where to store the model.")
-    # 16 用于可复制训练的seed
+
+    # 16 随机数seed，固定它可以重现模型
     parser.add_argument("--seed",
                         type=int,
                         default=1234,
                         help="A seed for reproducible training.")
+
     # 17 用于在GPU上进行分布式训练的local rank
     parser.add_argument("--local_rank",
                         type=int,
                         default=-1,
                         help="local_rank for distributed training on gpus")
-    # 18 是否启用梯度checkpoint
+
+    # 18 是否启用梯度checkpoint， 
+    '''
+    action=‘store_true’/‘store_false’。
+    顾名思义，store_true就代表着一旦有这个参数，做出动作“将其值标为True”，也就是没有时，默认状态下其值为False
+    '''
     parser.add_argument('--gradient_checkpointing',
                         action='store_true',
                         help='Enable HF gradient checkpointing for model.')
+
     # 19 是否禁用模型的dropout
     parser.add_argument('--disable_dropout',
                         action='store_true',
@@ -205,12 +227,13 @@ def parse_args():
     parser.add_argument('--offload',
                         action='store_true',
                         help='Enable ZeRO Offload techniques.')
+
     # 21 用于Actor模型（和clones）的ZeRO优化阶段
     parser.add_argument(
         '--zero_stage',
         type=int,
         default=0,
-        help='ZeRO optimization stage for Actor model (and clones).')
+        help='ZeRO optimization stage for Actor model (and clones).')  #yknote---clone？？？
 
     ## LoRA for efficient training setting
     # 22 如果大于0，使用LoRA进行高效训练
@@ -218,19 +241,23 @@ def parse_args():
                         type=int,
                         default=1,
                         help="If > 0, use LoRA for efficient training.")
+
     # 23 LoRA的范围
     parser.add_argument("--lora_module_name",
                         type=str,
                         default="decoder.layers.",
                         help="The scope of LoRA.")
+
     # 24 只优化LoRA参数
     parser.add_argument('--only_optimize_lora',
                         action='store_true',
                         help='Only optimize the LoRA parameters.')
+
     ## Tensorboard logging
     parser.add_argument('--enable_tensorboard',
                         action='store_true',
                         help='Enable tensorboard logging')
+    # Tensorboard 路径
     parser.add_argument('--tensorboard_path',
                         type=str,
                         default="step1_tensorboard")
@@ -239,13 +266,13 @@ def parse_args():
                         action='store_true',
                         help='Prints loss at each step.')
 
-    # from calltrace import CallTrace
-    # ct_ds_addconfig = CallTrace(tag='ds_addconfig')
-    # ct_ds_addconfig.startrecord()
-
+    print('parser--1:', parser)
     # 这一行将DeepSpeed的配置参数添加到解析器中。
+    print("####### deepspeed.add_config_arguments ################################################")
     parser = deepspeed.add_config_arguments(parser)
-    # ct_ds_addconfig.endRecord()
+    print("####### deepspeed.add_config_arguments ################################################")
+
+    print('parser--2:', parser)  #yknote-TBD,比较变化
 
     # 这一行解析命令行参数并将它们存储在args对象中
     args = parser.parse_args()
@@ -267,25 +294,30 @@ def parse_args():
 def main():
     # 第1步：超参数配 解析命令行参数。
     args = parse_args()
-    print("args is:", args)
+    print("args is:", args)  #yknote---TBD
 
-    # 如果本地排名为-1，说明不在分布式训练环境下，设备设置为"cuda"；
+    # 如果local_rank为-1，说明不在分布式训练环境下，设备设置为"cuda"；
     # 否则根据args.local_rank设置对应的cuda设备，并初始化分布式训练。
     if args.local_rank == -1:
         # 单机版的CUDA
         device = torch.device("cuda")
     else:
+        # 分布式训练
         # 设置了当前进程中的默认device，确保每个进程在正确的device上运行
         torch.cuda.set_device(args.local_rank)
+
         # 确保tensor被创建或移动到正确的device上
         device = torch.device("cuda", args.local_rank)
+        print("device is--1:" , device) #yknote---TBD. 
+
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # torch.distributed.init_process_group(backend='nccl')
         # 初始化分布式训练环境
+        print("#######ph1 deepspeed.init_distributed() ################################################")
         deepspeed.init_distributed()
+        print("#######ph1 deepspeed.init_distributed() ################################################")
 		
-    # 获取当前运行设备在分布式训练环境中的rank
-    # 获取全局rank。
+    # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
     # print("args.global_rank is:", args.global_rank)
     '''
@@ -294,16 +326,19 @@ def main():
     args.global_rank is: 0
     '''
 
-    # 获取deepspeed的训练配置  根据输入参数返回一个训练数据集的配置字
+    # 获取deepspeed的训练配置  根据输入参数返回一个训练数据集的配置字典
     ds_config = get_train_ds_config(offload=args.offload,
                                     stage=args.zero_stage,
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step1_model")
-    # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应设备的内存限制
+    print("ph1 ds_config train is--1:", ds_config)  # 一直打开
+
+    # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应GPU的内存限制
     # 在配置中设置训练时每个GPU的微批次大小和总的批次大小。
     ds_config[
         'train_micro_batch_size_per_gpu'] = args.per_device_train_batch_size
+
     # 每个训练步骤中处理的数据总量
     # gradient_accumulation(梯度积累)是另一种应对内存限制的技术，它会在多个步骤中积累梯度，然后再一次性更新模型参数。
     # torch.distributed.get_world_size() ：在分布式训练环境中的节点（设备）数量
@@ -311,10 +346,9 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
     ) * args.gradient_accumulation_steps
 
-    # print("ds_config is--1:", ds_config)
-    # print("ds_config['train_batch_size']is:", ds_config['train_batch_size'])
-    # print("args.per_device_train_batch_size is:", args.per_device_train_batch_size)
-
+    print("ph1 ds_config train is--2:", ds_config) #一直打开
+    # print("ds_config['train_batch_size']is:", ds_config['train_batch_size'])  #8
+    # print("args.per_device_train_batch_size is:", args.per_device_train_batch_size) #4
 
 
     # If passed along, set the training seed now.
@@ -329,15 +363,14 @@ def main():
     # 加载预训练模型tokenizer，fast_tokenizer=True表示使用优化过的、速度更快的tokenizer。
     # 加载预训练模型对应的分词器。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
-    # print("0--tokenizer :", tokenizer)
+    print("ph1 tokenizer --0:", tokenizer) # 一直打开
 
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
 	# 将tokenizer的填充方向设置为'right'，表示在序列的右侧（末尾）添加填充符号。
     tokenizer.padding_side = 'right'
 
-    # print("1--tokenizer :", tokenizer)
-    # print("ds_config is--2:", ds_config)
+    print("ph1 tokenizer --1:", tokenizer) # 一直打开
 
     # 创建预训练模型。 # 第2步：创建actor模型
     model = create_hf_model(AutoModelForCausalLM,
@@ -346,9 +379,8 @@ def main():
                             ds_config,
                             disable_dropout=args.disable_dropout)
 
-    #print("model---1 :", model)
+    print("s1 model create_hf_model:", model)
 
-	
     # 判断是否启用LoRA模式
     # 如果参数lora_dim大于0，将模型的线性层转换为LoRa层；如果只优化LoRa参数，关闭其他参数的梯度。
     if args.lora_dim > 0:
@@ -359,17 +391,18 @@ def main():
         这类结构的Weight参数将被冻结，转而优化LoRA旁路的参数。
         '''
         # 将模型中指定的线性层转换为LoRA层
-        # lora_module_name指定了要转换的模块的名称
-        # lora_dim指定了LoRA的维度
-        model = convert_linear_layer_to_lora(model, args.lora_module_name,
+        # lora_module_name指定了要转换的模块的名称 , lora_dim指定了LoRA的维度
+        model = convert_linear_layer_to_lora(model,
+                                             args.lora_module_name,
                                              args.lora_dim)
-        if args.only_optimize_lora:
-            # 只优化LoRA层的参数
-            # 将模型中非LoRA层的参数的requires_grad属性设为False，这样在训练过程中只有LoRA层的参数会被更新。
-            model = only_optimize_lora_parameters(model)
+        print("s1 convert_linear_layer_to_lora:", model)
 
-    # 第3步：准备数据集（训练集和验证集）
-    # Prepare the data
+        if args.only_optimize_lora:
+            # 将模型中非LoRA层的参数的requires_grad属性设为False，训练过程中只有LoRA层的参数会被更新/优化
+            model = only_optimize_lora_parameters(model)
+            print("s1 only_optimize_lora_parameters:", model)
+
+    # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
     train_phase = 1
 
@@ -387,29 +420,35 @@ def main():
     # print("train_dataset :", train_dataset)
     # print("eval_dataset :", eval_dataset)
 
-    # DataLoaders creation:
-    # # 不在分布式训练环境下，因此我们将使用随机采样和顺序采样
+    # DataLoaders creation
     if args.local_rank == -1:
+        # 非分布式训练环境下，因此我们将使用随机采样和顺序采样
         # 在训练过程中，将随机选择样本进行训练，防止模型过拟合。
         train_sampler = RandomSampler(train_dataset)
+
         # 在评估过程中，将按照数据集中的顺序选择样本进行评估，验证集的顺序通常对模型的性能评估没有影响。
         eval_sampler = SequentialSampler(eval_dataset)
-    # 在分布式训练环境中，将使用分布式采样
+
     else:
+        # 在分布式训练环境中，将使用分布式采样
         # 创建一个用于训练集的分布式采样器，会在所有的训练节点上对样本进行均匀的分布，
         # 确保每个节点处理的样本是独立且均匀的，从而提高分布式训练的效率和稳定性。
         train_sampler = DistributedSampler(train_dataset)
+
         # 创建一个用于评估集的分布式采样器
         eval_sampler = DistributedSampler(eval_dataset)
 
-
     # print("train_sampler :", train_sampler)
     # print("eval_sampler :", eval_sampler)
+
+    #default_data_collator 作用是将一批数据进行整合，使得它们可以整齐地堆叠在一起。
+
     # 创建用于训练集的数据加载器
     train_dataloader = DataLoader(train_dataset,
-                                  collate_fn=default_data_collator, # 要作用是将一批数据进行整合，使得它们可以整齐地堆叠在一起。
+                                  collate_fn=default_data_collator,
                                   sampler=train_sampler,
                                   batch_size=args.per_device_train_batch_size)
+
     # 创建用于评估集的数据加载器
     eval_dataloader = DataLoader(eval_dataset,
                                  collate_fn=default_data_collator,
@@ -418,48 +457,24 @@ def main():
 
     # print("train_dataloader :", train_dataloader)
     # print("eval_dataloader :", eval_dataloader)
-    '''
-    train_dataset : <utils.data.data_utils.PromptDataset object at 0x7f147c395c10>
-    eval_dataset : <utils.data.data_utils.PromptDataset object at 0x7f14920c5af0>
-    train_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f147c456ee0>
-    eval_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f14753f2580>
-    train_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f14753f2460>
-    eval_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f149210d190>
-    '''
 
-
-
-    # 根据是否使用权重衰减将模型参数分为两组。
     # Split weights in two groups, one with weight decay and the other not.
 	# 第4步：将模型参数分组、创建优化器 和 学习率调度器
 	# 1. 将模型的参数分为两组，一组应用权重衰减，另一组不应用
+    # 权重衰减是防止模型过拟合的一种策略，通常只对模型的权重参数应用。
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(model, args.weight_decay)
 	
     # print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
     # debugOGP(optimizer_grouped_parameters) #因为在cpu上，即使使用print_rank0也打印了两次！
     print("len of optimizer_grouped_parameters:", len(optimizer_grouped_parameters))
-    '''
-    Parameter containing Pytorch   https://zhuanlan.zhihu.com/p/119305088
-    The PyTorch parameter is a layer made up of nn or a module. 
-    A parameter that is assigned as an attribute inside a custom model is registered as a model parameter and 
-    is thus returned by the caller model. parameters(). 
-    We can say that a Parameter is a wrapper over Variables that are formed.
-
-    optimizer_grouped_parameters : [{'params': [Parameter containing:
-    tensor([[ 0.1150, -0.1438,  0.0555,  ...,  0.2146,  0.0833,  0.0669],
-    ...
-            [ 0.1156, -0.1437,  0.0577,  ...,  0.2139,  0.0833,  0.0650]],
-           requires_grad=True), Parameter containing:
-    tensor([[ 1.8272e-03,  9.0599e-04,  4.4289e-03,  ...,  1.6693e-02,
-              1.7462e-03, -4.9057e-03],
-        
-    '''
 
     # 根据是否使用DeepSpeed的CPU offload功能来选择优化器，优化器定义了如何更新模型的参数以最小化损失函数。
-    # DeepSpeedCPUAdam : 为了配合DeepSpeed的CPU offload功能设计的，在DeepSpeed中，CPU offload可以将模型参数、
-    #                    优化器状态和梯度数据在CPU和GPU之间进行切换，以减轻GPU的内存压力。
+
+    # DeepSpeedCPUAdam : 配合DeepSpeed的CPU offload功能设计的，
+    #          CPU offload可以将模型参数、优化器状态和梯度数据在CPU和GPU之间进行切换，以减轻GPU的内存压力。
+
     # FusedAdam : 它将一些计算操作融合在一起（fused），以减少计算时间和内存使用量。
-    #             FusedAdam主要是为了提高在GPU上的运算效率。
+    #          FusedAdam主要是为了提高在GPU上的运算效率。
 	
     # 选择优化器类型，如果启用了梯度Offload，使用DeepSpeedCPUAdam，否则使用FusedAdam。
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
@@ -467,73 +482,42 @@ def main():
     # print("AdamOptimizer :", AdamOptimizer)
     # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
 
-    # from calltrace import CallTrace
-    # ct_ds_AdamOptimizer = CallTrace(tag='ds_AdamOptimizer')
-    # ct_ds_AdamOptimizer.startrecord()
-    # 创建优化器。
-	# 使用选择的优化器进行实例化
+    # 创建优化器
+    print("####### optimizer = AdamOptimizer ################################################")
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
-    # print("optimizer :", optimizer)
-    '''
-    optimizer : FusedAdam (
-                Parameter Group 0
-                    betas: (0.9, 0.95)
-                    bias_correction: True
-                    eps: 1e-08
-                    lr: 9.65e-06
-                    weight_decay: 0.0
-                
-                Parameter Group 1
-                    betas: (0.9, 0.95)
-                    bias_correction: True
-                    eps: 1e-08
-                    lr: 0.0005
-                    weight_decay: 0.0
-                
-                Parameter Group 2
-                    betas: (0.9, 0.95)
-                    bias_correction: True
-                    eps: 1e-08
-                    lr: 9.65e-06
-                    weight_decay: 0.0
-                )
-    '''
+    print("####### optimizer = AdamOptimizer ################################################")
 
-    # ct_ds_AdamOptimizer.endRecord()
+    # print("optimizer :", optimizer)
 
     # 计算每个epoch需要进行的更新步数，等于训练数据集大小除以梯度累积步数（对结果向上取整）
-    # 计算每个epoch的更新步数。
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
     print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
 
     # 创建学习率调度器。
     lr_scheduler = get_scheduler(
-        name=args.lr_scheduler_type,
-        optimizer=optimizer,
-        num_warmup_steps=args.num_warmup_steps,
-        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch, # 总的训练步数等于训练的epoch数乘以每个epoch的更新步数
+        name=args.lr_scheduler_type, # 调度器的类型
+        optimizer=optimizer, # 优化器，在每个训练步骤调整其学习率
+        num_warmup_steps=args.num_warmup_steps, # 预热步骤数，在训练开始的一段时间内，
+                                                # 学习率从0线性增加到预设的初始学习率，预热过程有助于模型的稳定训练。
+        num_training_steps=args.num_train_epochs * num_update_steps_per_epoch, # 总的训练步骤数
     )
 
     # print("lr_scheduler :", lr_scheduler)
     # lr_scheduler : <torch.optim.lr_scheduler.LambdaLR object at 0x7f469aea9fd0>
 
-    # from calltrace import CallTrace
-
-    # ct_ds_init = CallTrace(tag='ds_init')
-    # ct_ds_init.startrecord()
-
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
+    print("#######ph1 deepspeed.initialize ################################################")
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
         args=args,
         config=ds_config, # DeepSpeed的配置信息
-        lr_scheduler=lr_scheduler,
+        lr_scheduler=lr_scheduler, # 学习率调度器
         dist_init_required=True)  # 需要进行分布式训练的初始化
-    # ct_ds_init.endRecord()
+    print("#######ph1 deepspeed.initialize ################################################")
 
     # print("model---3 :", model)
     # print("optimizer---3 :", optimizer)
@@ -541,7 +525,8 @@ def main():
 
     # 如果启用了梯度检查点，那么在模型中也启用梯度检查点。
     if args.gradient_checkpointing:
-        # 梯度检查点是一种可以减少训练过程中内存使用的技术，通过牺牲一部分计算效率来换取内存占用的降低。
+        # 在模型中启用梯度检查点
+        # # 梯度检查点是一种可以减少训练过程中内存使用的技术，通过牺牲一部分计算效率来换取内存占用的降低，会增加一些计算时间。
         model.gradient_checkpointing_enable()
 
     '''
@@ -551,9 +536,10 @@ def main():
     甚至有可能perplexity评估结果与实际情况并不一致（即，perplexity已经处于较低水平，但模型的实际生成能力却仍然堪忧），
     这点DeepSpeed-Chat团队也有做出过说明。
     
-    Supervised fine-tuning (SFT) has indeed made significant progress in the field of large language models (LLMs). 
-    However, unexpected behaviors such as repeating content generation and inconsistency between perplexity (PPL) scores 
-    and generation capabilities can still occur.
+    Supervised fine-tuning (SFT) 
+    has indeed made significant progress in the field of large language models (LLMs). 
+    However, unexpected behaviors such as repeating content generation and inconsistency 
+    between perplexity (PPL) scores and generation capabilities can still occur.
     
     但无论如何，源码中phase1定义的evaluation是基于perplexity来进行的，我们仍有必要具体了解其实现过程。
     
@@ -568,18 +554,15 @@ def main():
     其中，输出的句子共有T个token，第t个token的置信概率值为p_t
     
     因此perplexity与CausalLM的loss之间实际存在如下关系：
-
         perplexity=exp(loss)
     
     相关源码的perplexity计算也是基于上述公式得到的：
     先是将验证数据输入至模型，得到模型loss输出，然后通过perplexity与loss之间的指数关系计算得到perplexity。
 
     '''
-    # 定义模型评估函数，用于计算模型在验证集上的困惑度。    # 第6步：模型验证 模型评估
+    ## 第6步：模型验证 模型评估 定义模型评估函数，用于计算模型在验证集上的困惑度。
     def evaluation(model, eval_dataloader):
-        """
-        以困惑度perplexity为评估指标进行验证
-        """
+        # 以困惑度perplexity为评估指标进行验证
         # 将模型切换为评估模式。
         model.eval() 
 		
@@ -605,25 +588,28 @@ def main():
             # 取出模型的输出中的loss。
             loss = outputs.loss 
 			
-            # 将当前的loss累加到总的losses中。# 累积整个评估过程中的损失值
+            # 将当前的loss累加到总的losses中， 这里losses是整个评估过程中的损失值
             losses += loss.float()  
         
         # 计算平均的loss。
         losses = losses / (step + 1)
 
+        # 尝试计算模型的困惑度，如果捕捉到溢出错误，将困惑度设置为无穷大。
         try:
-            """困惑度perplexity通常可以通过exp(CELoss)计算得到"""
             # 计算模型的困惑度，这是评估语言模型性能的常用指标。困惑度的计算方法是对平均损失值取指数。
             # 如果这步运算没有发生溢出，那么困惑度的值就是torch.exp(losses)。
             # 当损失值过大时，指数运算可能会导致溢出
-            perplexity = torch.exp(losses)  # 尝试计算模型的困惑度，如果捕捉到溢出错误，将困惑度设置为无穷大。
+            perplexity = torch.exp(losses)
         except OverflowError:
-            # 如果上一步的指数运算发生了溢出，那么将困惑度的值设为无穷大。
+            # 将困惑度的值设为无穷大。
             perplexity = float("inf")
+
         # 尝试在所有设备上计算困惑度的平均值，如果发生任何错误，就忽略。
         try:
             """
-            - get_all_reduce_mean中调用了torch.distributed.all_reduce(perplexity, op=torch.distributed.ReduceOp.SUM)
+            - get_all_reduce_mean中调用了
+              torch.distributed.all_reduce(perplexity, op=torch.distributed.ReduceOp.SUM)
+              
             - 对所有进程、或者说GPU（因为通常情况下就是单个进程控制单个GPU）中的perplexity进行求和
             - 然后再除以全局进程数torch.distributed.get_world_size()得到平均的perplexity结果
             """
@@ -631,11 +617,12 @@ def main():
             perplexity = get_all_reduce_mean(perplexity).item()
         except:
             pass
-			
+
         # 返回最后的困惑度作为模型在给定评估数据集上的性能指标
         return perplexity
 
-    # Train! # 第7步：模型训练
+    # Train! 第7步：模型训练
+
     # 使用 print_rank_0 函数在主节点（global_rank为0的节点）打印开始训练的信息。
     print_rank_0("***** Running training *****", args.global_rank)
 
@@ -665,17 +652,14 @@ def main():
             # 将batch数据移到对应的设备上。
             batch = to_device(batch, device)  
 
-            # 将batch数据输入模型，进行前向计算。
-			# use_cache 通常用于控制是否使用缓存来加速计算
+            # 将batch数据输入模型，进行前向计算；use_cache 是否使用缓存来加速计算
             outputs = model(**batch, use_cache=False)  
 			
             # 取出模型的输出中的loss。
             loss = outputs.loss
 
             if args.print_loss:
-                print(
-                    f"Epoch: {epoch}, Step: {step}, Rank: {torch.distributed.get_rank()}, loss = {loss}"
-                )
+                print(f"Epoch: {epoch}, Step: {step}, Rank: {torch.distributed.get_rank()}, loss = {loss}")
 			
             # 调用模型的backward方法进行反向传播，计算损失函数关于模型参数的梯度。
             model.backward(loss)  
@@ -685,17 +669,16 @@ def main():
 
         # Evaluate perplexity on the validation set.
         # 在每个epoch结束后，在主节点打印开始评估的信息。
-        print_rank_0(
-            f"***** Evaluating perplexity, Epoch {epoch + 1}/{args.num_train_epochs} *****",
-            args.global_rank)
+        print_rank_0(f"***** Evaluating perplexity, Epoch {epoch + 1}/{args.num_train_epochs} *****",
+                     args.global_rank)
 			
-        # 对模型进行评估，得到模型的困惑度。# 计算在验证集上的困惑度
+        # 对模型进行评估，计算在验证集上的困惑度
         perplexity = evaluation(model, eval_dataloader)
 		
-        # 在主节点打印模型的困惑度。
+        # 在主节点打印模型的困惑度
         print_rank_0(f"ppl: {perplexity}", args.global_rank)
 		
-        # 更新了模型的内部计时器，表示一个epoch已经完成。。
+        # 更新了模型的内部计时器，表示一个epoch已经完成
         model.tput_timer.update_epoch_count()
 
     # 第8步：训练结束后保存模型 如果设置了输出目录，进行以下操作。 
@@ -705,17 +688,17 @@ def main():
 		
         # 将模型中的LoRA层转换为标准的线性层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         model = convert_lora_to_linear_layer(model)
-        #print("model---4 :", model)
+        print("ph1 convert_lora_to_linear_layer model:", model)
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:
             # 以HuggingFace格式保存模型和tokenizer
             save_hf_format(model, tokenizer, args)
-			
-        # 如果使用了Zero Redundancy Optimizer（Zero）的第三阶段，进行以下操作。
-        # 是否使用了Zero Redundancy Optimizer的第三阶段（ZeRO-3）
+
+
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
+            debuginfo(prj='ds-chat')
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(model,
@@ -728,16 +711,40 @@ if __name__ == "__main__":
 
 
 '''
-ds_config is--1: {'train_batch_size': 32, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10, 
-'zero_optimization': {'stage': 2, 'offload_param': {'device': 'none'}, 'offload_optimizer': {'device': 'none'}, 
-'stage3_param_persistence_threshold': 10000.0, 'stage3_max_live_parameters': 30000000.0, 
-'stage3_prefetch_bucket_size': 30000000.0, 'memory_efficient_linear': False}, 
-'fp16': {'enabled': True, 'loss_scale_window': 100}, 'gradient_clipping': 1.0, 
-'prescale_gradients': False, 'wall_clock_breakdown': False, 
-'hybrid_engine': {'enabled': False, 'max_out_tokens': 512, 'inference_tp_size': 1, 'release_inference_cache': False, 
-'pin_parameters': True, 'tp_gather_partition_size': 8}, 
-'tensorboard': {'enabled': False, 'output_path': 'step1_tensorboard/ds_tensorboard_logs/', 
-'job_name': 'step1_model_tensorboard'}}
+ds_config is--1: {
+'train_batch_size': 32, 
+'train_micro_batch_size_per_gpu': 4, 
+'steps_per_print': 10, 
+'zero_optimization': {
+    'stage': 2, 
+    'offload_param': {'device': 'none'}, 
+    'offload_optimizer': {'device': 'none'}, 
+    'stage3_param_persistence_threshold': 10000.0, 
+    'stage3_max_live_parameters': 30000000.0, 
+    'stage3_prefetch_bucket_size': 30000000.0, 
+    'memory_efficient_linear': False
+    }, 
+'fp16': {
+    'enabled': True, 
+    'loss_scale_window': 100
+    }, 
+'gradient_clipping': 1.0, 
+'prescale_gradients': False, 
+'wall_clock_breakdown': False, 
+'hybrid_engine': {
+    'enabled': False, 
+    'max_out_tokens': 512, 
+    'inference_tp_size': 1, 
+    'release_inference_cache': False, 
+    'pin_parameters': True, 
+    'tp_gather_partition_size': 8
+    }, 
+'tensorboard': {
+    'enabled': False, 
+    'output_path': 'step1_tensorboard/ds_tensorboard_logs/', 
+    'job_name': 'step1_model_tensorboard'
+    }
+}
 
 ds_config['train_batch_size']is: 8
 args.per_device_train_batch_size is: 4
@@ -860,15 +867,88 @@ model---1 : OPTForCausalLM(
 0--tokenizer : GPT2TokenizerFast(name_or_path='facebook/opt-125m', vocab_size=50265, model_max_length=1000000000000000019884624838656, is_fast=True, padding_side='right', truncation_side='right', special_tokens={'bos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'eos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'unk_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'pad_token': AddedToken("<pad>", rstrip=False, lstrip=False, single_word=False, normalized=True)}, clean_up_tokenization_spaces=True)
 1--tokenizer : GPT2TokenizerFast(name_or_path='facebook/opt-125m', vocab_size=50265, model_max_length=1000000000000000019884624838656, is_fast=True, padding_side='right', truncation_side='right', special_tokens={'bos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'eos_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'unk_token': AddedToken("</s>", rstrip=False, lstrip=False, single_word=False, normalized=True), 'pad_token': '</s>'}, clean_up_tokenization_spaces=True)
 
-ds_config is--2: 
-{'train_batch_size': 8, 'train_micro_batch_size_per_gpu': 4, 'steps_per_print': 10, 
-'zero_optimization': {'stage': 2, 'offload_param': {'device': 'none'}, 'offload_optimizer': {'device': 'none'}, 
-'stage3_param_persistence_threshold': 10000.0, 'stage3_max_live_parameters': 30000000.0, 
-'stage3_prefetch_bucket_size': 30000000.0, 'memory_efficient_linear': False}, 
-'fp16': {'enabled': True, 'loss_scale_window': 100}, 'gradient_clipping': 1.0, 
-'prescale_gradients': False, 'wall_clock_breakdown': False, 
-'hybrid_engine': {'enabled': False, 'max_out_tokens': 512, 'inference_tp_size': 1, 'release_inference_cache': False,
- 'pin_parameters': True, 'tp_gather_partition_size': 8}, 
- 'tensorboard': {'enabled': False, 'output_path': 'step1_tensorboard/ds_tensorboard_logs/',
-  'job_name': 'step1_model_tensorboard'}}
+ds_config is--2: {
+'train_batch_size': 8, 
+'train_micro_batch_size_per_gpu': 4, 
+'steps_per_print': 10, 
+'zero_optimization': {
+    'stage': 2, 
+    'offload_param': {'device': 'none'}, 
+    'offload_optimizer': {'device': 'none'}, 
+    'stage3_param_persistence_threshold': 10000.0, 
+    'stage3_max_live_parameters': 30000000.0, 
+    'stage3_prefetch_bucket_size': 30000000.0, 
+    'memory_efficient_linear': False
+    }, 
+'fp16': {
+    'enabled': True, 
+    'loss_scale_window': 100
+    }, 
+'gradient_clipping': 1.0, 
+'prescale_gradients': False, 
+'wall_clock_breakdown': False, 
+'hybrid_engine': {
+    'enabled': False, 
+    'max_out_tokens': 512, 
+    'inference_tp_size': 1, 
+    'release_inference_cache': False,
+    'pin_parameters': True, 
+    'tp_gather_partition_size': 8
+    }, 
+'tensorboard': {
+    'enabled': False, 
+    'output_path': 'step1_tensorboard/ds_tensorboard_logs/',
+    'job_name': 'step1_model_tensorboard'
+    }
+}
+'''
+'''
+train_dataset : <utils.data.data_utils.PromptDataset object at 0x7f147c395c10>
+eval_dataset : <utils.data.data_utils.PromptDataset object at 0x7f14920c5af0>
+train_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f147c456ee0>
+eval_sampler : <torch.utils.data.distributed.DistributedSampler object at 0x7f14753f2580>
+train_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f14753f2460>
+eval_dataloader : <torch.utils.data.dataloader.DataLoader object at 0x7f149210d190>
+'''
+
+'''
+Parameter containing Pytorch   https://zhuanlan.zhihu.com/p/119305088
+The PyTorch parameter is a layer made up of nn or a module. 
+A parameter that is assigned as an attribute inside a custom model is registered as a model parameter and 
+is thus returned by the caller model. parameters(). 
+We can say that a Parameter is a wrapper over Variables that are formed.
+
+optimizer_grouped_parameters : [{'params': [Parameter containing:
+tensor([[ 0.1150, -0.1438,  0.0555,  ...,  0.2146,  0.0833,  0.0669],
+...
+        [ 0.1156, -0.1437,  0.0577,  ...,  0.2139,  0.0833,  0.0650]],
+       requires_grad=True), Parameter containing:
+tensor([[ 1.8272e-03,  9.0599e-04,  4.4289e-03,  ...,  1.6693e-02,
+          1.7462e-03, -4.9057e-03],
+
+'''
+
+'''
+optimizer : FusedAdam (
+            Parameter Group 0
+                betas: (0.9, 0.95)
+                bias_correction: True
+                eps: 1e-08
+                lr: 9.65e-06
+                weight_decay: 0.0
+
+            Parameter Group 1
+                betas: (0.9, 0.95)
+                bias_correction: True
+                eps: 1e-08
+                lr: 0.0005
+                weight_decay: 0.0
+
+            Parameter Group 2
+                betas: (0.9, 0.95)
+                bias_correction: True
+                eps: 1e-08
+                lr: 9.65e-06
+                weight_decay: 0.0
+            )
 '''

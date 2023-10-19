@@ -31,3 +31,5 @@ deepspeed main.py \
    --deepspeed \
    --output_dir $OUTPUT \
     2>&1 | tee $OUTPUT/training-ph1-1node2gpus-opt125-ZERO$ZERO_STAGE.log
+
+#  --deepspeed  源码并没有这个参数

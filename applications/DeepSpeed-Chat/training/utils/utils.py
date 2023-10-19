@@ -279,15 +279,18 @@ def moving_average(model, # 原模型
     # 是否在使用DeepSpeed的ZeRO-3阶段，
     # ZeRO-3是一种内存优化策略，用于分布式训练，它会将模型参数、优化器状态、和梯度分布在多个GPU上。
     zero_stage_3 = (zero_stage == 3)
+    print("zero_stage_3 is:", zero_stage_3)
 
     with torch.no_grad():
         # 遍历模型的每个参数及其对应的滑动平均参数
         for param, param_ema in zip(model.parameters(),
                                     model_ema.parameters()):
+            print(f'param:{param}####param_ema:{param_ema}')
             # TODO: use prefiltering for efficiency
             # 如果使用ZeRO-3阶段，找出列表中需要从其他GPU收集的参数。否则，返回空列表。
             params_to_fetch = _z3_params_to_fetch([param, param_ema
                                                    ]) if zero_stage_3 else []
+            print("params_to_fetch is:", params_to_fetch)
 
             # 是否需要在多个设备之间同步参数
             should_gather_param = len(params_to_fetch) > 0
@@ -350,17 +353,24 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
         # 遍历模型的所有参数
         for k, v in model_to_save.named_parameters():
+            print("save_zero_three_model k is", k)
+            print("save_zero_three_model v is", v)
             # 如果参数在分布式环境中（即 v.ds_id 存在）
             if hasattr(v, 'ds_id'):
                 # 从各个 GPU 收集参数值
                 # deepspeed.zero.GatheredParameters是DeepSpeed提供的一个上下文管理器，
                 # 它可以将分布在多个设备上的参数收集到一起。这部分参数保存在CPU上。
-                with deepspeed.zero.GatheredParameters(_z3_params_to_fetch([v]),
+                print("[v] is:", [v])
+                tmpz3 = _z3_params_to_fetch([v])
+                print("tmpz3 is:", tmpz3)
+                with deepspeed.zero.GatheredParameters(tmpz3,
                                                        enabled=zero_stage_3):
                     v_p = v.data.cpu()
+                    print("v_p---1 is:", v_p)
             else:
                 # 直接获取参数值
                 v_p = v.cpu()
+                print("v_p---2 is:", v_p)
 
             # 在主节点上，如果参数名称中不包含lora，将参数值添加到output_state_dict中。
             # 然后，将收集好的参数（并且不包含“lora”关键字的参数）添加到输出状态字典中。

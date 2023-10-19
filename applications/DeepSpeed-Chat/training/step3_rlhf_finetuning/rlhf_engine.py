@@ -159,6 +159,8 @@ class DeepSpeedRLHFEngine():
             enable_tensorboard=self.args.enable_tensorboard,
             tb_path=self.args.tensorboard_path,
             tb_name="step3_actor")
+        print("_init_actor ds_config train---1:", ds_config)  # 一直打开
+
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size  # 每个GPU的微批次训练大小
         #TODO(jeff): we should probably set grad accumlation steps here as well for clarity
@@ -166,7 +168,7 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor # 全局训练批次大小
 
-        #print("_init_actor ds_config:", ds_config)
+        print("_init_actor ds_config train ---2:", ds_config) #一直打开
 
         # Model : 创建 actor model
         # Model 使用CausalLM结构载入模型及权重，实例化actor
@@ -177,18 +179,23 @@ class DeepSpeedRLHFEngine():
             ds_config=ds_config,
             disable_dropout=self.args.disable_actor_dropout)
 
+        print("s3 create_hf_model actor_model:", actor_model)
+
         # LoRA
         # 如果开启LoRA训练则添加LoRA旁路
         if self.args.actor_lora_dim > 0:
-            debuginfo(prj='ds-chat')
             # 在模型中找到指定的模块并将其全连接层转换为LoRA层
             actor_model = convert_linear_layer_to_lora(
                 actor_model, self.args.actor_lora_module_name,
                 self.args.actor_lora_dim)
+
+            print("s3 convert_linear_layer_to_lora actor_model:", actor_model)
+
             if self.args.only_optimize_lora:
-                debuginfo(prj='ds-chat')
                 # 只有LoRA层的参数会被更新，而其他层的参数将保持不变
                 actor_model = only_optimize_lora_parameters(actor_model)
+                print("s3 only_optimize_lora_parameters actor_model:", actor_model)
+
 
         # Optimizer
         # 实例化优化器：分组权重衰减等
@@ -219,20 +226,21 @@ class DeepSpeedRLHFEngine():
         # 确切地说还是个DeepSpeedHybridEngine实例，集成有HybridEngine的优化
 
         #TODO: move enable_hybrid_engine and pin_parameters to ds_config
+        print("#######ph3 actor_model deepspeed.initialize ################################################")
         actor_engine, *_ = deepspeed.initialize(model=actor_model, # 需要训练的模型
                                                 optimizer=optim, # 优化器
                                                 lr_scheduler=lr_scheduler, # 学习率调度器
                                                 config=ds_config # 设置DeepSpeed引擎的配置
                                                 )
+        print("#######ph3 actor_model deepspeed.initialize ################################################")
 
         log_init("Actor", stime=stime)
 
         # print("optim_params is:", optim_params)
         # print("optim is:", optim)
         # print("lr_scheduler is:", lr_scheduler)
-        #
-        # print("actor_model is:", actor_model)
-        # print("actor_engine is:", actor_engine)
+
+        print("actor_engine is:", actor_engine)
 
         return actor_engine
 
@@ -240,7 +248,7 @@ class DeepSpeedRLHFEngine():
     其余ref、actor_ema、critic、reward的初始化几乎同理，
     只是ds_config设置不同，但最终都将返回经DeepSpeedEngine封装的对象。
     """
-	# ref模型
+    # ref模型
     def _init_ref(self, actor_model_name_or_path):
         debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''初始化参考模型（Ref model）'''
@@ -250,6 +258,7 @@ class DeepSpeedRLHFEngine():
         zero_stage = self.args.actor_zero_stage
 
         if zero_stage != 3:
+            debuginfo(prj='ds-chat', info=self.__class__.__name__)
             # If actor is ZeRO-3 then we use it for everything, otherwise assume we have enough memory for ref model
             # 如果Actor模型使用了ZeRO-3阶段，那么参考模型也使用，否则使用ZeRO-0阶段。
             # 区别：
@@ -259,6 +268,7 @@ class DeepSpeedRLHFEngine():
 
         # 定义DeepSpeed的配置 
         ds_config = get_eval_ds_config(self.args.offload_reference_model,zero_stage)
+        print("_init_ref ds_config eval ---1:", ds_config)  # 一直打开
 		
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size
@@ -268,7 +278,7 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
-        # print("_init_ref ds_config is:", ds_config)
+        print("_init_ref ds_config eval ---2:", ds_config)  # 一直打开
 
         # 创建模型
         ## 往往会再定义一个ref model，为原始的actor_model，用来计算KL避免生成的内容与原始模型差太远【怕训飞】。
@@ -276,14 +286,18 @@ class DeepSpeedRLHFEngine():
         ref_model = create_hf_model(AutoModelForCausalLM,
                                     actor_model_name_or_path, self.tokenizer,
                                     ds_config)
+
+        print("s3 create_hf_model ref_model is:", ref_model)
 									
         # DeepSpeed初始化
         # 参考模型不需要优化器和学习率调度器，所以在初始化DeepSpeed时只需要传入模型和配置即可。
+        print("#######ph3 ref_model deepspeed.initialize ################################################")
         ref_engine, *_ = deepspeed.initialize(model=ref_model,
                                               config=ds_config)
+        print("#######ph3 ref_model deepspeed.initialize ################################################")
 
-        # print("ref_model is:", ref_model)
-        # print("ref_engine is:", ref_engine)
+
+        print("ref_engine is:", ref_engine)
 
         log_init("Ref", stime=stime)
         return ref_engine
@@ -310,6 +324,7 @@ class DeepSpeedRLHFEngine():
         # 定义DeepSpeed的配置
         ds_config = get_eval_ds_config(self.args.offload_reference_model,
                                        zero_stage)
+        print("_init_ema ds_config eval ---1:", ds_config)  # 一直打开
 
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size
@@ -319,23 +334,27 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps_actor
 
-        # print("_init_ema ds_config is:", ds_config)
+        print("_init_ema ds_config eval ---2:", ds_config)  # 一直打开
 
         # 创建模型
         actor_model_ema = create_hf_model(AutoModelForCausalLM,
                                           actor_model_name_or_path,
                                           self.tokenizer, ds_config)
+
+        print("s3 create_hf_model actor_model_ema:", actor_model_ema)
+
         if self.args.actor_lora_dim > 0:
-            debuginfo(prj="ds-chat")
             actor_model_ema = convert_linear_layer_to_lora(
                 actor_model_ema, self.args.actor_lora_module_name,
                 self.args.actor_lora_dim)
+            print("s3 convert_linear_layer_to_lora actor_model_ema:", actor_model_ema)
 
+        print("#######ph3 actor_model_ema deepspeed.initialize ################################################")
         ema_engine, *_ = deepspeed.initialize(model=actor_model_ema,
                                               config=ds_config)
+        print("#######ph3 actor_model_ema deepspeed.initialize ################################################")
 
-        # print("ema_engine is:", ema_engine)
-        # print("actor_model_ema is:", actor_model_ema)
+        print("ema_engine is:", ema_engine)
 
         log_init("EMA", stime=stime)
 
@@ -353,6 +372,8 @@ class DeepSpeedRLHFEngine():
             tb_path=self.args.tensorboard_path,
             tb_name="step3_critic")
 
+        print("_init_critic ds_config train ---1:", ds_config)  # 一直打开
+
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size
 
@@ -361,11 +382,12 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps
 
+        print("_init_critic ds_config train ---2:", ds_config)  # 一直打开
+
         #TODO(jeff): should not be needed, we should be able to use ds_config above
         #TODO(jeff): it means we never create the critic w. zero.init context if we are using ZeRO-3
         ds_eval_config = get_eval_ds_config(offload=False, stage=0)
-
-        print("_init_critic ds_config is:", ds_config)
+        print("_init_critic ds_config eval:", ds_config)  # 一直打开
 
         # Model
         critic_model = create_critic_model(
@@ -375,14 +397,20 @@ class DeepSpeedRLHFEngine():
             num_padding_at_beginning=self.args.num_padding_at_beginning,
             rlhf_training=True,
             disable_dropout=self.args.disable_critic_dropout)
+        print("s3 critic_model = create_critic_model:", critic_model)
 
         # LoRA
         if self.args.critic_lora_dim > 0:
+
             critic_model = convert_linear_layer_to_lora(
                 critic_model, self.args.critic_lora_module_name,
                 self.args.critic_lora_dim)
+
+            print("s3 convert_linear_layer_to_lora critic_model:", critic_model)
+
             if self.args.only_optimize_lora:
                 critic_model = only_optimize_lora_parameters(critic_model)
+                print("s3 only_optimize_lora_parameters critic_model:", critic_model)
 
         # Optimizer
         AdamOptimizer = DeepSpeedCPUAdam if self.args.offload else FusedAdam
@@ -401,10 +429,12 @@ class DeepSpeedRLHFEngine():
         )
 
         # DeepSpeed Engine
+        print("#######ph3 critic_model deepspeed.initialize ################################################")
         critic_engine, *_ = deepspeed.initialize(model=critic_model,
                                                  optimizer=optim,
                                                  lr_scheduler=lr_scheduler,
                                                  config=ds_config)
+        print("#######ph3 critic_model deepspeed.initialize ################################################")
 
         log_init("Critic", stime=stime)
         return critic_engine
@@ -423,6 +453,7 @@ class DeepSpeedRLHFEngine():
 
         ds_config = get_eval_ds_config(offload=self.args.offload,
                                        stage=zero_stage)
+        print("_init_reward ds_config eval--1 :", ds_config)  # 一直打开
 
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size
@@ -431,11 +462,12 @@ class DeepSpeedRLHFEngine():
             'train_batch_size'] = self.args.per_device_mini_train_batch_size * torch.distributed.get_world_size(
             ) * self.args.gradient_accumulation_steps
 
-        #print("_init_reward ds_config is:", ds_config)
+        print("_init_reward ds_config eval--2:", ds_config)  # 一直打开
 
         #TODO(jeff): should not be needed, we should be able to use ds_config above
         #TODO(jeff): it means we never create the critic w. zero.init context if we are using ZeRO-3
         ds_eval_config = get_eval_ds_config(offload=False, stage=0)
+        print("_init_reward eval ds_config --3:", ds_eval_config)  # 一直打开
 
         ## reward model 和 critic model 都是用step 2 的模型初始化，step 3 中 reward model 不再训练
         # Model
@@ -446,8 +478,10 @@ class DeepSpeedRLHFEngine():
             num_padding_at_beginning=self.args.num_padding_at_beginning,
             rlhf_training=True)
 
+        print("#######ph3 reward_engine deepspeed.initialize ################################################")
         reward_engine, *_ = deepspeed.initialize(model=reward_model,
                                                  config=ds_config)
+        print("#######ph3 reward_engine deepspeed.initialize ################################################")
 
         log_init("Reward", stime=stime)
         return reward_engine

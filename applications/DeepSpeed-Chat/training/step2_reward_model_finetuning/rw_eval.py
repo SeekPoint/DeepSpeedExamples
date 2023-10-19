@@ -17,10 +17,10 @@ from utils.utils import load_hf_tokenizer
 
 from pydebug import debuginfo, infoTensor
 
+# 解析命令行参数
 def parse_args():
-    parser = argparse.ArgumentParser(
-        description="Eval the finetued reward model")
-    # 1. 模型
+    parser = argparse.ArgumentParser(description="Eval the finetued reward model")
+    # 基线模型的路径
     parser.add_argument(
         "--model_name_or_path",
         type=str,
@@ -28,7 +28,8 @@ def parse_args():
         "Path to pretrained model or model identifier from huggingface.co/models.",
         required=True,
     )
-    # 2. 开始处的padding token数量
+
+    # 开始处的padding token数量
     parser.add_argument(
         "--num_padding_at_beginning",
         type=int,
@@ -37,7 +38,9 @@ def parse_args():
         "OPT model has a fixed number (1) of padding tokens at the beginning of the input. "
         "We did not see this in other models but keep it as an option for now.",
     )
+
     args = parser.parse_args()
+
     return args
 
 # 加载 tokenizer 和 model
@@ -46,6 +49,7 @@ def load_stuff(model_name_or_path, num_padding_at_beginning):
     # 加载 tokenizer
     tokenizer = load_hf_tokenizer(model_name_or_path, fast_tokenizer=True)
     tokenizer.pad_token = tokenizer.eos_token
+
     # 创建奖励模型
     model = create_critic_model(model_name_or_path, tokenizer, None,
                                 num_padding_at_beginning, True)
@@ -59,10 +63,12 @@ def prepare_datapair(prompt,
                      tokenizer,
                      max_seq_len=512,
                      end_of_conversation_token="<|endoftext|>"):
-    # 被选中的语句（good answer）
-    chosen_sentence = prompt + good_ans + end_of_conversation_token  # the accept response
-    # 被拒绝的语句（bad answer）
-    reject_sentence = prompt + bad_ans + end_of_conversation_token  # the reject response
+    # 被选中的语句（good answer）# the accept response
+    chosen_sentence = prompt + good_ans + end_of_conversation_token
+
+    # 被拒绝的语句（bad answer）# the reject response
+    reject_sentence = prompt + bad_ans + end_of_conversation_token
+
     # toknization
     chosen_token = tokenizer(chosen_sentence,
                              max_length=max_seq_len,
@@ -91,7 +97,9 @@ def prepare_singlesample(prompt,
                          tokenizer,
                          max_seq_len=512,
                          end_of_conversation_token="<|endoftext|>"):
+
     chosen_sentence = prompt + good_ans + end_of_conversation_token
+
     chosen_token = tokenizer(chosen_sentence,
                              max_length=max_seq_len,
                              padding="max_length",
@@ -106,17 +114,19 @@ def prepare_singlesample(prompt,
 
 
 def run_pair_comparison():
-    # 1. 参数配置
+    # 参数配置
     args = parse_args()
-    # 2. 移动到CUDA
+
+    # 移动到CUDA
     device = torch.device("cuda:0")
-    # 3. 加载 tokenizer 和 reward model
+
+    # 加载 tokenizer 和 reward model
     rm_model, tokenizer = load_stuff(args.model_name_or_path,
                                      args.num_padding_at_beginning)
     rm_model.to(device)
     rm_model.eval()
 
-    # 4. 测试样例
+    # 测试样例
     prompt_list = [
         "Human: Please tell me about Microsoft in a few sentence? Assistant: ",
         "Human: Explain the moon landing to a 6 year old in a few sentences. Assistant: "
@@ -129,8 +139,10 @@ def run_pair_comparison():
         "I'm not sure. Human: What's your job? Assistant: I'm not sure. Human: What's your favorite color? Assistant: I'm not sure. Human: What's your favorite food? Assistant: I'm not sure. Human: What's your favorite drink? Assistant: I'm not sure.",
         "I don't know, I don't know."
     ]
-    # 5. 奖励模型推理
-    for prompt, good_ans, bad_ans in zip(prompt_list, good_ans_list,
+
+    # 奖励模型推理
+    for prompt, good_ans, bad_ans in zip(prompt_list,
+                                         good_ans_list,
                                          bad_ans_list):
         # 准备批数据
         batch = prepare_datapair(prompt,
@@ -139,8 +151,9 @@ def run_pair_comparison():
                                  tokenizer,
                                  max_seq_len=512,
                                  end_of_conversation_token="<|endoftext|>")
-        # 部署到device上
+        # 数据移到device上
         batch = to_device(batch, device)
+
         # Run inference
         with torch.no_grad():
             # 前向传播
@@ -167,6 +180,7 @@ def run_single_sample():
 
     prompt = "Human: Explain the moon landing to a 6 year old in a few sentences."
     my_ans = "Assistant: The moon landing was a major milestone in the history of human exploration of the solar system. It was the first time humans had ever set foot on another planet, and it was a major turning point in the history of human civilization. The astronauts, Neil Armstrong, Buzz Aldrin, and Michael Collins, successfully landed the Apollo 11 spacecraft on the moon, marking the first time humans had ever set foot on another"
+
     # 针对单个样本
     batch = prepare_singlesample(prompt,
                                  my_ans,
@@ -178,6 +192,7 @@ def run_single_sample():
     batch = to_device(batch, device)
 
     rm_model.eval()
+
     # Run inference
     with torch.no_grad():
         outputs = rm_model.forward_value(

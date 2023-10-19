@@ -44,44 +44,11 @@ def create_hf_model(model_class,
                     ds_config=None,
                     rlhf_training=False,
                     disable_dropout=False):
+
     # 根据model_name_or_path从预训练模型获取模型配置model_config。
 	# 从预训练模型的路径或名称中加载模型配置
     model_config = AutoConfig.from_pretrained(model_name_or_path)
-    #print("model_config is", model_config)
-    '''
-    model_config is OPTConfig {
-                  "_name_or_path": "/home/amd00/hf_model/opt-125m",
-                  "_remove_final_layer_norm": false,
-                  "activation_dropout": 0.0,
-                  "activation_function": "relu",
-                  "architectures": [
-                    "OPTForCausalLM"
-                  ],
-                  "attention_dropout": 0.0,
-                  "bos_token_id": 2,
-                  "do_layer_norm_before": true,
-                  "dropout": 0.1,
-                  "enable_bias": true,
-                  "eos_token_id": 2,
-                  "ffn_dim": 3072,
-                  "hidden_size": 768,
-                  "init_std": 0.02,
-                  "layer_norm_elementwise_affine": true,
-                  "layerdrop": 0.0,
-                  "max_position_embeddings": 2048,
-                  "model_type": "opt",
-                  "num_attention_heads": 12,
-                  "num_hidden_layers": 12,
-                  "pad_token_id": 1,
-                  "prefix": "</s>",
-                  "torch_dtype": "float16",
-                  "transformers_version": "4.32.1",
-                  "use_cache": true,
-                  "vocab_size": 50272,
-                  "word_embed_proj_dim": 768
-                }
-
-    '''
+    print("model_config is", model_config)  # 一直保留，以下同
 
     # 如果disable_dropout为真，则将模型配置中的dropout设为0.0。
     if disable_dropout:
@@ -100,38 +67,41 @@ def create_hf_model(model_class,
         dschf = None
 
     # 是否进行强化学习训练
-    # 根据rlhf_training的值，确定是从配置中创建模型还是从预训练模型中加载模型。
-	# 如果rlhf_training为真，则根据模型配置创建模型；否则，从预训练模型加载模型。
+    # 根据rlhf_training的值，确定是从配置中创建模型还是从预训练模型中加载模型。后面有补充区别
     if rlhf_training:
-        debuginfo(prj="ds-chat", info = "rlhf_training")
+        debuginfo(prj="ds-chat", info = "将使用模型配置（而非预训练权重）来创建模型")
 
-        # 将使用模型配置（而非预训练权重）来创建模型
         # the weight loading is handled by create critic model
         model = model_class.from_config(model_config)
-        # print("model-A is", model)
+        print("model-A is", model)
     else:
-        debuginfo(prj="ds-chat", info="rlhf_training")
-
-        # 将从预训练模型中加载权重
-        # 如果模型的路径或名称包含".ckpt"，那么模型将从TensorFlow checkpoint加载权重。
+        debuginfo(prj="ds-chat", info="将从预训练模型中加载模型及其权重")
+        # 如果模型的路径或名称包含".ckpt"，那么模型将从tf checkpoint加载权重。
         model = model_class.from_pretrained(
             model_name_or_path,
             from_tf=bool(".ckpt" in model_name_or_path),
             config=model_config)
-        # print("model-B is", model)
+        print("model-B is", model)
 
+
+    print("tokenizer.eos_token_id is:", tokenizer.eos_token_id)
+    print("model.config.eos_token_id is:", model.config.eos_token_id)
     # 将模型的结束标记和填充标记设为分词器的结束标记id。
-	# 将模型配置中的结束符号id和填充符号id设为tokenizer的结束符号id
+    # 将模型配置中的结束符号id和填充符号id设为tokenizer的结束符号id
     model.config.end_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = model.config.eos_token_id
 
-    # 调整模型的词汇表大小，使其为8的倍数。这样做的目的是为了在某些硬件（如GPU）上提高效率。
+    #不能放在上面
+    print("model.config.end_token_id is:", model.config.end_token_id)
+    print("model.config.pad_token_id is:", model.config.pad_token_id)
+
+    # 调整模型的词汇表大小，使其为8的倍数 yknote????为了在某些硬件（如GPU）上提高效率。
     model.resize_token_embeddings(int(
         8 *
         math.ceil(len(tokenizer) / 8.0)))  # make the vocab size multiple of 8
 
     #按照Causal Language Modeling进行训练，例如GPT、OPT、LLaMA、BLOOM等。
-    # print("model-C is", model)
+    print("model-C is", model)
 
     return model
 
@@ -149,18 +119,16 @@ def create_critic_model(model_name_or_path,
     """此处的模型读取方法用的是“AutoModel”，因此此处critic_model只有主干部分"""
     critic_model = create_hf_model(AutoModel, model_name_or_path, tokenizer,
                                    ds_config, rlhf_training, disable_dropout)
-    # print("critic_model-A is", critic_model)
+    print("critic_model-A is", critic_model)
     
-	# 2. 在强化学习中评估动作的回报值
-    """
-       critic_model传入RewardModel，将额外得到线性层输出头，
-       因此此处的critic_model结构为“v_head + 主干部分”
-    """
+    # 2. 在强化学习中评估动作的回报值
+    # critic_model传入RewardModel进行改造！！
+    # 将额外得到线性层输出头，因此此处的critic_model结构为“v_head + 主干部分”
     critic_model = RewardModel(
         critic_model,
         tokenizer,
         num_padding_at_beginning=num_padding_at_beginning)
-    #print("critic_model-B is", critic_model)
+    print("critic_model-B is", critic_model)
 
     # 在RLHF训练模式下，为critic model加载预训练权重，以便在后续的训练过程中用于评估生成模型的表现。
     if rlhf_training:
@@ -179,166 +147,23 @@ def create_critic_model(model_name_or_path,
         critic_model.load_state_dict(
             torch.load(model_ckpt_path, map_location='cpu'))
 
-    #print("critic_model-C is", critic_model)
+    print("critic_model-C is", critic_model)
 
     return critic_model
 
+'''补充知识
+https://stackoverflow.com/questions/72695297/difference-between-from-config-and-from-pretrained-in-huggingface
 
-'''
-    model-C is OPTForCausalLM(
-      (model): OPTModel(
-        (decoder): OPTDecoder(
-          (embed_tokens): Embedding(50272, 768, padding_idx=1)
-          (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-          (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (layers): ModuleList(
-            (0-11): 12 x OPTDecoderLayer(
-              (self_attn): OPTAttention(
-                (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                (out_proj): Linear(in_features=768, out_features=768, bias=True)
-              )
-              (activation_fn): ReLU()
-              (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              (fc1): Linear(in_features=768, out_features=3072, bias=True)
-              (fc2): Linear(in_features=3072, out_features=768, bias=True)
-              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-            )
-          )
-        )
-      )
-      (lm_head): Linear(in_features=768, out_features=50272, bias=False)
-    )
+The two functions you described, from_config and from_pretrained, do not behave the same. 
+For a model M, with a reference R:
+
+    from_config allows you to instantiate a blank model,
+         which has the same configuration (the same shape) as your model of choice: 
+         M is as R was before training
+         
+    from_pretrained allows you to load a pretrained model,
+         which has already been trained on a specific dataset for a given number of epochs: 
+         M is as R after training.
 '''
 
-'''
-    model-A is OPTModel(
-          (decoder): OPTDecoder(
-            (embed_tokens): Embedding(50272, 768, padding_idx=2)
-            (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-            (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-            (layers): ModuleList(
-              (0-11): 12 x OPTDecoderLayer(
-                (self_attn): OPTAttention(
-                  (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (out_proj): Linear(in_features=768, out_features=768, bias=True)
-                )
-                (activation_fn): ReLU()
-                (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                (fc1): Linear(in_features=768, out_features=3072, bias=True)
-                (fc2): Linear(in_features=3072, out_features=768, bias=True)
-                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              )
-            )
-          )
-        )
-'''
-
-'''
-    critic_model-A is OPTModel(
-          (decoder): OPTDecoder(
-            (embed_tokens): Embedding(50272, 768, padding_idx=1)
-            (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-            (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-            (layers): ModuleList(
-              (0-11): 12 x OPTDecoderLayer(
-                (self_attn): OPTAttention(
-                  (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                  (out_proj): Linear(in_features=768, out_features=768, bias=True)
-                )
-                (activation_fn): ReLU()
-                (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                (fc1): Linear(in_features=768, out_features=3072, bias=True)
-                (fc2): Linear(in_features=3072, out_features=768, bias=True)
-                (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              )
-            )
-          )
-        )   
-        
-        critic_model-B is RewardModel(
-          (v_head): Linear(in_features=768, out_features=1, bias=False)
-          (rwtranrsformer): OPTModel(
-            (decoder): OPTDecoder(
-              (embed_tokens): Embedding(50272, 768, padding_idx=1)
-              (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              (layers): ModuleList(
-                (0-11): 12 x OPTDecoderLayer(
-                  (self_attn): OPTAttention(
-                    (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (out_proj): Linear(in_features=768, out_features=768, bias=True)
-                  )
-                  (activation_fn): ReLU()
-                  (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                  (fc1): Linear(in_features=768, out_features=3072, bias=True)
-                  (fc2): Linear(in_features=3072, out_features=768, bias=True)
-                  (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                )
-              )
-            )
-          )
-        )
-        
-        critic_model-C is RewardModel(
-          (v_head): Linear(in_features=768, out_features=1, bias=False)
-          (rwtranrsformer): OPTModel(
-            (decoder): OPTDecoder(
-              (embed_tokens): Embedding(50272, 768, padding_idx=1)
-              (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-              (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-              (layers): ModuleList(
-                (0-11): 12 x OPTDecoderLayer(
-                  (self_attn): OPTAttention(
-                    (k_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (v_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (q_proj): Linear(in_features=768, out_features=768, bias=True)
-                    (out_proj): Linear(in_features=768, out_features=768, bias=True)
-                  )
-                  (activation_fn): ReLU()
-                  (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                  (fc1): Linear(in_features=768, out_features=3072, bias=True)
-                  (fc2): Linear(in_features=3072, out_features=768, bias=True)
-                  (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-                )
-              )
-            )
-          )
-        )
-
-'''
-'''
-
-model-B is OPTForCausalLM(
-  (model): OPTModel(
-    (decoder): OPTDecoder(
-      (embed_tokens): Embedding(50272, 768, padding_idx=1)
-      (embed_positions): OPTLearnedPositionalEmbedding(2050, 768)
-      (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-      (layers): ModuleList(
-        (0-11): 12 x OPTDecoderLayer(
-          (self_attn): OPTAttention(
-            (k_proj): Linear(in_features=768, out_features=768, bias=True)
-            (v_proj): Linear(in_features=768, out_features=768, bias=True)
-            (q_proj): Linear(in_features=768, out_features=768, bias=True)
-            (out_proj): Linear(in_features=768, out_features=768, bias=True)
-          )
-          (activation_fn): ReLU()
-          (self_attn_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-          (fc1): Linear(in_features=768, out_features=3072, bias=True)
-          (fc2): Linear(in_features=3072, out_features=768, bias=True)
-          (final_layer_norm): LayerNorm((768,), eps=1e-05, elementwise_affine=True)
-        )
-      )
-    )
-  )
-  (lm_head): Linear(in_features=768, out_features=50272, bias=False)
-)
-'''
+#ph-1

@@ -36,7 +36,8 @@ def get_train_ds_config(offload, # 否使用ZeRO Offload技术。如果为True�
         "offload_optimizer": {
             "device": device
         },
-        # 这三个字段只有在ZeRO stage 3时有效，用于控制参数offloading的细节。
+
+        # 只有在ZeRO stage 3时有效，控制参数offloading的细节。
         "stage3_param_persistence_threshold": 1e4,
         "stage3_max_live_parameters": 3e7,
         "stage3_prefetch_bucket_size": 3e7,
@@ -56,8 +57,8 @@ def get_train_ds_config(offload, # 否使用ZeRO Offload技术。如果为True�
             "enabled": True,           # 是否启用半精度浮点数进行训练
             "loss_scale_window": 100
         },
-        "gradient_clipping": 1.0,      # 梯度裁剪的阈值，用于防止梯度爆炸
-        "prescale_gradients": False,   # 是否在梯度累计之前就进行梯度缩放，通常用于防止梯度下溢, 是否对梯度进行预缩放
+        "gradient_clipping": 1.0,      # 梯度裁剪的阈值，防止梯度爆炸
+        "prescale_gradients": False,   # 是否在梯度累计之前就进行梯度缩放，防止梯度下溢, 是否对梯度进行预缩放
         "wall_clock_breakdown": False, # 是否进行每步训练时间的详细分析, 是否打印训练过程中各部分的耗时详细信息
         "hybrid_engine": {  # HE允许模型的不同部分在不同的GPU上进行训练，以实现更大规模的模型训练和更高效的硬件利用率
             "enabled": enable_hybrid_engine,

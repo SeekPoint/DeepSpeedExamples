@@ -1,0 +1,472 @@
+================================================直接由ds启动！
+
+注意:
+1 对于action= store_XXX的参数
+    --gradient_checkpointing True
+    --disable_dropout False
+===不能填写 False、True true false
+
+2  --deepspeed  源码并没有这个参数, bash中有
+
+
+~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning$
+
+===ph1===z0
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path . \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 0 \
+   --lora_dim 16 \
+   --output_dir actor+opt125m+Z0 \
+    2>&1 | tee actor+opt125m+Z0/training-1node2gpus.log
+
+===ph1===z1
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path . \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 1 \
+   --lora_dim 16 \
+   --output_dir actor+opt125m+Z1 \
+    2>&1 | tee actor+opt125m+Z1/training-1node2gpus.log
+
+===ph1===z2
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path . \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 2 \
+   --lora_dim 16 \
+   --output_dir actor+opt125m+Z2 \
+    2>&1 | tee actor+opt125m+Z2/training-1node2gpus.log
+
+===ph1===z3
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path . \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 3 \
+   --lora_dim 16 \
+   --output_dir actor+opt125m+Z3 \
+    2>&1 | tee actor+opt125m+Z3/training-1node2gpus.log
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step2_reward_model_finetuning$
+
+===ph2===z0
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
+   --max_seq_len 128 \
+   --learning_rate 5e-5 \
+   --weight_decay 0.1 \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --zero_stage 0 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --output_dir reward+opt125m+Z0 \
+   2>&1 | tee 2>&1 | tee reward+opt125m+Z0/training-1node2gpus.log
+
+===ph2===z1
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
+   --max_seq_len 128 \
+   --learning_rate 5e-5 \
+   --weight_decay 0.1 \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --zero_stage 1 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --output_dir reward+opt125m+Z1 \
+   2>&1 | tee 2>&1 | tee reward+opt125m+Z1/training-1node2gpus.log
+
+===ph2===z2
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
+   --max_seq_len 128 \
+   --learning_rate 5e-5 \
+   --weight_decay 0.1 \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --zero_stage 2 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --output_dir reward+opt125m+Z2 \
+   2>&1 | tee 2>&1 | tee reward+opt125m+Z2/training-1node2gpus.log
+
+===ph2===z3
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
+   --max_seq_len 128 \
+   --learning_rate 5e-5 \
+   --weight_decay 0.1 \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --zero_stage 3 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --output_dir reward+opt125m+Z3 \
+   2>&1 | tee 2>&1 | tee reward+opt125m+Z3/training-1node2gpus.log
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+inference_tp_size 的话必须启用zero3！！！
+
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step3_rlhf_finetuning$
+
+===ph3===z3
+===出问题的配置
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_mini_train_batch_size 4 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 10 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 3 \
+   --critic_zero_stage 3 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 2 \
+   --tp_gather_partition_size 2 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --output_dir rlhf+opt125m+ac3+cr3 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac3+cr3/training-1node2gpus.log
+
+
+    self._attn_qkvw, self._attn_qkvb = self._merge_qkv()
+  File "/home/amd00/yk_repo/ds/DeepSpeed/deepspeed/ops/transformer/inference/ds_attention.py", line 125, in _merge_qkv
+    qvkw[:self.hidden_size_per_partition, :] = self.attn_qw  # type: ignore
+RuntimeError: The expanded size of the tensor (384) must match the existing size (768) at non-singleton dimension 0.  Target sizes: [384, 768].  Tensor sizes: [768, 768]
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+===ph3===z3  ===出问题的配置
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 16 \
+   --per_device_mini_train_batch_size 8 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 10 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 3 \
+   --critic_zero_stage 3 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 4 \
+   --tp_gather_partition_size 4 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --output_dir rlhf+opt125m+ac3+cr3 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac3+cr3/training-1node2gpus.log
+
+
+    self._inference_containers.append(self.inference_policies[child.__class__][0](
+  File "/home/amd00/yk_repo/ds/DeepSpeed/deepspeed/runtime/hybrid_engine.py", line 119, in new_inference_container
+    _container.set_tensor_parallel_config(self._config.hybrid_engine.inference_tp_size, self.mp_group)
+  File "/home/amd00/yk_repo/ds/DeepSpeed/deepspeed/runtime/engine.py", line 514, in __getattr__
+    raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+AttributeError: 'DeepSpeedHybridEngine' object has no attribute 'mp_group'
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+===ph3===z3
+
+会生成 ~/.cache/torch_extensions/py39_cu121/transformer_inference/*
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 16 \
+   --per_device_mini_train_batch_size 8 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 10 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 3 \
+   --critic_zero_stage 3 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 1 \
+   --tp_gather_partition_size 2 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --actor_lora_dim 64 \
+   --critic_lora_dim 32 \
+   --enable_ema \
+   --output_dir rlhf+opt125m+ac3+cr3 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac3+cr3/training-1node2gpus.log
+
+
+
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+===ph3===z2
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_mini_train_batch_size 4 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 3 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 2 \
+   --critic_zero_stage 2 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 1 \
+   --tp_gather_partition_size 2 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --output_dir rlhf+opt125m+ac2+cr2 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac2+cr2/training-1node2gpus.log
+
+===ph3===z1
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_mini_train_batch_size 4 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 3 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 1 \
+   --critic_zero_stage 1 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 1 \
+   --tp_gather_partition_size 2 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --output_dir rlhf+opt125m+ac1+cr1 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac1+cr1/training-1node2gpus.log
+
+===ph3===z0
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --actor_model_name_or_path ../step1_supervised_finetuning/actor+opt125m+Z1 \
+   --critic_model_name_or_path ../step2_reward_model_finetuning/reward+opt125m+Z1 \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_mini_train_batch_size 4 \
+   --generation_batch_numbers 2 \
+   --ppo_epochs 2 \
+   --max_answer_seq_len 128 \
+   --max_prompt_seq_len 128 \
+   --actor_learning_rate 9.65e-6 \
+   --critic_learning_rate 5e-6 \
+   --num_train_epochs 2 \
+   --lr_scheduler_type cosine \
+   --gradient_accumulation_steps 2 \
+   --disable_actor_dropout \
+   --num_warmup_steps 3 \
+   --deepspeed \
+   --seed 1234 \
+   --enable_hybrid_engine \
+   --actor_zero_stage 0 \
+   --critic_zero_stage 0 \
+   --enable_ema \
+   --preprocessing_num_workers 2 \
+   --enable_hybrid_engine \
+   --unpin_actor_parameters \
+   --release_inference_cache \
+   --inference_tp_size 1 \
+   --tp_gather_partition_size 2 \
+   --actor_gradient_checkpointing \
+   --critic_gradient_checkpointing \
+   --output_dir rlhf+opt125m+ac0+cr0 \
+   2>&1 | tee 2>&1 | tee rlhf+opt125m+ac0+cr0/training-1node2gpus.log
