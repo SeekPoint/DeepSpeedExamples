@@ -14,7 +14,7 @@ from utils.module.lora import convert_linear_layer_to_lora, only_optimize_lora_p
 from utils.model.model_utils import create_hf_model, create_critic_model
 from utils.utils import get_optimizer_grouped_parameters
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 """
 TODOs:
@@ -81,7 +81,7 @@ class DeepSpeedRLHFEngine():
         2. critic与reward通常都初始化自phase2训练所得的模型。
         根据它们的入参就能知道。
         """
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         self.args = args
         self.num_total_iters = num_total_iters
         self.tokenizer = tokenizer
@@ -141,7 +141,7 @@ class DeepSpeedRLHFEngine():
         同时享有训练与推理的优化，
         这对于既需要进行推理生成、又需要进行训练的actor来说是有增益作用的。
         """
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 		
         # 打印一条关于actor模型初始化开始的信息
         stime = log_init("Actor")
@@ -250,7 +250,7 @@ class DeepSpeedRLHFEngine():
     """
     # ref模型
     def _init_ref(self, actor_model_name_or_path):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''初始化参考模型（Ref model）'''
         stime = log_init("Ref")
 
@@ -258,7 +258,7 @@ class DeepSpeedRLHFEngine():
         zero_stage = self.args.actor_zero_stage
 
         if zero_stage != 3:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
             # If actor is ZeRO-3 then we use it for everything, otherwise assume we have enough memory for ref model
             # 如果Actor模型使用了ZeRO-3阶段，那么参考模型也使用，否则使用ZeRO-0阶段。
             # 区别：
@@ -304,7 +304,7 @@ class DeepSpeedRLHFEngine():
 
     # ema模型
     def _init_ema(self, actor_model_name_or_path):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''初始化指数移动平均（Exponential Moving Average，EMA）模型
         知识补充:
         EMA模型是用来平滑模型权重的，它会根据设定的衰减率持续追踪模型的运动平均。
@@ -362,7 +362,7 @@ class DeepSpeedRLHFEngine():
 
     # critic模型
     def _init_critic(self, critic_model_name_or_path):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Critic")
 
         ds_config = get_train_ds_config(
@@ -441,7 +441,7 @@ class DeepSpeedRLHFEngine():
 
     # reward模型
     def _init_reward(self, critic_model_name_or_path):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         stime = log_init("Reward")
 
         # DS Config

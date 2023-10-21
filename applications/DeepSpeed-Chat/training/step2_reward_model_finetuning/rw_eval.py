@@ -15,7 +15,7 @@ from utils.model.model_utils import create_critic_model
 from utils.utils import to_device
 from utils.utils import load_hf_tokenizer
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 # 解析命令行参数
 def parse_args():
@@ -45,7 +45,7 @@ def parse_args():
 
 # 加载 tokenizer 和 model
 def load_stuff(model_name_or_path, num_padding_at_beginning):
-    debuginfo(prj='ds-chat')
+    gd.debuginfo(prj='ds-chat')
     # 加载 tokenizer
     tokenizer = load_hf_tokenizer(model_name_or_path, fast_tokenizer=True)
     tokenizer.pad_token = tokenizer.eos_token
@@ -167,7 +167,7 @@ def run_pair_comparison():
         print("good_ans score: ", outputs["chosen_mean_scores"].item())
         print("bad_ans score: ", outputs["rejected_mean_scores"].item())
 
-        debuginfo(prj='ds-chat', info = f"batch is: {batch}")
+        gd.debuginfo(prj='ds-chat', info = f"batch is: {batch}")
 
 
 def run_single_sample():

@@ -4,7 +4,7 @@
 # DeepSpeed Team
 import torch
 from torch import nn
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 '''
 3.3.3.3 奖励reward_score和价值估计values的获取
@@ -89,7 +89,7 @@ class RewardModel(nn.Module):
 
         # 检查配置是否包含word_embed_proj_dim属性
         if hasattr(self.config, "word_embed_proj_dim"):
-            debuginfo(prj='ds-chat', info=self.__class__.__name__ + '-- word_embed_proj_dim')
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ + '-- word_embed_proj_dim')
             # `OPT` models use word_embed_proj_dim as final output
             # https://github.com/huggingface/transformers/blob/main/src/transformers/models/opt/modeling_opt.py#L497
             """
@@ -102,7 +102,7 @@ class RewardModel(nn.Module):
                                     1,
                                     bias=False)
         else:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__ + '--No word_embed_proj_dim')
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ + '--No word_embed_proj_dim')
             # `gpt-neo(x)` models use `hidden_size` attribute names instead of `n_embd``
 
             # 检查配置是否包含hidden_size属性。如果包含，那么将其赋值给n_embd
@@ -120,7 +120,7 @@ class RewardModel(nn.Module):
 
     # 启用梯度检查点，减少内存使用
     def gradient_checkpointing_enable(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 启用后，在反向传播过程中，rwtranrsformer会重新计算一些中间层的输出，
         # 而不是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -128,7 +128,7 @@ class RewardModel(nn.Module):
 
     # 禁用梯度检查点
     def gradient_checkpointing_disable(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 禁用后，rwtranrsformer在反向传播过程中不再重新计算一些中间层的输出，
         # 而是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -151,7 +151,7 @@ class RewardModel(nn.Module):
         """
         loss = None
 
-        # debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        # gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         """获得主干网络的输出的特征"""
         transformer_outputs = self.rwtranrsformer(
@@ -194,9 +194,25 @@ class RewardModel(nn.Module):
         # 这个值可以被视为模型对每个输入token的奖励
 
         # v_head为Dx1的全连接网络对最后一维压缩
-        # 将特征送入全连接层得到分数回归值
-        # rewards.shape: (bs * 2, max_seq_len)
+        # 将特征送入全连接层得到分数回归值， rewards.shape: (bs * 2, max_seq_len)
         # 全连接层将每个token的隐藏状态映射到一个实数，即模型对该token的奖励。
+        '''
+        假设bs=2，seq_len=3,
+        对应hidden_state的形状就是[2, 3, hidden_dim]的三维张量，其中hidden_dim是隐藏层的维度
+        
+        hidden_state经过下面语句，也就是全连接层self.v_head后，会变成一个形状为[2, 3, 1]的三维张量，
+        也就是对于每一个输入的token，都得到一个对应的奖励值，这个奖励值被包裹在形状为[1]的张量中，也就是
+        [[[0.1],
+          [0.2],
+          [0.3]],
+         [[0.7],
+          [0.8],
+          [0.9]]]
+        但是我们希望的是一个形状为[2, 3]的二维张量，其中每个元素就是对应token的奖励值，
+        所以通过sqeeze(-1)操作后，可以得到希望的形式
+        [[0.1, 0.2, 0.3],
+         [0.7, 0.8, 0.9]]
+        '''
         rewards = self.v_head(hidden_states).squeeze(-1)
         # print("rewards is:", rewards)
 
@@ -220,8 +236,9 @@ class RewardModel(nn.Module):
         # 序列长度
         seq_len = input_ids.shape[1]
 
-        # 区分出chosen和reject
-        # N x seq x 1 前N个为正样本
+
+        # 区分出chosen和reject ,N x seq x 1 前N个为正样本, 和之前的数据处理代码对应！
+
         # 选择前半部分作为被选定的输入
         chosen_ids = input_ids[:bs]
 
@@ -258,7 +275,7 @@ class RewardModel(nn.Module):
         # Compute pairwise loss. Only backprop on the different tokens before padding
         loss = 0
 
-        # 遍历每个样本
+        # 遍历每个样本，注意bs已经除以2，因为包括了acc和rej的样本
         for i in range(bs):
             # 遍历每个序列对（被接受和被拒绝的序列），提取相应的ID和奖励
 
@@ -308,6 +325,14 @@ class RewardModel(nn.Module):
             取chosen和rejected第一个不同的地方的index，可以理解为“response中两个回答自由发挥的第1个token的index”
             divergence_ind为chosen_sentence和reject_sentence两者answer的第1个token的index
             """
+
+            '''
+            例子， 假设chose_id = [pad, pad, 1, 2, 3, pad, pad, pad],其中pad的id是0
+            self.num_padding_at_begining是序列开始的padding数量，假设它的值是2
+            (chosen_id == self.PAD_ID) 得到 [1, 1, 0, 0, 0, 1, 1, 1] 然后经过nonzero()得到 [0, 1, 5, 6, 7]
+            也就是包括所有pad标记位置的列表
+            
+            '''
 
             ## 获取 PAD_token 的索引, 只支持right_padding ?
 
@@ -461,7 +486,7 @@ class RewardModel(nn.Module):
         :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
         """
 
-        #debuginfo(prj='ds-chat', info=self.__class__.__name__) #后面有细分
+        #gd.debuginfo(prj='ds-chat', info=self.__class__.__name__) #后面有细分
 
         # 模型的隐藏状态，它是一个列表，包含了每一层的输出，
         # 每一层的输出都是一个形状为[batch_size, sequence_length, hidden_size]的tensor。
@@ -487,7 +512,7 @@ class RewardModel(nn.Module):
 
         ## value 为 bs * seq 的sequence 分数
         if return_value_only:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
             """
             如果传参中预设了“return_value_only=True”，
@@ -495,7 +520,7 @@ class RewardModel(nn.Module):
             """
             return values
         else:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
             # 否则还将进一步取得reward_score
             # [0 0 0 0 prompt, answer, 0 0 0 0 ] for step 3, we have padding at the beginning

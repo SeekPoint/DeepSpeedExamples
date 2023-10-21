@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from deepspeed.compression.helper import recursive_getattr, recursive_setattr
 import deepspeed
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 '''
 经过LoRA改造后，原始基座模型（此处的基座模型为“facebook/opt-125m”）的结构如下所示，
@@ -70,7 +70,7 @@ class LinearLayer_LoRA(nn.Module):
                  lora_scaling=1,
                  lora_droppout=0,
                  bias=None):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         super(LinearLayer_LoRA, self).__init__()
 
         """此处的weight和bias即为原始结构中的参数"""
@@ -90,8 +90,10 @@ class LinearLayer_LoRA(nn.Module):
             # 使用了DeepSpeed的阶段3优化
             # 在阶段3中，模型的权重会被切分成多个片段并分布在不同的设备上，因此无法直接获取权重的形状。
             rows, columns = weight.ds_shape
+            print(f"z3: rows:{rows} ++ columns:{columns}")
         except:
             # 没有使用
+            print(f"Not z3: rows:{rows} ++ columns:{columns}")
             rows, columns = weight.shape
 
         # 然后初始化 LoRA 的左右两个权重矩阵，并设置它们为可学习的参数。
@@ -104,8 +106,12 @@ class LinearLayer_LoRA(nn.Module):
         # 新的权重参数，shape = [lora_dim, rows]
         self.lora_left_weight = nn.Parameter(torch.zeros(lora_dim, rows))
 
+        print("self.lora_right_weight :", self.lora_right_weight)
+        print("self.lora_left_weight :", self.lora_left_weight)
+
         # 缩放因子，用于调整LoRA参数的影响大小
         self.lora_scaling = lora_scaling / lora_dim
+        print("self.lora_scaling :", self.lora_scaling)
 
         # 如果 lora_droppout 大于0，则创建一个 Dropout 层；否则创建一个 Identity 层。
 		# lora_dropout是在LoRA层的输出上应用的dropout
@@ -131,7 +137,7 @@ class LinearLayer_LoRA(nn.Module):
         self.fuse_lora = False
 
     def eval(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 将dropout层设置为评估模式
         # 这意味着在评估或测试过程中，dropout层不会进行任何操作，而是简单地将输入传递给下一个层。
@@ -141,7 +147,7 @@ class LinearLayer_LoRA(nn.Module):
         # self.fuse_lora_weight()
 
     def train(self, mode=True):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         # 在模型进行训练时调用
         # 它将dropout层设置为训练模式，这意味着在训练过程中，
         # dropout层会按照预设的概率随机地关闭输入中的部分元素，以防止过拟合。
@@ -151,7 +157,7 @@ class LinearLayer_LoRA(nn.Module):
 
     # 初始化 LoRA 权重的方法。右权重使用 kaiming 均匀分布进行初始化，左权重初始化为全0。
     def reset_parameters(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         """初始化LoRA线性层的参数"""
         # 降维矩阵使用kaiming均匀分布初始化，
         # 服从均匀分布U(-\sqrt{1/in_feature}, +\sqrt{1/in_feature})
@@ -167,7 +173,7 @@ class LinearLayer_LoRA(nn.Module):
     # 这两个方法用于将 LoRA 权重融合到原始权重中，或者从原始权重中解融合。
     # 融合操作实质上是将原始权重与 LoRA 权重的乘积（缩放后）相加。
     def fuse_lora_weight(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''用于将原始的权重和LoRA的权重进行融合'''
         # 如果没有融合，那么它会将LoRA的权重和原始的权重加在一起。
         # 这个过程实际上是一个矩阵乘法操作，然后乘以一个比例因子lora_scaling。
@@ -179,7 +185,7 @@ class LinearLayer_LoRA(nn.Module):
         self.fuse_lora = True
 
     def unfuse_lora_weight(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''用于将融合后的权重分离开来'''
         # 如果已经进行了融合，那么它会将LoRA的权重从融合后的权重中减去，这样就得到了原始的权重。
         # 这个过程实际上是一个矩阵乘法操作，然后乘以一个比例因子lora_scaling。
@@ -204,11 +210,11 @@ class LinearLayer_LoRA(nn.Module):
     # 否则，会额外计算一个 LoRA 项，该项是输入通过 Dropout 层，然后与 LoRA 权重相乘得到的。
     def forward(self, input):
         if self.fuse_lora:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
             # 如果fuse_lora为真，就使用融合后的权重进行线性变换，然后返回结果
             return F.linear(input, self.weight, self.bias)
         else:
-            debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
             """LoRA的正向传播"""
             # 否则，就分别用原始权重和LoRA权重进行线性变换，将两个结果加在一起，然后返回
             return F.linear(
@@ -225,7 +231,7 @@ def convert_linear_layer_to_lora(model,
                                  lora_dim=0,
                                  lora_scaling=1,
                                  lora_droppout=0):
-    debuginfo(prj='ds-chat')
+    gd.debuginfo(prj='ds-chat')
 
     # 保存需要转换为LoRA层的模块的名称
     """
@@ -277,7 +283,7 @@ def convert_linear_layer_to_lora(model,
 # 当这些参数需要再次被使用时，需要先获取到本地。
 # 从给定的参数列表param_list中获取那些在当前GPU上不可用的ZeRO-3分区参数
 def _z3_params_to_fetch(param_list):
-    debuginfo(prj='ds-chat')
+    gd.debuginfo(prj='ds-chat')
 
     # yknote--代码有改动
 	# 这个条件语句判断一个参数是否是被DeepSpeed Zero 3优化过的，且其状态为"未获取"（NOT_AVAILABLE）。
@@ -295,7 +301,7 @@ def _z3_params_to_fetch(param_list):
 # 以便进行下一步的操作，如模型的保存、加载等。
 # convert the LoRA layer to linear layer
 def convert_lora_to_linear_layer(model):
-    debuginfo(prj='ds-chat')
+    gd.debuginfo(prj='ds-chat')
 
     repalce_name = []
 
@@ -338,7 +344,7 @@ def convert_lora_to_linear_layer(model):
 
 # 这个函数的作用是关闭模型中除LoRA参数之外的所有参数的梯度。这意味着在训练过程中，只有LoRA参数会被优化，其他参数保持不变。
 def only_optimize_lora_parameters(model):
-    debuginfo(prj='ds-chat')
+    gd.debuginfo(prj='ds-chat')
 
     # turn off the gradient of all the parameters except the LoRA parameters
     # 遍历模型的所有参数。每个参数都有一个唯一的名称name和对应的参数值param。
@@ -352,12 +358,12 @@ def only_optimize_lora_parameters(model):
 		# 如果参数名称中含有"lora_right_weight"或"lora_left_weight"（这是LoRA层中权重的参数名），
         # 就将该参数的requires_grad属性设置为True，使得该参数在接下来的训练中可以被优化。
         if "lora_right_weight" in name or "lora_left_weight" in name:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             # param.requires_grad = True 如果参数名包含lora_right_weight或lora_left_weight，
             # 则设置参数的requires_grad属性为True，表示需要对此参数进行梯度下降优化。
             param.requires_grad = True
         else:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             # 否则，不被优化
             param.requires_grad = False
     return model

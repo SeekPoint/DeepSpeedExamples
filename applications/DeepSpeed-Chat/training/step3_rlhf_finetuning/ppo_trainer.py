@@ -20,7 +20,7 @@ sys.path.append(
 )
 
 from utils.utils import print_rank_0
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 def print_all_ranks(tag, value, rank):
     '''在多进程（即分布式）训练的环境中，将各个进程（rank）的某个值打印出来。'''
@@ -162,7 +162,7 @@ reward model和critic model是本文第一部分训练出来的模型的两个�
 class DeepSpeedPPOTrainer():
 
     def __init__(self, rlhf_engine, args):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         self.rlhf_engine = rlhf_engine # rlhf引擎实例，包含了所有训练相关模型和参数
         self.actor_model = self.rlhf_engine.actor # actor模型用来决定要执行的动作
         self.critic_model = self.rlhf_engine.critic # critic模型用来评估actor选择的动作的价值
@@ -223,7 +223,7 @@ class DeepSpeedPPOTrainer():
         实际上相当于max_seq_len，
         用于对生成长度做限制
         """
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         # 最大答案序列长度加上给定提问的长度
         max_min_length = self.max_answer_seq_len + prompts.shape[1]
         # print("max_min_length--2 is:", max_min_length)
@@ -361,7 +361,7 @@ class DeepSpeedPPOTrainer():
         :param mask: prompt attention mask, (bs, max_prompt_len)
         :return:
         '''
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         #将actor、reference、critic、reward转换为eval模式
         # 给定prompt，生成response text
@@ -570,7 +570,7 @@ class DeepSpeedPPOTrainer():
                         ref_log_probs, # 参考行为的对数概率
                         reward_score, # 奖励模型给出的奖励
                         action_mask):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 计算kl散度，log_probs里边存的数字经过log变化了，因此减法就对应除法
         """
@@ -677,7 +677,7 @@ class DeepSpeedPPOTrainer():
     使得相应的函数代码衔接在其调用后方，便于具体对照其传参，从而辨析传入的新旧策略、新旧价值估计等：
     '''
     def train_rlhf(self, inputs):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 使用1个ppo_batch的经验数据，执行1次rlhf训练迭代
 
@@ -1093,7 +1093,7 @@ class DeepSpeedPPOTrainer():
 
     # Clipped Surrogate Objective 033.png  对应为更新actor的loss
     def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''
 		定义了PPO算法中的策略梯度损失函数，它是计算actor model的损失函数的一部分。
            PPO的主要思想，即通过限制新旧策略之间的差异来稳定学习过程，同时仍然允许策略改进以获得更好的性能。
@@ -1129,7 +1129,7 @@ class DeepSpeedPPOTrainer():
 
     #同样的，我们也要对critic model进行训练，更新，loss就是mse loss。
     def critic_loss_fn(self, values, old_values, returns, mask):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         # 计算价值损失
 
@@ -1188,7 +1188,7 @@ class DeepSpeedPPOTrainer():
     ## 公式 035.png
 
     def get_advantages_and_returns(self, values, rewards, start):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         '''定义了如何计算Generalized Advantage Estimation (GAE) 和 returns（即每个时间步的累积奖励），
            这两个量都用于PPO (Proximal Policy Optimization)训练过程。
         '''
@@ -1261,32 +1261,32 @@ class DeepSpeedPPOTrainer():
         assert not self.reward_model.module.training
 
     def train(self):
-        #debuginfo(prj='ds-chat', info=self.__class__.__name__)
-        # debuginfo(prj='ds-chat', info="start actor_model.train")
+        #gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        # gd.debuginfo(prj='ds-chat', info="start actor_model.train")
         self.actor_model.train()
-        # debuginfo(prj='ds-chat', info="end actor_model.train")
+        # gd.debuginfo(prj='ds-chat', info="end actor_model.train")
         #
-        debuginfo(prj='ds-chat', info="-start critic_model.train")
+        gd.debuginfo(prj='ds-chat', info="-start critic_model.train")
         self.critic_model.train()
-        debuginfo(prj='ds-chat', info="end critic_model.train")
+        gd.debuginfo(prj='ds-chat', info="end critic_model.train")
 
     def eval(self):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
-        # debuginfo(prj='ds-chat', info="start actor_model.eval")
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        # gd.debuginfo(prj='ds-chat', info="start actor_model.eval")
         self.actor_model.eval()
-        # debuginfo(prj='ds-chat', info="end actor_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="end actor_model.eval")
         #
-        # debuginfo(prj='ds-chat', info="start critic_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="start critic_model.eval")
         self.critic_model.eval()
-        # debuginfo(prj='ds-chat', info="end critic_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="end critic_model.eval")
         #
-        # debuginfo(prj='ds-chat', info="start reward_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="start reward_model.eval")
         self.reward_model.eval()
-        # debuginfo(prj='ds-chat', info="end reward_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="end reward_model.eval")
         #
-        # debuginfo(prj='ds-chat', info="start ref_model.eval ")
+        # gd.debuginfo(prj='ds-chat', info="start ref_model.eval ")
         self.ref_model.eval()
-        # debuginfo(prj='ds-chat', info="end ref_model.eval")
+        # gd.debuginfo(prj='ds-chat', info="end ref_model.eval")
 
     def dump_model_norms(self, tag):
         '''计算并打印每个模型（actor_model，ref_model，critic_model和reward_model）的参数范数
@@ -1316,11 +1316,11 @@ class DeepSpeedPPOTrainer():
 class DeepSpeedPPOTrainerUnsupervised(DeepSpeedPPOTrainer):
 
     def __init__(self, *args, **kwargs):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
         super().__init__(*args, **kwargs)
 
     def train_unsupervised(self, inputs, unsup_coef):
-        debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
 
         """
         1个ppo_batch的无监督训练

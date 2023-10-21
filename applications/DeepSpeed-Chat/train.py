@@ -264,7 +264,7 @@ def main(args):
 
 if __name__ == "__main__":
     # self 不存在时，也可以保证程序正常运行！！https://blog.csdn.net/jewely/article/details/90259422
-    # debuginfo(prj='ds-chat', info=self.__class__.__name__ if 'self' in locals() or 'self' in globals() else '')
+    # gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ if 'self' in locals() or 'self' in globals() else '')
     args = parse_args()
     print("args is:", args)
     main(args)

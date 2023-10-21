@@ -14,7 +14,7 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 # 因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），
 # 默认的数据整理函数（default_data_collator）和获取优化器调度器的函数（get_scheduler）。
@@ -698,7 +698,7 @@ def main():
 
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(model,

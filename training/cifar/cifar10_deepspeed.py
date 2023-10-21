@@ -2,7 +2,7 @@ import torch
 import torchvision
 import torchvision.transforms as transforms
 import argparse
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 import deepspeed
 
@@ -102,12 +102,12 @@ def add_argument():
     return args
 
 
-debuginfo(prj='cifar10ds',info='ds init start')
+gd.debuginfo(prj='cifar10ds',info='ds init start')
 
 deepspeed.init_distributed()
 g_ct.setMileStone("deepspeed.init_distributed")
 
-debuginfo(prj='cifar10ds',info='ds init start')
+gd.debuginfo(prj='cifar10ds',info='ds init start')
 
 ########################################################################
 # The output of torchvision datasets are PILImage images of range [0, 1].

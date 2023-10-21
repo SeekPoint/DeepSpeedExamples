@@ -11,7 +11,7 @@ import json
 import deepspeed
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 # 在rank0也就是master rank打印信息，防止每个机器或GPU都打印消息造成大量重复信息
 def print_rank_0(msg, rank=0):
@@ -340,13 +340,13 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
     # 如果没有使用ZeRO Stage 3，并且当前是主节点global_rank==0，直接保存模型的状态字典state_dict
     if not zero_stage_3:
-        debuginfo(prj='ds-chat', info="Not use zero3")
+        gd.debuginfo(prj='ds-chat', info="Not use zero3")
 
       # 如果没有使用Zero阶段3优化，直接使用PyTorch的torch.save函数保存模型状态。
         if global_rank == 0:
             torch.save(model_to_save.state_dict(), output_model_file)
     else:
-        debuginfo(prj='ds-chat', info = "use zero3")
+        gd.debuginfo(prj='ds-chat', info = "use zero3")
 
         # 如果使用了Zero阶段3优化，因为模型的部分参数和优化器状态在不同的设备上，所以需要先将它们收集起来。
         output_state_dict = {}

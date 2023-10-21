@@ -20,7 +20,7 @@ from transformers import (
 import deepspeed
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
@@ -488,7 +488,7 @@ def main():
 
     # 第6步：模型验证   yknote---改变位置
     def evaluation_reward(model, eval_dataloader):
-        debuginfo(prj='ds-chat')
+        gd.debuginfo(prj='ds-chat')
         # 评估模式
         model.eval()
         # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数  # 预测正确的数量
@@ -497,7 +497,7 @@ def main():
         # 统计预测总数 # 总预测数量
         total_predictions = 0
         scores = 0
-        debuginfo(prj='ds-chat', info=len(eval_dataloader))
+        gd.debuginfo(prj='ds-chat', info=len(eval_dataloader))
         for step, batch in enumerate(eval_dataloader):
             # print("batch---C is:", batch)
             # print("T batch['input_ids']--C:", infoTensor(batch['input_ids']))
@@ -669,7 +669,7 @@ def main():
 
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(rm_model,

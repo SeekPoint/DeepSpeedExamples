@@ -35,7 +35,7 @@ import deepspeed
 from ppo_trainer import DeepSpeedPPOTrainer, DeepSpeedPPOTrainerUnsupervised
 from rlhf_engine import DeepSpeedRLHFEngine
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 import sys
 
@@ -603,13 +603,13 @@ def main():
 
     # 如果启用无监督训练
     if unsupervised_training_enabled:
-        debuginfo(prj='ds-chat')
+        gd.debuginfo(prj='ds-chat')
         # if we enable unsupervised training, we need to double the batch size for actor model
         # actor模型的梯度积累步数将设置为原始梯度积累步数的两倍
         # 这是因为在无监督训练中，需要处理更多的数据（即，每个批次的数据量将加倍），因此需要更多的梯度积累步数来平衡更新。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps * 2
     else:
-        debuginfo(prj='ds-chat')
+        gd.debuginfo(prj='ds-chat')
         # 如果未启用无监督训练，actor模型的梯度积累步数将与原始梯度积累步数相同。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps
 
@@ -705,11 +705,11 @@ def main():
 
             batch_prompt = to_device(batch_prompt, device)
             if batch_unsupervised is not None:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 batch_unsupervised = to_device(batch_unsupervised, device)
                 unsup_dataset = unsup_mini_dataset.add(batch_unsupervised)
             else:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 unsup_dataset = unsup_mini_dataset.add(
                     [[None] * args.per_device_train_batch_size])
             # print("len of unsup_dataset", len(unsup_dataset))
@@ -768,13 +768,13 @@ def main():
             '''
 
             if exp_dataset is not None:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 inner_iter = 0
                 actor_loss_sum, critic_loss_sum, unsup_loss_sum = 0, 0, 0
                 average_reward = 0
 
                 if args.actor_gradient_checkpointing:
-                    debuginfo(prj='ds-chat')
+                    gd.debuginfo(prj='ds-chat')
                     rlhf_engine.actor.gradient_checkpointing_enable()
 
                 '''
@@ -795,11 +795,11 @@ def main():
                 '''
                 # 从经验池中进行学习Epoch轮
                 for ppo_ep in range(args.ppo_epochs):
-                    debuginfo(prj='ds-chat', info = f"ppo_ep is {ppo_ep}")
+                    gd.debuginfo(prj='ds-chat', info = f"ppo_ep is {ppo_ep}")
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
                             zip(exp_dataset, unsup_dataset)):
-                        debuginfo(prj='ds-chat')
+                        gd.debuginfo(prj='ds-chat')
                         # print("exp_data is:", exp_data)
                         # print("unsup_dataset is:", unsup_dataset)
 
@@ -841,7 +841,7 @@ def main():
                             unsup_loss = trainer.train_unsupervised(
                                 unsup_data, args.unsup_coef)
 
-                            debuginfo(prj='ds-chat', info=f"unsup_loss is {unsup_loss}")
+                            gd.debuginfo(prj='ds-chat', info=f"unsup_loss is {unsup_loss}")
 
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
@@ -851,7 +851,7 @@ def main():
 
                         """是否启用指数移动平均技术"""
                         if args.enable_ema:
-                            debuginfo(prj='ds-chat', info=f"enable_ema")
+                            gd.debuginfo(prj='ds-chat', info=f"enable_ema")
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
@@ -871,7 +871,7 @@ def main():
                 print_rank_0("--------------------------------------------------------",args.global_rank)
 
                 if args.enable_tensorboard and torch.distributed.get_rank() == 0:
-                    debuginfo(prj='ds-chat')
+                    gd.debuginfo(prj='ds-chat')
                     writer.add_scalar('reward',
                                       average_reward / inner_iter,
                                       global_step=step)
@@ -890,7 +890,7 @@ def main():
                     writer.flush()
 
             if args.actor_gradient_checkpointing:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 rlhf_engine.actor.gradient_checkpointing_disable()
 
     if args.output_dir is not None:
@@ -905,12 +905,12 @@ def main():
         print("ph3 critic convert_lora_to_linear_layer model:", rlhf_engine.critic)
 
         if args.enable_ema:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             rlhf_engine.actor_ema = convert_lora_to_linear_layer(
                 rlhf_engine.actor_ema)
 
         if torch.distributed.get_rank() == 0:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             save_hf_format(rlhf_engine.actor,
                            tokenizer,
                            args,
@@ -922,21 +922,21 @@ def main():
                            sub_folder='critic')
 
             if args.enable_ema:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 save_hf_format(rlhf_engine.actor_ema,
                                tokenizer,
                                args,
                                sub_folder='actor_ema')
 
         if args.actor_zero_stage == 3:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             save_zero_three_model(rlhf_engine.actor,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(
                                       args.output_dir, 'actor'),
                                   zero_stage=args.actor_zero_stage)
             if args.enable_ema:
-                debuginfo(prj='ds-chat')
+                gd.debuginfo(prj='ds-chat')
                 save_zero_three_model(rlhf_engine.actor_ema,
                                       global_rank=args.global_rank,
                                       save_dir=os.path.join(
@@ -944,7 +944,7 @@ def main():
                                       zero_stage=args.actor_zero_stage)
 
         if args.critic_zero_stage == 3:
-            debuginfo(prj='ds-chat')
+            gd.debuginfo(prj='ds-chat')
             save_zero_three_model(rlhf_engine.critic,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(

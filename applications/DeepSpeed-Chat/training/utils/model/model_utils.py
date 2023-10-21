@@ -14,7 +14,7 @@ from transformers.deepspeed import HfDeepSpeedConfig
 
 from .reward_model import RewardModel
 
-from pydebug import debuginfo, infoTensor
+from pydebug import gd, infoTensor
 
 """
 
@@ -69,13 +69,13 @@ def create_hf_model(model_class,
     # 是否进行强化学习训练
     # 根据rlhf_training的值，确定是从配置中创建模型还是从预训练模型中加载模型。后面有补充区别
     if rlhf_training:
-        debuginfo(prj="ds-chat", info = "将使用模型配置（而非预训练权重）来创建模型")
+        gd.debuginfo(prj="ds-chat", info = "将使用模型配置（而非预训练权重）来创建模型")
 
         # the weight loading is handled by create critic model
         model = model_class.from_config(model_config)
         print("model-A is", model)
     else:
-        debuginfo(prj="ds-chat", info="将从预训练模型中加载模型及其权重")
+        gd.debuginfo(prj="ds-chat", info="将从预训练模型中加载模型及其权重")
         # 如果模型的路径或名称包含".ckpt"，那么模型将从tf checkpoint加载权重。
         model = model_class.from_pretrained(
             model_name_or_path,
