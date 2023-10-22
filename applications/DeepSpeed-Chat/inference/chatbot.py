@@ -219,7 +219,7 @@ def main(args):
         output = process_response(response, num_rounds)
 
         # 最后，更新 user_input 为当前的输出，然后进入下一轮循环。
-        print("-" * 30 + f" Round {num_rounds} " + "-" * 30)
+        gd.debuginfo(prj="ds_chat", info=f"-" * 30 + f" Round {num_rounds} " + "-" * 30)
 
         # 打印出这一轮的对话内容
         print(f"{output}")

@@ -418,10 +418,10 @@ def parse_args():
                         help='Print prompt and answers during training')
 
     parser = deepspeed.add_config_arguments(parser)
-    print("ph3 parser is:", parser)
+    gd.debuginfo(prj="ds_chat", info=f"ph3 parser is:, {parser}")
 
     args = parser.parse_args()
-    print("ph3 args is:", args)
+    gd.debuginfo(prj="ds_chat", info=f"ph3 args is:, {args}")
 
     if args.enable_tensorboard:
         print(f"Tensorboard logs going to: {args.tensorboard_path}/step3_tensorboard_logs")
@@ -588,32 +588,33 @@ def main():
 
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # 初始化分布式环境
-        print("#######ph3 deepspeed.init_distributed() ################################################")
+        gd.enable(info=f"#######ph3 deepspeed.init_distributed() #################################")
         deepspeed.init_distributed()
-        print("#######ph3 deepspeed.init_distributed() ################################################")
+        gd.disable(info=f"#######ph3 deepspeed.init_distributed() ################################")
 
     # 在分布式训练环境中获取当前进程的全局唯一标识符，即全局进程ID。
     # torch.distributed.get_rank()返回的是一个整数，这个整数在整个分布式训练环境中是唯一的，用于表示当前进程。
     # 对于非分布式训练环境，这个函数默认返回0。
     args.global_rank = torch.distributed.get_rank()
-    print("args.global_rank is:", args.global_rank )
+    gd.debuginfo(prj="ds_chat", info=f"args.global_rank is:, {args.global_rank}")
 
     unsupervised_training_enabled = args.unsupervised_dataset_name and args.unsupervised_dataset_config_name
-    print("unsupervised_training_enabled is:", unsupervised_training_enabled)
+    gd.debuginfo(prj="ds_chat", info=f"unsupervised_training_enabled is:, {unsupervised_training_enabled}")
 
     # 如果启用无监督训练
     if unsupervised_training_enabled:
-        gd.debuginfo(prj='ds-chat')
+        gd.debuginfo(prj="ds_chat")
         # if we enable unsupervised training, we need to double the batch size for actor model
         # actor模型的梯度积累步数将设置为原始梯度积累步数的两倍
         # 这是因为在无监督训练中，需要处理更多的数据（即，每个批次的数据量将加倍），因此需要更多的梯度积累步数来平衡更新。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps * 2
     else:
-        gd.debuginfo(prj='ds-chat')
+        gd.debuginfo(prj="ds_chat")
         # 如果未启用无监督训练，actor模型的梯度积累步数将与原始梯度积累步数相同。
         args.gradient_accumulation_steps_actor = args.gradient_accumulation_steps
 
-    print("args.gradient_accumulation_steps_actor is:", args.gradient_accumulation_steps_actor)
+    gd.debuginfo(prj="ds_chat", info=f"args.gradient_accumulation_steps_actor is:\
+                 {args.gradient_accumulation_steps_actor}")
 
     # If passed along, set the training seed now.
     # 设置训练的随机种子
@@ -628,7 +629,7 @@ def main():
     # 创建了一个基于actor模型的分词器
     tokenizer = load_hf_tokenizer(args.actor_model_name_or_path,
                                   fast_tokenizer=True)
-    print("ph3 tokenizer -1 is:", tokenizer)
+    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -1 is:, {tokenizer}")
 
     # 超出原序列长度的部分就会被填充为eos_token。
     tokenizer.pad_token = tokenizer.eos_token
@@ -637,7 +638,7 @@ def main():
     # 填充方式为右填充
     tokenizer.padding_side = 'right'
 
-    print("ph3 tokenizer -2 is:", tokenizer)
+    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -2 is:, {tokenizer}")
 
     # 创建数据集，并获取训练数据dataloader以及总的迭代次数
     prompt_train_dataloader, unsupervised_train_dataloader, num_total_iters = create_datasets(
@@ -661,7 +662,7 @@ def main():
         num_total_iters=num_total_iters, # 总的训练迭代次数
         args=args)
 
-    # print("rlhf_engine is:", rlhf_engine)
+    gd.debuginfo(prj="ds_chat", info=f"rlhf_engine is:, {rlhf_engine}")
     # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
 
     # 该字段的值为一个空字符串，用于表示一个对话的结束
@@ -674,8 +675,8 @@ def main():
     trainer = ppo_trainer(rlhf_engine, args)
 
 
-    # print("ppo_trainer is:", ppo_trainer)
-    # print("trainer is:", trainer)
+    gd.debuginfo(prj="ds_chat", info=f"ppo_trainer is:, {ppo_trainer}")
+    gd.debuginfo(prj="ds_chat", info=f"trainer is:, {trainer}")
     # ppo_trainer is: <class 'ppo_trainer.DeepSpeedPPOTrainer'>
     # trainer is: <ppo_trainer.DeepSpeedPPOTrainer object at 0x7f939c0b7160>
 
@@ -687,8 +688,8 @@ def main():
     unsup_mini_dataset = MiniDataset(args.generation_batch_numbers,
                                      args.per_device_mini_train_batch_size)
 
-    print("exp_mini_dataset is:", exp_mini_dataset)
-    print("unsup_mini_dataset is:", unsup_mini_dataset)
+    gd.debuginfo(prj="ds_chat", info=f"exp_mini_dataset is:, {exp_mini_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"unsup_mini_dataset is:, {unsup_mini_dataset}")
 
     # Train!
     print_rank_0("***** Running training *****", args.global_rank)
@@ -705,17 +706,21 @@ def main():
 
             batch_prompt = to_device(batch_prompt, device)
             if batch_unsupervised is not None:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 batch_unsupervised = to_device(batch_unsupervised, device)
                 unsup_dataset = unsup_mini_dataset.add(batch_unsupervised)
             else:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 unsup_dataset = unsup_mini_dataset.add(
                     [[None] * args.per_device_train_batch_size])
-            # print("len of unsup_dataset", len(unsup_dataset))
-            #len of unsup_dataset 1
-            # print("unsup_dataset", unsup_dataset)
-            # unsup_dataset [[[None, None, None, None]]]
+
+            if unsup_dataset: #可能是None
+                gd.debuginfo(prj="ds_chat", info=f"len of unsup_dataset: {len(unsup_dataset)}")
+                #len of unsup_dataset 1
+                gd.debuginfo(prj="ds_chat", info=f"unsup_dataset: {unsup_dataset}")
+                # unsup_dataset [[[None, None, None, None]]]
+            else:
+                gd.debuginfo(prj="ds_chat", info=f"unsup_dataset is None")
 
 
             # prompts = batch_prompt['prompt']
@@ -729,15 +734,15 @@ def main():
                                               batch_prompt['prompt_att_mask'],
                                               step)
             
-            # print("out of generate_experience :", out)
+            gd.debuginfo(prj="ds_chat", info=f"out of generate_experience :, {out}")
 
-            # print("T out['prompts']:", infoTensor(out['prompts']))
-            # print("T out['logprobs']:", infoTensor(out['logprobs']))
-            # print("T out['ref_logprobs']:", infoTensor(out['ref_logprobs']))
-            # print("T out['value']:", infoTensor(out['value']))
-            # print("T out['rewards']:", infoTensor(out['rewards']))
-            # print("T out['input_ids']:", infoTensor(out['input_ids']))
-            # print("T out['attention_mask']:", infoTensor(out['attention_mask']))
+            gd.debuginfo(prj="ds_chat", info=f"T out['prompts']:, {infoTensor(out['prompts'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['logprobs']:, {infoTensor(out['logprobs'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['ref_logprobs']:, {infoTensor(out['ref_logprobs'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['value']:, {infoTensor(out['value'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['rewards']:, {infoTensor(out['rewards'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['input_ids']:, {infoTensor(out['input_ids'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T out['attention_mask']:, {infoTensor(out['attention_mask'])}")
             ''' only ph3 x1
             T out['prompts']: _Size([4, 256])_int64_cuda:1_
             T out['logprobs']: _Size([4, 511])_float16_cuda:1_
@@ -749,15 +754,15 @@ def main():
             '''
 
             exp_dataset = exp_mini_dataset.add(out)
-            # print("exp_dataset is:", exp_dataset)
-            # print("len of exp_dataset", len(exp_dataset))
-
-            # print("T exp_dataset[0]['prompts']:", infoTensor(exp_dataset[0]['prompts']))
-            # print("T exp_dataset[0]['logprobs']:", infoTensor(exp_dataset[0]['logprobs']))
-            # print("T exp_dataset[0]['ref_logprobs']:", infoTensor(exp_dataset[0]['ref_logprobs']))
-            # print("T exp_dataset[0]['value']:", infoTensor(exp_dataset[0]['value']))
-            # print("T exp_dataset[0]['rewards']:", infoTensor(exp_dataset[0]['rewards']))
-            # print("T exp_dataset[0]['attention_mask']:", infoTensor(exp_dataset[0]['attention_mask']))
+            gd.debuginfo(prj="ds_chat", info=f"exp_dataset is:, {exp_dataset}")
+            if exp_dataset: #可能是None
+                gd.debuginfo(prj="ds_chat", info=f"len of exp_dataset: {len(exp_dataset)}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['prompts']:, {infoTensor(exp_dataset[0]['prompts'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['logprobs']:, {infoTensor(exp_dataset[0]['logprobs'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['ref_logprobs']:, {infoTensor(exp_dataset[0]['ref_logprobs'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['value']:, {infoTensor(exp_dataset[0]['value'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['rewards']:, {infoTensor(exp_dataset[0]['rewards'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['attention_mask']:, {infoTensor(exp_dataset[0]['attention_mask'])}")
             '''
             T exp_dataset[0]['prompts']: _Size([4, 256])_int64_cuda:0_
             T exp_dataset[0]['logprobs']: _Size([4, 511])_float16_cuda:0_
@@ -768,13 +773,13 @@ def main():
             '''
 
             if exp_dataset is not None:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 inner_iter = 0
                 actor_loss_sum, critic_loss_sum, unsup_loss_sum = 0, 0, 0
                 average_reward = 0
 
                 if args.actor_gradient_checkpointing:
-                    gd.debuginfo(prj='ds-chat')
+                    gd.debuginfo(prj="ds_chat")
                     rlhf_engine.actor.gradient_checkpointing_enable()
 
                 '''
@@ -795,21 +800,21 @@ def main():
                 '''
                 # 从经验池中进行学习Epoch轮
                 for ppo_ep in range(args.ppo_epochs):
-                    gd.debuginfo(prj='ds-chat', info = f"ppo_ep is {ppo_ep}")
+                    gd.debuginfo(prj="ds_chat", info = f"ppo_ep is {ppo_ep}")
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
                             zip(exp_dataset, unsup_dataset)):
-                        gd.debuginfo(prj='ds-chat')
-                        # print("exp_data is:", exp_data)
-                        # print("unsup_dataset is:", unsup_dataset)
+                        gd.debuginfo(prj="ds_chat")
+                        gd.debuginfo(prj="ds_chat", info=f"exp_data is:, {exp_data}")
+                        gd.debuginfo(prj="ds_chat", info=f"unsup_dataset is:, {unsup_dataset}")
 
-                        # print("T exp_data['prompts']:", infoTensor(exp_data['prompts']))
-                        # print("T exp_data['logprobs']:", infoTensor(exp_data['logprobs']))
-                        # print("T exp_data['ref_logprobs']:", infoTensor(exp_data['ref_logprobs']))
-                        # print("T exp_data['value']:", infoTensor(exp_data['value']))
-                        # print("T exp_data['rewards']:", infoTensor(exp_data['rewards']))
-                        # print("T exp_data['input_ids']:", infoTensor(exp_data['input_ids']))
-                        # print("T exp_data['attention_mask']:", infoTensor(exp_data['attention_mask']))
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['prompts']:, {infoTensor(exp_data['prompts'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['logprobs']:, {infoTensor(exp_data['logprobs'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['ref_logprobs']:, {infoTensor(exp_data['ref_logprobs'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['value']:, {infoTensor(exp_data['value'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['rewards']:, {infoTensor(exp_data['rewards'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['input_ids']:, {infoTensor(exp_data['input_ids'])}")
+                        gd.debuginfo(prj="ds_chat", info=f"T exp_data['attention_mask']:, {infoTensor(exp_data['attention_mask'])}")
                         '''
                         T exp_data['prompts']: _Size([4, 256])_int64_cuda:1_
                         T exp_data['logprobs']: _Size([4, 511])_float16_cuda:1_
@@ -841,7 +846,7 @@ def main():
                             unsup_loss = trainer.train_unsupervised(
                                 unsup_data, args.unsup_coef)
 
-                            gd.debuginfo(prj='ds-chat', info=f"unsup_loss is {unsup_loss}")
+                            gd.debuginfo(prj="ds_chat", info=f"unsup_loss is {unsup_loss}")
 
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
@@ -851,7 +856,7 @@ def main():
 
                         """是否启用指数移动平均技术"""
                         if args.enable_ema:
-                            gd.debuginfo(prj='ds-chat', info=f"enable_ema")
+                            gd.debuginfo(prj="ds_chat", info=f"enable_ema")
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
@@ -871,7 +876,7 @@ def main():
                 print_rank_0("--------------------------------------------------------",args.global_rank)
 
                 if args.enable_tensorboard and torch.distributed.get_rank() == 0:
-                    gd.debuginfo(prj='ds-chat')
+                    gd.debuginfo(prj="ds_chat")
                     writer.add_scalar('reward',
                                       average_reward / inner_iter,
                                       global_step=step)
@@ -890,27 +895,27 @@ def main():
                     writer.flush()
 
             if args.actor_gradient_checkpointing:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 rlhf_engine.actor.gradient_checkpointing_disable()
 
     if args.output_dir is not None:
         print_rank_0('saving model ...')
 
-        print("ph3 rlhf_engine.actor model:", rlhf_engine.actor)
+        gd.debuginfo(prj="ds_chat", info=f"ph3 rlhf_engine.actor model:, {rlhf_engine.actor}")
         rlhf_engine.actor = convert_lora_to_linear_layer(rlhf_engine.actor)
-        print("ph3 actor convert_lora_to_linear_layer model:", rlhf_engine.actor)
+        gd.debuginfo(prj="ds_chat", info=f"ph3 actor convert_lora_to_linear_layer model:, {rlhf_engine.actor}")
 
-        print("ph3 rlhf_engine.critic model:", rlhf_engine.critic)
+        gd.debuginfo(prj="ds_chat", info=f"ph3 rlhf_engine.critic model:, {rlhf_engine.critic}")
         rlhf_engine.critic = convert_lora_to_linear_layer(rlhf_engine.critic)
-        print("ph3 critic convert_lora_to_linear_layer model:", rlhf_engine.critic)
+        gd.debuginfo(prj="ds_chat", info=f"ph3 critic convert_lora_to_linear_layer model:, {rlhf_engine.critic}")
 
         if args.enable_ema:
-            gd.debuginfo(prj='ds-chat')
+            gd.debuginfo(prj="ds_chat")
             rlhf_engine.actor_ema = convert_lora_to_linear_layer(
                 rlhf_engine.actor_ema)
 
         if torch.distributed.get_rank() == 0:
-            gd.debuginfo(prj='ds-chat')
+            gd.debuginfo(prj="ds_chat")
             save_hf_format(rlhf_engine.actor,
                            tokenizer,
                            args,
@@ -922,21 +927,21 @@ def main():
                            sub_folder='critic')
 
             if args.enable_ema:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 save_hf_format(rlhf_engine.actor_ema,
                                tokenizer,
                                args,
                                sub_folder='actor_ema')
 
         if args.actor_zero_stage == 3:
-            gd.debuginfo(prj='ds-chat')
+            gd.debuginfo(prj="ds_chat")
             save_zero_three_model(rlhf_engine.actor,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(
                                       args.output_dir, 'actor'),
                                   zero_stage=args.actor_zero_stage)
             if args.enable_ema:
-                gd.debuginfo(prj='ds-chat')
+                gd.debuginfo(prj="ds_chat")
                 save_zero_three_model(rlhf_engine.actor_ema,
                                       global_rank=args.global_rank,
                                       save_dir=os.path.join(
@@ -944,7 +949,7 @@ def main():
                                       zero_stage=args.actor_zero_stage)
 
         if args.critic_zero_stage == 3:
-            gd.debuginfo(prj='ds-chat')
+            gd.debuginfo(prj="ds_chat")
             save_zero_three_model(rlhf_engine.critic,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(

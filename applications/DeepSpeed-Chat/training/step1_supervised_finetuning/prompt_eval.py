@@ -139,8 +139,8 @@ def generate(model,
     result = tokenizer.batch_decode(generate_ids,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
-    print("generate_ids---1:", generate_ids)
-    print("result---1:", result)
+    gd.debuginfo(prj="ds_chat", info=f"generate_ids---1:", generate_ids)
+    gd.debuginfo(prj="ds_chat", info=f"result---1:", result)
     return result
 
 # 使用的是一种不同的文本生成策略，称为对比搜索（Contrastive Search）。
@@ -180,8 +180,8 @@ def generate_constrastive_search(model,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
 
-    print("generate_ids---2:", generate_ids)
-    print("result---2:", result)
+    gd.debuginfo(prj="ds_chat", info=f"generate_ids---2:", generate_ids)
+    gd.debuginfo(prj="ds_chat", info=f"result---2:", result)
 
     return result
 
@@ -207,7 +207,7 @@ def prompt_eval(args, model_baseline, model_fintuned, tokenizer, device,
 		# 1. 使用tokenizer把prmpt转换为模型可以理解的输入格式
         inputs = tokenizer(prompt, return_tensors="pt").to(device)
 
-        print("==========Baseline: Greedy=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========Baseline: Greedy=========")
         # 2. 用基线模型进行贪婪搜索
         r_base = generate(model_baseline,
                           tokenizer,
@@ -217,7 +217,7 @@ def prompt_eval(args, model_baseline, model_fintuned, tokenizer, device,
                           max_new_tokens=args.max_new_tokens)
         print_utils(r_base)
 
-        print("==========finetune: Greedy=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Greedy=========")
 
         # 3. 用微调模型进行贪婪搜索
         r_finetune_g = generate(model_fintuned,
@@ -235,34 +235,34 @@ def prompt_eval(args, model_baseline, model_fintuned, tokenizer, device,
         # such as beam search, multinomial sampling, and beam-search multinomial sampling.
         # We provide examples as below for users to try.
 
-        # print("==========finetune: Multinomial sampling=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Multinomial sampling=========")
         # r_finetune_m = generate(model_fintuned, tokenizer, inputs,
         #                         num_beams=1,
         #                         do_sample=True,
         #                         num_return_sequences=args.num_return_sequences,
         #                         max_new_tokens=args.max_new_tokens)
         # print_utils(r_finetune_m)
-        # print("==========finetune: Beam Search=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Beam Search=========")
         # r_finetune_b = generate(model_fintuned, tokenizer, inputs,
         #                         num_beams=args.num_beams,
         #                         num_return_sequences=args.num_return_sequences,
         #                         max_new_tokens=args.max_new_tokens)
         # print_utils(r_finetune_b)
-        # print("==========finetune: Beam-search multinomial sampling=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Beam-search multinomial sampling=========")
         # r_finetune_s = generate(model_fintuned, tokenizer, inputs,
         #                         num_beams=args.num_beams,
         #                         do_sample=True,
         #                         num_return_sequences=args.num_return_sequences,
         #                         max_new_tokens=args.max_new_tokens)
         # print_utils(r_finetune_s)
-        # print("==========finetune: Diverse Beam Search=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Diverse Beam Search=========")
         # r_finetune_d = generate(model_fintuned, tokenizer, inputs,
         #                         num_beams=args.num_beams,
         #                         num_beam_groups=args.num_beam_groups,
         #                         num_return_sequences=args.num_return_sequences,
         #                         max_new_tokens=args.max_new_tokens)
         # print_utils(r_finetune_d)
-        # print("==========finetune: Constrastive Search=========")
+        gd.debuginfo(prj="ds_chat", info=f"==========finetune: Constrastive Search=========")
         # r_finetune_c = generate_constrastive_search(model_fintuned, tokenizer, inputs,
         #                                             top_k=args.top_k,
         #                                             penalty_alpha=args.penalty_alpha,
@@ -270,7 +270,7 @@ def prompt_eval(args, model_baseline, model_fintuned, tokenizer, device,
         #                                             max_new_tokens=args.max_new_tokens)
         # print_utils(r_finetune_c)
 
-        print("====================prompt end=============================")
+        gd.debuginfo(prj="ds_chat", info=f"====================prompt end=============================")
         print()
         print()
 
@@ -296,10 +296,10 @@ def main():
                                      args.model_name_or_path_finetune,
                                      tokenizer, None)
 
-    print("device--2:", device)
-    print("ph1 eval tokenizer :", tokenizer)
-    print("model_baseline :", model_baseline)
-    print("model_fintuned :", model_fintuned)
+    gd.debuginfo(prj="ds_chat", info=f"device--2:", device)
+    gd.debuginfo(prj="ds_chat", info=f"ph1 eval tokenizer :", tokenizer)
+    gd.debuginfo(prj="ds_chat", info=f"model_baseline :", model_baseline)
+    gd.debuginfo(prj="ds_chat", info=f"model_fintuned :", model_fintuned)
 
     # 模型被移动到指定的设备上
     model_baseline.to(device)

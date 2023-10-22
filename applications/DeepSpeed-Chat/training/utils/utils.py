@@ -182,7 +182,7 @@ def debugOGP(optimizer_grouped_parameters):
     for id1, pg in enumerate(optimizer_grouped_parameters): #根据下面代码，这是固定3个！
         for id2, p in enumerate(pg["params"]):
             print_rank_0(f'T OGP:{id1}-params-{id2}:' + infoTensor(pg["params"][id2]))
-        print(f'T OGP:{id1}-weight_decay:' + str(pg["weight_decay"]))
+        gd.debuginfo(prj="ds_chat", info=f'T OGP:{id1}-weight_decay:' + str(pg["weight_decay"]))
         if 'lr' in pg.keys():
             print_rank_0(f'T OGP:{id1}-lr:' + str(pg["lr"]))
 
@@ -245,7 +245,7 @@ def get_optimizer_grouped_parameters(
     if not optimizer_grouped_parameters[1]["params"]:
         optimizer_grouped_parameters.pop(1)
 
-	# 返回包含了两组参数的列表
+    # 返回包含了两组参数的列表
     return optimizer_grouped_parameters
     # 这种参数的分组策略是很常见的。比如在训练Transformer模型时，通常会为权重和偏置项设定不同的学习策略。
     # 这是因为权重衰减对于防止过拟合很有帮助，
@@ -279,18 +279,17 @@ def moving_average(model, # 原模型
     # 是否在使用DeepSpeed的ZeRO-3阶段，
     # ZeRO-3是一种内存优化策略，用于分布式训练，它会将模型参数、优化器状态、和梯度分布在多个GPU上。
     zero_stage_3 = (zero_stage == 3)
-    print("zero_stage_3 is:", zero_stage_3)
-
+    gd.debuginfo(prj="ds_chat", info=f"zero_stage_3 is: {zero_stage_3}")
     with torch.no_grad():
         # 遍历模型的每个参数及其对应的滑动平均参数
         for param, param_ema in zip(model.parameters(),
                                     model_ema.parameters()):
-            print(f'param:{param}####param_ema:{param_ema}')
+            gd.debuginfo(prj="ds_chat", info=f'param:{param} #### param_ema:{param_ema}')
             # TODO: use prefiltering for efficiency
             # 如果使用ZeRO-3阶段，找出列表中需要从其他GPU收集的参数。否则，返回空列表。
             params_to_fetch = _z3_params_to_fetch([param, param_ema
                                                    ]) if zero_stage_3 else []
-            print("params_to_fetch is:", params_to_fetch)
+            gd.debuginfo(prj="ds_chat", info=f"params_to_fetch is: {params_to_fetch}")
 
             # 是否需要在多个设备之间同步参数
             should_gather_param = len(params_to_fetch) > 0
@@ -340,37 +339,50 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
     # 如果没有使用ZeRO Stage 3，并且当前是主节点global_rank==0，直接保存模型的状态字典state_dict
     if not zero_stage_3:
-        gd.debuginfo(prj='ds-chat', info="Not use zero3")
+        gd.debuginfo(prj="ds_chat", info=f"Not use zero3")
 
       # 如果没有使用Zero阶段3优化，直接使用PyTorch的torch.save函数保存模型状态。
         if global_rank == 0:
             torch.save(model_to_save.state_dict(), output_model_file)
     else:
-        gd.debuginfo(prj='ds-chat', info = "use zero3")
+        gd.debuginfo(prj="ds_chat", info=f"use zero3")
 
         # 如果使用了Zero阶段3优化，因为模型的部分参数和优化器状态在不同的设备上，所以需要先将它们收集起来。
         output_state_dict = {}
 
         # 遍历模型的所有参数
         for k, v in model_to_save.named_parameters():
-            print("save_zero_three_model k is", k)
-            print("save_zero_three_model v is", v)
+            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model k is {k}")
+            # save_zero_three_model k is model.decoder.layers.5.self_attn.q_proj.weight
+
+            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model v is {v}")
+            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model is" + infoTensor(save_zero_three_model))
+
             # 如果参数在分布式环境中（即 v.ds_id 存在）
             if hasattr(v, 'ds_id'):
                 # 从各个 GPU 收集参数值
                 # deepspeed.zero.GatheredParameters是DeepSpeed提供的一个上下文管理器，
                 # 它可以将分布在多个设备上的参数收集到一起。这部分参数保存在CPU上。
-                print("[v] is:", [v])
+
+                gd.debuginfo(prj="ds_chat", info=f"[v] is: {[v]}")
+                # [v] is: [Parameter containing:
+                # tensor([], device='cuda:1', dtype=torch.float16, requires_grad=True)]
+
                 tmpz3 = _z3_params_to_fetch([v])
-                print("tmpz3 is:", tmpz3)
+                gd.debuginfo(prj="ds_chat", info=f"tmpz3 is: {tmpz3}")
+                # tmpz3 is: [Parameter containing:
+                # tensor([], device='cuda:0', dtype=torch.float16, requires_grad=True)]
+
+
                 with deepspeed.zero.GatheredParameters(tmpz3,
                                                        enabled=zero_stage_3):
                     v_p = v.data.cpu()
-                    print("v_p---1 is:", v_p)
+                    gd.debuginfo(prj="ds_chat", info=f"v_p---1 is: {v_p}")
+                    gd.debuginfo(prj="ds_chat", info=f"v_p---1 is + {infoTensor(v_p)}")
             else:
                 # 直接获取参数值
                 v_p = v.cpu()
-                print("v_p---2 is:", v_p)
+                gd.debuginfo(prj="ds_chat", info=f"v_p---2 is: {v_p}")
 
             # 在主节点上，如果参数名称中不包含lora，将参数值添加到output_state_dict中。
             # 然后，将收集好的参数（并且不包含“lora”关键字的参数）添加到输出状态字典中。
@@ -387,17 +399,26 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
         z123都可能是空的字典
         或者非常大的输出
         '''
-        print("++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
+        gd.debuginfo(prj="ds_chat", info=f"++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
         if len(output_state_dict.keys()) != 0:
             for k in output_state_dict.keys():
                 infoTen = infoTensor(output_state_dict[k])
-                print(f"(### {k} is: {infoTen}")
+                gd.debuginfo(prj="ds_chat", info=f"(### {k} is: {infoTen}")
         else:
-            print("output_state_dict is", output_state_dict)
-        print("++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
+            gd.debuginfo(prj="ds_chat", info=f"output_state_dict is: {output_state_dict}")
+        gd.debuginfo(prj="ds_chat", info=f"++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
 
 
         # 同时为了节省内存，使用del关键字删除了存储参数的字典。
         del output_state_dict
 
 
+'''
+v_p---1 is: tensor([-0.1528,  0.1247, -0.0771,  0.0391,  0.0133,  0.0101, -0.1174, -0.1603,
+        -0.1559,  0.1505, -0.0884,  0.1022, -0.0716,  0.1163, -0.0853,  0.1059],
+       dtype=torch.float16)
+
+save_zero_three_model v is tensor([[0., 0., 0.,  ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0.,  ..., 0., 0., 0.]], dtype=torch.float16)      
+'''

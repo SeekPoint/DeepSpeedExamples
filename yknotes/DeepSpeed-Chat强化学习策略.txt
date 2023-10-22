@@ -1,0 +1,93 @@
+DeepSpeed-Chat强化学习策略
+
+https://mathmach.com/be7f3b4f/
+
+本文共计6949个字 | 您是第 9755位看到它们的小伙伴
+背景
+符号定义
+Off-Policy Advantage Actor-Critic标准范式
+DeepSpeed-Chat强化学习策略
+Reward设计
+Advantage设计
+Actor Model
+Critic Model
+DeepSpeed-Chat强化学习训练逻辑
+参考
+背景
+ChatGPT出现后，已经有许多开源项目尝试复现其效果，包括LLaMa、DeepSpeed-Chat、ColossalChat、ChatGLM等。
+其中DeepSpeed-Chat是微软Deep Speed团队的开源项目，
+其完整的提供了Supervised Fine-tuning、Reward Model Training、RLHF PPO Traing三阶段的代码，
+逻辑简单，模块划分清晰，另外也由于Deep Speed在大模型训练中的使用非常普遍，
+所以笔者近期正在研究DeepSpeed-Chat的代码。之前博客中已经介绍了全部三阶段的训练实战情况：
+
+DeepSpeed-Chat全流程训练实战
+
+本文以DeepSpeed-Chat的实现为例，详细介绍下RLHF——基于人类反馈的强化学习策略，并与经典Off-Policy Actor-Critic策略做对比。
+
+符号定义 036.png
+
+Off-Policy Advantage Actor-Critic标准范式
+Off-Policy策略，在老版本参数的模型下做出动作选择和环境交互，放入样本池，在后面训练过程中可以重复利用。样本格式可以为：
+037.png
+...
+
+
+DeepSpeed-Chat强化学习策略
+DeepSpeed-Chat和ColossalChat强化学习部分的策略借鉴了TRLX开源项目。
+从InstructGPT论文和一些开源复现中，可以推测出ChatGPT对于step和episode的定义。
+每次预估下一个token是一个step，完成一个完整response是一个episode。
+
+Reward设计
+每个episode获得一个收益R，由Reward Model预估得到，Reward Model相当于强化学习中的环境。
+并且，所有step共享episode的reward。 R
+eward除了Reward Model预估值外，增加了当前Actor模型与SFT模型的KL散度，保证Actor模型不要改变的太远。
+因为Off-Policy理论中，采样模型和最新模型接近时才有效果保障，否则需要非常多的采样样本，
+因此这里增加KL保障是符合理论要求的。不过这里的KL计算逻辑和严格数学定义也不太一样。
+038.png
+
+    def compute_rewards(self, prompts, log_probs, ref_log_probs, reward_score, action_mask):
+    。。。
+
+Advantage设计
+039.png
+
+    def get_advantages_and_returns(self, values, rewards, start):
+    。。。
+
+
+Actor Model
+Actor模型以SFT模型初始化，其损失函数设计与标准Actor-Critic有个不同点，是PPO2策略，
+040.png
+    def actor_loss_fn(self, logprobs, old_logprobs, advantages, mask):
+        log_ratio = (logprobs - old_logprobs) * mask
+    。。。
+
+Critic Model
+Critic模型以Reward Model初始化，。。。。
+041.png
+    def critic_loss_fn(self, values, old_values, returns, mask):
+    。。。
+
+
+DeepSpeed-Chat强化学习训练逻辑
+训练逻辑是Off-Policy策略，外层循环读取prompt数据生成prompt+response数据放入样本池，
+内层循环从样本池中读取prompt+response数据进行Actor Model和Critic Model的训练。
+性能上，SFT模型放到CPU上，Actor模型通过DeepSpeed Hybrid Engine支持训练和推理两种模式的高效切换。
+另外，Instruct论文中在Actor Loss中增加了一个SFT Loss和一个Unsupervised Loss，两个Loss也加到之前的Actor Loss上。
+
+最终的Actor Loss为： 042.png
+
+其中，SFT Loss部分保证和Actor模型和SFT模型偏离不远，Unsupervised Loss部分增加了一个自回归任务，整体Loss计算梯度做模型更新，
+而DeepSpeed-Chat只使用了Unsupervised，没有增加SFT部分（在reward计算时使用了，间接引入），并且先用Actor Loss更新，
+再用Unsupervised Loss更新。Actor模型参数都采用了Exponential Moving Averages策略。
+
+def generate_experience(self, prompts, mask):
+ ....
+
+参考
+台大李宏毅强化学习课程
+DeepSpeed-Chat
+ColossalChat
+TRLX
+Training language models to follow instructions with human feedback
+DeepSpeed-Chat全流程训练实战

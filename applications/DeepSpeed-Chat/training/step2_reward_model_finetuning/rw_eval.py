@@ -45,7 +45,7 @@ def parse_args():
 
 # 加载 tokenizer 和 model
 def load_stuff(model_name_or_path, num_padding_at_beginning):
-    gd.debuginfo(prj='ds-chat')
+    gd.debuginfo(prj="ds_chat")
     # 加载 tokenizer
     tokenizer = load_hf_tokenizer(model_name_or_path, fast_tokenizer=True)
     tokenizer.pad_token = tokenizer.eos_token
@@ -158,16 +158,16 @@ def run_pair_comparison():
         with torch.no_grad():
             # 前向传播
             outputs = rm_model(**batch)
-        print("==================Eval result============================")
-        print("prompt: ", prompt)
-        print("\ngood_ans: ", good_ans)
-        print("\nbad_ans:", bad_ans)
+        gd.debuginfo(prj="ds_chat", info=f"==================Eval result============================")
+        gd.debuginfo(prj="ds_chat", info=f"prompt: ", prompt)
+        gd.debuginfo(prj="ds_chat", info=f"\ngood_ans: ", good_ans)
+        gd.debuginfo(prj="ds_chat", info=f"\nbad_ans:", bad_ans)
         print()
-        print("=============Scores (higher, better)========================")
-        print("good_ans score: ", outputs["chosen_mean_scores"].item())
-        print("bad_ans score: ", outputs["rejected_mean_scores"].item())
+        gd.debuginfo(prj="ds_chat", info=f"=============Scores (higher, better)========================")
+        gd.debuginfo(prj="ds_chat", info=f"good_ans score: ", outputs["chosen_mean_scores"].item())
+        gd.debuginfo(prj="ds_chat", info=f"bad_ans score: ", outputs["rejected_mean_scores"].item())
 
-        gd.debuginfo(prj='ds-chat', info = f"batch is: {batch}")
+        gd.debuginfo(prj="ds_chat", info = f"batch is: {batch}")
 
 
 def run_single_sample():
@@ -187,7 +187,7 @@ def run_single_sample():
                                  tokenizer,
                                  max_seq_len=512,
                                  end_of_conversation_token="<|endoftext|>")
-    print("batch---A", batch)
+    gd.debuginfo(prj="ds_chat", info=f"batch---A", batch)
 
     batch = to_device(batch, device)
 
@@ -198,14 +198,14 @@ def run_single_sample():
         outputs = rm_model.forward_value(
             **batch, prompt_length=max(2, args.num_padding_at_beginning)
         )  # we just need to skip the number of padding tokens at the beginning
-        print("outputs---A", outputs)
+        gd.debuginfo(prj="ds_chat", info=f"outputs---A", outputs)
 
-    print("==================Eval result============================")
-    print("prompt: ", prompt)
-    print("my_ans: ", my_ans)
+    gd.debuginfo(prj="ds_chat", info=f"==================Eval result============================")
+    gd.debuginfo(prj="ds_chat", info=f"prompt: ", prompt)
+    gd.debuginfo(prj="ds_chat", info=f"my_ans: ", my_ans)
     print()
-    print("=============Scores========================")
-    print("my_ans score: ", outputs["chosen_end_scores"].item())
+    gd.debuginfo(prj="ds_chat", info=f"=============Scores========================")
+    gd.debuginfo(prj="ds_chat", info=f"my_ans score: ", outputs["chosen_end_scores"].item())
 
 
 if __name__ == "__main__":

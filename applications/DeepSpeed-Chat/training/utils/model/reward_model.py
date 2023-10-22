@@ -89,7 +89,6 @@ class RewardModel(nn.Module):
 
         # 检查配置是否包含word_embed_proj_dim属性
         if hasattr(self.config, "word_embed_proj_dim"):
-            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ + '-- word_embed_proj_dim')
             # `OPT` models use word_embed_proj_dim as final output
             # https://github.com/huggingface/transformers/blob/main/src/transformers/models/opt/modeling_opt.py#L497
             """
@@ -101,16 +100,18 @@ class RewardModel(nn.Module):
             self.v_head = nn.Linear(self.config.word_embed_proj_dim,
                                     1,
                                     bias=False)
+            gd.debuginfo(prj="ds_chat", info=f"self.v_head is {self.v_head}")
         else:
-            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ + '--No word_embed_proj_dim')
             # `gpt-neo(x)` models use `hidden_size` attribute names instead of `n_embd``
 
             # 检查配置是否包含hidden_size属性。如果包含，那么将其赋值给n_embd
             self.config.n_embd = self.config.hidden_size if hasattr(
                 self.config, "hidden_size") else self.config.n_embd
+            gd.debuginfo(prj="ds_chat", info=f"self.config.n_embd is {self.config.n_embd}")
 
             # 使用一个线性层self.v_head将n_embd映射到1，这个线性层没有偏置。
             self.v_head = nn.Linear(self.config.n_embd, 1, bias=False)
+            gd.debuginfo(prj="ds_chat", info=f"self.v_head is {self.v_head}")
 
         # base_model即为主干网络，因此RM最终由1个主干网络和1个线性层构成
         self.rwtranrsformer = base_model
@@ -120,7 +121,7 @@ class RewardModel(nn.Module):
 
     # 启用梯度检查点，减少内存使用
     def gradient_checkpointing_enable(self):
-        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
 
         # 启用后，在反向传播过程中，rwtranrsformer会重新计算一些中间层的输出，
         # 而不是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -128,7 +129,7 @@ class RewardModel(nn.Module):
 
     # 禁用梯度检查点
     def gradient_checkpointing_disable(self):
-        gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
 
         # 禁用后，rwtranrsformer在反向传播过程中不再重新计算一些中间层的输出，
         # 而是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -151,7 +152,7 @@ class RewardModel(nn.Module):
         """
         loss = None
 
-        # gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
 
         """获得主干网络的输出的特征"""
         transformer_outputs = self.rwtranrsformer(
@@ -162,7 +163,7 @@ class RewardModel(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache)
 
-        print("transformer_outputs is-1", transformer_outputs)
+        gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-1, {transformer_outputs}")
 
         '''
         https://zhuanlan.zhihu.com/p/624589622
@@ -188,7 +189,7 @@ class RewardModel(nn.Module):
         # hidden_states.shape: (bs * 2, max_seq_len, hidden_size)
         # 是transformer模型的主要输出，表示模型对输入的隐藏表示。
         hidden_states = transformer_outputs[0]
-        # print("hidden_states is:", hidden_states)
+        gd.debuginfo(prj="ds_chat", info=f"hidden_states is: {hidden_states}")
 
         # 将hidden_states传递到self.v_head（一个全连接层）并删除最后一个维度（通过squeeze(-1)）来计算reward。
         # 这个值可以被视为模型对每个输入token的奖励
@@ -214,12 +215,12 @@ class RewardModel(nn.Module):
          [0.7, 0.8, 0.9]]
         '''
         rewards = self.v_head(hidden_states).squeeze(-1)
-        # print("rewards is:", rewards)
+        gd.debuginfo(prj="ds_chat", info=f"rewards is:, {rewards}")
 
 
-        # print("T hidden_states:", infoTensor(hidden_states)) #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T hidden_states is: {infoTensor(hidden_states)}") #only ph2
         # T hidden_states: _Size([16, 128, 768])_float16_cuda:1_
-        # print("T rewards:", infoTensor(rewards)) #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T rewards is: {infoTensor(rewards)}") #only ph2
 
         # 模型选择或拒绝某些特定输入的平均分数
         chosen_mean_scores = []
@@ -256,12 +257,12 @@ class RewardModel(nn.Module):
         # 后半部分被拒绝的奖励
         rejected_rewards = rewards[bs:]
 
-        # print("len of chosen_ids is:", len(chosen_ids))
-        # print("len of rejected_ids is:", len(rejected_ids))
-        # print("len of chosen_rewards is:", len(chosen_rewards))
-        # print("len of rejected_rewards is:", len(rejected_rewards))
-        # print("bs is:", bs)
-        # print("seq_len is:", seq_len)
+        gd.debuginfo(prj="ds_chat", info=f"len of chosen_ids is: {len(chosen_ids)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of rejected_ids is: {len(rejected_ids)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of chosen_rewards is: {len(chosen_rewards)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of rejected_rewards is: {len(rejected_rewards)}")
+        gd.debuginfo(prj="ds_chat", info=f"bs is: {bs}")
+        gd.debuginfo(prj="ds_chat", info=f"seq_len is: {seq_len}")
         '''
         len of chosen_ids is: 8
         len of rejected_ids is: 8
@@ -283,25 +284,25 @@ class RewardModel(nn.Module):
             # chosen_id.shape: (max_seq_len,)
             # 获得一个chosen样本（正样本）
             chosen_id = chosen_ids[i]
-            # print("chosen_id is:", chosen_id)
+            gd.debuginfo(prj="ds_chat", info=f"chosen_id is: {chosen_id}")
 
             # 获得一个rejected样本（负样本）
             rejected_id = rejected_ids[i]
-            # print("rejected_id is:", rejected_id)
+            gd.debuginfo(prj="ds_chat", info=f"rejected_id is: {rejected_id}")
 
             # 当前正样本的得分
             chosen_reward = chosen_rewards[i]
-            # print("chosen_reward is:", chosen_reward)
+            gd.debuginfo(prj="ds_chat", info=f"chosen_reward is: {chosen_reward}")
 
             # 当前负样本的得分
             rejected_reward = rejected_rewards[i]
-            # print("rejected_reward is:", rejected_reward)
+            gd.debuginfo(prj="ds_chat", info=f"rejected_reward is: {rejected_reward}")
 
 
-            # print("T chosen_id--5:", infoTensor(chosen_id))
-            # print("T rejected_id--5:", infoTensor(rejected_id))
-            # print("T chosen_reward--5:", infoTensor(chosen_reward))
-            # print("T rejected_reward--5:", infoTensor(rejected_reward))
+            gd.debuginfo(prj="ds_chat", info=f"T chosen_id--5: {infoTensor(chosen_id)}")
+            gd.debuginfo(prj="ds_chat", info=f"T rejected_id--5: {infoTensor(rejected_id)}")
+            gd.debuginfo(prj="ds_chat", info=f"T chosen_reward--5: {infoTensor(chosen_reward)}")
+            gd.debuginfo(prj="ds_chat", info=f"T rejected_reward--5: {infoTensor(rejected_reward)}")
             '''
             only ph2
             T chosen_id--5: _Size([128])_int64_cuda:0_
@@ -341,7 +342,7 @@ class RewardModel(nn.Module):
             # PyTorch 中的nonzero()方法，这个方法会返回输入张量中所有非零元素的索引
             # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
-            # print("c_inds is:", c_inds)
+            gd.debuginfo(prj="ds_chat", info=f"c_inds is: {c_inds}")
 
             # 如果是OPT，那么第0个一定是OPT模型默认在input最前面的padding token，不予考虑
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
@@ -349,12 +350,12 @@ class RewardModel(nn.Module):
             ) > self.num_padding_at_beginning else seq_len
             # OPT model pads the first token, so we need to use the second padding token as the end of the sequence
 
-            # print("c_ind is:", c_ind)
+            gd.debuginfo(prj="ds_chat", info=f"c_ind is: {c_ind}")
 
             # 获取不同id的索引
             # 查找被选定序列和被拒绝序列之间的差异位置，这里的差异位置是指这两个序列第一个不同的标记的位置。
             check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
-            # print("check_divergence is:", check_divergence)
+            gd.debuginfo(prj="ds_chat", info=f"check_divergence is: {check_divergence}")
 
             # 如果两个序列完全相同，则结束位置设置为序列的最后一位，差异位置设置为结束位置的前一位。
             # 说明不存在相等的padding token
@@ -403,8 +404,8 @@ class RewardModel(nn.Module):
             # 基于差异位置和结束位置，截取被选定序列和被拒绝序列的奖励部分
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
-            # print("c_truncated_reward is:", c_truncated_reward)
-            # print("r_truncated_reward is:", r_truncated_reward)
+            gd.debuginfo(prj="ds_chat", info=f"c_truncated_reward is {c_truncated_reward}")
+            gd.debuginfo(prj="ds_chat", info=f"r_truncated_reward is {r_truncated_reward}")
 
             # 从截取的奖励中计算平均值并添加到被选定和被拒绝的平均分列表中
             # 选择最后一个非填充token的奖励值添加到得分列表，可能是因为最后一个token往往包含了模型对整个输入序列的最终评价
@@ -423,19 +424,19 @@ class RewardModel(nn.Module):
             loss += -torch.nn.functional.logsigmoid(c_truncated_reward -
                                                     r_truncated_reward).mean()
 
-            # print("T c_inds--5:", infoTensor(c_inds))
+            gd.debuginfo(prj="ds_chat", info=f"T c_inds--5: {infoTensor(c_inds)}")
             # #only ph2, 很多次数，大小经常变化 T c_inds--5: _Size([72, 1])_int64_cuda:0_
 
-            # print("T c_truncated_reward--5:", infoTensor(c_truncated_reward))
+            gd.debuginfo(prj="ds_chat", info=f"T c_truncated_reward--5: {infoTensor(c_truncated_reward)}")
             # #only ph2, 很多次数，大小不定 T c_truncated_reward--5: _Size([48])_float16_cuda:0_
 
-            # print("T check_divergence--5:", infoTensor(check_divergence))
+            gd.debuginfo(prj="ds_chat", info=f"T check_divergence--5: {infoTensor(check_divergence)}")
             # #only ph2, 很多次数，大小不定 T check_divergence--5: _Size([0, 1])_int64_cuda:0_
 
-            # print("T r_truncated_reward--5:", infoTensor(r_truncated_reward))
+            gd.debuginfo(prj="ds_chat", info=f"T r_truncated_reward--5: {infoTensor(r_truncated_reward)}")
             # #only ph2, 很多次数，大小不定 T r_truncated_reward--5: _Size([111])_float16_cuda:0_
 
-        # print("len of rejected_mean_scores", len(rejected_mean_scores))
+        gd.debuginfo(prj="ds_chat", info=f"len of rejected_mean_scores {len(rejected_mean_scores)}")
         # #len of rejected_mean_scores 8
         # 将模型在整个batch中每个样本上计算得到的损失值进行平均，得到一个标量值作为这个batch的损失
         loss = loss / bs
@@ -444,11 +445,11 @@ class RewardModel(nn.Module):
         chosen_mean_scores = torch.stack(chosen_mean_scores)
         rejected_mean_scores = torch.stack(rejected_mean_scores)
 
-        # print("chosen_mean_scores", chosen_mean_scores)
-        # print("rejected_mean_scores", rejected_mean_scores)
+        gd.debuginfo(prj="ds_chat", info=f"chosen_mean_scores {chosen_mean_scores}")
+        gd.debuginfo(prj="ds_chat", info=f"rejected_mean_scores {rejected_mean_scores}")
 
-        # print("T chosen_mean_scores--5:", infoTensor(chosen_mean_scores))
-        # print("T rejected_mean_scores--5:", infoTensor(rejected_mean_scores))
+        gd.debuginfo(prj="ds_chat", info=f"T chosen_mean_scores--5 {infoTensor(chosen_mean_scores)}")
+        gd.debuginfo(prj="ds_chat", info=f"T rejected_mean_scores--5 {infoTensor(rejected_mean_scores)}")
         # only ph2
         # T chosen_mean_scores--5: _Size([8])_float16_cuda:1_
         # T rejected_mean_scores--5: _Size([8])_float16_cuda:1_
@@ -486,7 +487,7 @@ class RewardModel(nn.Module):
         :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
         """
 
-        #gd.debuginfo(prj='ds-chat', info=self.__class__.__name__) #后面有细分
+        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__) #后面有细分
 
         # 模型的隐藏状态，它是一个列表，包含了每一层的输出，
         # 每一层的输出都是一个形状为[batch_size, sequence_length, hidden_size]的tensor。
@@ -499,7 +500,7 @@ class RewardModel(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache)
 
-        print("transformer_outputs is-2",  transformer_outputs)
+        gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-2 {transformer_outputs}")
 
         # hidden_states.shape: (bs, max_seq_len, hidden_size)
 		# 取出第一层的隐藏状态
@@ -512,7 +513,7 @@ class RewardModel(nn.Module):
 
         ## value 为 bs * seq 的sequence 分数
         if return_value_only:
-            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
 
             """
             如果传参中预设了“return_value_only=True”，
@@ -520,7 +521,7 @@ class RewardModel(nn.Module):
             """
             return values
         else:
-            gd.debuginfo(prj='ds-chat', info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
 
             # 否则还将进一步取得reward_score
             # [0 0 0 0 prompt, answer, 0 0 0 0 ] for step 3, we have padding at the beginning

@@ -181,8 +181,8 @@ def get_cmd(args, step_num):
 
     # 获取用于执行训练的bash脚本的路径
     script = get_script(args, step_num)
-    print("output_dir is:", output_dir)
-    print("script is:", script)
+    gd.debuginfo(prj="ds_chat", info=f"output_dir is:", output_dir)
+    gd.debuginfo(prj="ds_chat", info=f"script is:", script)
 
     if step_num in (1, 2):
         # 获取到对应的ZeRO阶段
@@ -264,7 +264,7 @@ def main(args):
 
 if __name__ == "__main__":
     # self 不存在时，也可以保证程序正常运行！！https://blog.csdn.net/jewely/article/details/90259422
-    # gd.debuginfo(prj='ds-chat', info=self.__class__.__name__ if 'self' in locals() or 'self' in globals() else '')
+    gd.debuginfo(prj="ds_chat", info=self.__class__.__name__ if 'self' in locals() or 'self' in globals() else '')
     args = parse_args()
-    print("args is:", args)
+    gd.debuginfo(prj="ds_chat", info=f"args is:", args)
     main(args)

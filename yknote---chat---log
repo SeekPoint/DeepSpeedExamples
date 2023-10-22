@@ -65,3 +65,6 @@ Running:
 bash /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/training/step3_rlhf_finetuning/training_scripts/single_node/run_125m.sh /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/actor-models/125m /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/reward-models/125m '' '' /home/amd00/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat/output/step3-models/125m
 ---=== Finished Step 3 in 0:22:33 ===---
 (gh_DeepSpeed-Chat) amd00@asus00:~/llm_dev/DeepSpeedExamples-ori/applications/DeepSpeed-Chat$
+
+
+

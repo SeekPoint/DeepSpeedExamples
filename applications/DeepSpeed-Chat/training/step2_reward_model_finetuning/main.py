@@ -265,7 +265,7 @@ def main():
 
     # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
-    # print("args.global_rank :", args.global_rank)
+    gd.debuginfo(prj="ds_chat", info=f"args.global_rank: {args.global_rank}")
 	
     # 根据输入参数返回一个训练数据集的配置字典
     ds_config = get_train_ds_config(offload=args.offload,
@@ -273,7 +273,7 @@ def main():
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step2_model")
-    print("ph2 ds_config train---1:", ds_config) #一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph2 ds_config train---1, {ds_config}") #一直打开
 									
     # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应GPU的内存限制
     # 在配置中设置训练时每个GPU的微批次大小和总的批次大小。
@@ -287,7 +287,7 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
         ) * args.gradient_accumulation_steps
 
-    print("ph2 ds_config train---2:", ds_config) #一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph2 ds_config train---2, {ds_config}") #一直打开
 
     # If passed along, set the training seed now.
     set_random_seed(args.seed)
@@ -298,7 +298,7 @@ def main():
 	
     # 表示使用优化过的、速度更快的tokenizer。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
-    print("ph2 tokenizer---0:", tokenizer)
+    gd.debuginfo(prj="ds_chat", info=f"ph2 tokenizer---0, {tokenizer}")
 	
     # 模型将认为这些填充部分是句子的结束。
     tokenizer.pad_token = tokenizer.eos_token
@@ -307,7 +307,7 @@ def main():
 	# 在序列的右侧（末尾）添加填充符号。
     tokenizer.padding_side = 'right'
 
-    print("ph2 tokenizer---1:", tokenizer)
+    gd.debuginfo(prj="ds_chat", info=f"ph2 tokenizer---1, {tokenizer}")
 	
     """
     rm_model调用了create_critic_model进行载入
@@ -320,7 +320,7 @@ def main():
                                    args.num_padding_at_beginning,
                                    disable_dropout=args.disable_dropout)
 
-    print("s2 create_critic_model rm_model:", rm_model)
+    gd.debuginfo(prj="ds_chat", info=f"s2 create_critic_model rm_model, {rm_model}")
 
     if args.lora_dim > 0:
         # 将模型中指定的线性层转换为LoRA层
@@ -328,12 +328,12 @@ def main():
         rm_model = convert_linear_layer_to_lora(rm_model,
                                                 args.lora_module_name,
                                                 args.lora_dim)
-        print("s2 convert_linear_layer_to_lora rm_model:", rm_model)
+        gd.debuginfo(prj="ds_chat", info=f"s2 convert_linear_layer_to_lora rm_model, {rm_model}")
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，在训练过程中只有LoRA层的参数会被更新。
             rm_model = only_optimize_lora_parameters(rm_model)
-            print("s2 only_optimize_lora_parameters rm_model:", rm_model)
+            gd.debuginfo(prj="ds_chat", info=f"s2 only_optimize_lora_parameters rm_model, {rm_model}")
 
     # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
@@ -343,10 +343,10 @@ def main():
         args.local_rank, args.data_path, args.data_split,
         args.data_output_path, train_phase, args.seed, tokenizer,
         args.max_seq_len)
-    # print("train_dataset :", train_dataset)
-    # print("eval_dataset :", eval_dataset)
-    print("len of train_dataset :", len(train_dataset))
-    print("len of eval_dataset :", len(eval_dataset))
+    gd.debuginfo(prj="ds_chat", info=f"train_dataset, {train_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_dataset, {eval_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"len of train_dataset, {len(train_dataset)}")
+    gd.debuginfo(prj="ds_chat", info=f"len of eval_dataset, {len(eval_dataset)}")
 
     # DataLoaders creation:
     """
@@ -360,7 +360,7 @@ def main():
     # phase2使用的data_collator为DataCollatorReward()
 	# 2. 将批次数据整理成模型需要的形式
     data_collator = DataCollatorReward()
-    print("data_collator :", data_collator)
+    gd.debuginfo(prj="ds_chat", info=f"data_collator , {data_collator}")
 
     if args.local_rank == -1:
         # 非分布式训练环境下，因此我们将使用随机采样和顺序采样
@@ -378,8 +378,8 @@ def main():
         # 创建一个用于评估集的分布式采样器
         eval_sampler = DistributedSampler(eval_dataset)
 
-    # print("train_sampler :", train_sampler)
-    # print("eval_sampler :", eval_sampler)
+    gd.debuginfo(prj="ds_chat", info=f"train_sampler , {train_sampler}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_sampler , {eval_sampler}")
 
     #default_data_collator 作用是将一批数据进行整合，使得它们可以整齐地堆叠在一起。
 
@@ -393,9 +393,9 @@ def main():
                                  collate_fn=data_collator,
                                  sampler=eval_sampler,
                                  batch_size=args.per_device_eval_batch_size)
-    # print("train_dataloader :", train_dataloader)
-    # print("eval_sampler :", eval_sampler)
-    # print("eval_dataloader :", eval_dataloader)
+    gd.debuginfo(prj="ds_chat", info=f"train_dataloader , {train_dataloader}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_sampler , {eval_sampler}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_dataloader , {eval_dataloader}")
 
     '''
     2.3.4 phase2的指标评估
@@ -417,7 +417,7 @@ def main():
 	# 1. 将模型的参数分为两组，一组应用权重衰减，另一组不应用
     # 权重衰减是防止模型过拟合的一种策略，通常只对模型的权重参数应用。
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(rm_model, args.weight_decay)
-    # print("optimizer_grouped_parameters :", optimizer_grouped_parameters)
+    gd.debuginfo(prj="ds_chat", info=f"optimizer_grouped_parameters , {optimizer_grouped_parameters}")
 
     # 根据是否使用DeepSpeed的CPU offload功能来选择优化器，优化器定义了如何更新模型的参数以最小化损失函数。
 
@@ -430,19 +430,19 @@ def main():
     # 选择优化器类型，如果启用了梯度Offload，使用DeepSpeedCPUAdam，否则使用FusedAdam。
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
 	
-    # print("AdamOptimizer :", AdamOptimizer)
+    gd.debuginfo(prj="ds_chat", info=f"AdamOptimizer , {AdamOptimizer}")
     # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
     # 优化器被初始化时，指定了模型参数、学习率和优化器的betas参数。
     # 创建优化器
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
-    # print("optimizer :", optimizer)
+    gd.debuginfo(prj="ds_chat", info=f"optimizer , {optimizer}")
 
     # 计算每个epoch需要进行的更新步数，等于训练数据集大小除以梯度累积步数（对结果向上取整）
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
-    print("num_update_steps_per_epoch :", num_update_steps_per_epoch)
+    gd.debuginfo(prj="ds_chat", info=f"num_update_steps_per_epoch , {num_update_steps_per_epoch}")
 
     # 创建学习率调度器，学习率调度器可以动态地在训练过程中改变学习率以得到最优的学习效果。
     lr_scheduler = get_scheduler(
@@ -452,7 +452,7 @@ def main():
                                                 # 学习率从0线性增加到预设的初始学习率，预热过程有助于模型的稳定训练。
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch, # 总的训练步骤数
     )
-    # print("lr_scheduler---2 :", lr_scheduler)
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---2 , {lr_scheduler}")
     # lr_scheduler---2 : <torch.optim.lr_scheduler.LambdaLR object at 0x7f1c900786a0>
 	
     '''--- 知识点补充 ---
@@ -465,7 +465,7 @@ def main():
     CONSTANT_WITH_WARMUP：带预热的常数调度器，学习率在一开始的一段时间内线性增加，然后保持不变。
     '''
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
-    print("#######ph2 deepspeed.initialize ################################################")
+    gd.enable(info=f"#######ph2 deepspeed.initialize ################################################")
     rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=rm_model, # 模型
         optimizer=optimizer, # 优化器
@@ -474,12 +474,10 @@ def main():
         lr_scheduler=lr_scheduler, # 学习率调度器
         dist_init_required=True # # 需要进行分布式训练的初始化
     )
-    print("#######ph2 deepspeed.initialize ################################################")
-
-    # print("rm_model---4 :", rm_model)
-    # print("optimizer---4 :", optimizer)
-    # print("lr_scheduler---4 :", lr_scheduler)
-
+    gd.debuginfo(prj="ds_chat", info=f"rm_model---4 , {rm_model}")
+    gd.debuginfo(prj="ds_chat", info=f"optimizer---4 , {optimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---4 , {lr_scheduler}")
+    gd.disable(info=f"#######ph2 deepspeed.initialize ################################################")
 
     if args.gradient_checkpointing:
         # 在模型中启用梯度检查点
@@ -488,7 +486,6 @@ def main():
 
     # 第6步：模型验证   yknote---改变位置
     def evaluation_reward(model, eval_dataloader):
-        gd.debuginfo(prj='ds-chat')
         # 评估模式
         model.eval()
         # 统计预测（赋分）正确的结果即chosen_reward > rejected_reward的结果数  # 预测正确的数量
@@ -497,12 +494,12 @@ def main():
         # 统计预测总数 # 总预测数量
         total_predictions = 0
         scores = 0
-        gd.debuginfo(prj='ds-chat', info=len(eval_dataloader))
+        gd.debuginfo(prj="ds_chat", info="len(eval_dataloader): {len(eval_dataloader)}")
         for step, batch in enumerate(eval_dataloader):
-            # print("batch---C is:", batch)
-            # print("T batch['input_ids']--C:", infoTensor(batch['input_ids']))
+            gd.debuginfo(prj="ds_chat", info=f"batch---C is, {batch}")
+            gd.debuginfo(prj="ds_chat", info=f"T batch['input_ids']--C, {infoTensor(batch['input_ids'])}")
             # #only ph2 T batch['input_ids']--C: _Size([16, 128])_int64_cpu_
-            # print("T batch['attention_mask']--C:", infoTensor(batch['attention_mask']))
+            gd.debuginfo(prj="ds_chat", info=f"T batch['attention_mask']--C, {infoTensor(batch['attention_mask'])}")
             # #pnly ph2 T batch['attention_mask']--C: _Size([16, 128])_int64_cpu_
 
             batch = to_device(batch, device)
@@ -516,10 +513,10 @@ def main():
                 """
                 # 前向传播
                 outputs = model(**batch)
-                # print("outputs--C", outputs)
-                # print("T outputs['loss']--A:", infoTensor(outputs['loss']))
-                # print("T outputs['chosen_mean_scores']--A:", infoTensor(outputs['chosen_mean_scores']))
-                # print("T outputs['rejected_mean_scores']--A:", infoTensor(outputs['rejected_mean_scores']))
+                gd.debuginfo(prj="ds_chat", info=f"outputs--C, {outputs}")
+                gd.debuginfo(prj="ds_chat", info=f"T outputs['loss']--A, {infoTensor(outputs['loss'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T outputs['chosen_mean_scores']--A, {infoTensor(outputs['chosen_mean_scores'])}")
+                gd.debuginfo(prj="ds_chat", info=f"T outputs['rejected_mean_scores']--A, {infoTensor(outputs['rejected_mean_scores'])}")
 
             # 获取预测得分
             # chosen.shape: (bs,)
@@ -528,10 +525,10 @@ def main():
             # rejected.shape: (bs,)
             rejected = outputs["rejected_mean_scores"]
 
-            # print("chosen--C", chosen)
-            # print("rejected--C", rejected)
-            # print("T chosen---C:", infoTensor(chosen))
-            # print("T rejected---C:", infoTensor(rejected))
+            gd.debuginfo(prj="ds_chat", info=f"chosen--C: {chosen}")
+            gd.debuginfo(prj="ds_chat", info=f"rejected--C: {rejected}")
+            gd.debuginfo(prj="ds_chat", info=f"T chosen---C, {infoTensor(chosen)}")
+            gd.debuginfo(prj="ds_chat", info=f"T rejected---C, {infoTensor(rejected)}")
             ''' only ph2
             chosen--C tensor([-0.4812, -0.0686, -0.5049, -0.2944, -0.4268, -0.7700, -0.4253, -0.3943],
                    device='cuda:0', dtype=torch.float16)
@@ -547,10 +544,10 @@ def main():
             total_predictions += chosen.shape[0]
 
             # only ph2
-            # print("correct_predictions--C", infoTensor(correct_predictions))
+            gd.debuginfo(prj="ds_chat", info=f"correct_predictions--C: {infoTensor(correct_predictions)}")
             # correct_predictions--C _Size([])_int64_cuda:0_  only ph2
 
-            # print("total_predictions--C", total_predictions)  #total_predictions--C 672
+            gd.debuginfo(prj="ds_chat", info=f"total_predictions--C: {total_predictions}")  #total_predictions--C 672
 
             # 累加每个step的平均chosen分值
             # 计算并累计得分
@@ -570,8 +567,8 @@ def main():
             scores = get_all_reduce_mean(scores).item()
         except:
             pass
-        print("scores:", scores)
-        print("acc:", acc)
+        gd.debuginfo(prj="ds_chat", info=f"scores: {scores}")
+        gd.debuginfo(prj="ds_chat", info=f"acc: {acc}")
         return scores, acc
 
 
@@ -596,8 +593,6 @@ def main():
 
         # 训练模式
         rm_model.train()
-        print(" :", )
-
         mean_loss = 0
         for step, batch in enumerate(train_dataloader):
             batch = to_device(batch, device)
@@ -612,12 +607,12 @@ def main():
             # print_rank_0("outputs :", outputs)
             # print_rank_0("loss :", loss)
 
-            # print("T batch['input_ids']--D:", infoTensor(batch['input_ids']))
-            # print("T batch['attention_mask']--D:", infoTensor(batch['attention_mask']))
-            # print("T outputs['loss']--D:", infoTensor(outputs['loss']))
-            # print("T outputs['chosen_mean_scores']--D:", infoTensor(outputs['chosen_mean_scores']))
-            # print("T outputs['rejected_mean_scores']--D:", infoTensor(outputs['rejected_mean_scores']))
-            # print("T loss--D:", infoTensor(loss))
+            gd.debuginfo(prj="ds_chat", info=f"T batch['input_ids']--D, {infoTensor(batch['input_ids'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T batch['attention_mask']--D, {infoTensor(batch['attention_mask'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T outputs['loss']--D, {infoTensor(outputs['loss'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T outputs['chosen_mean_scores']--D, {infoTensor(outputs['chosen_mean_scores'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T outputs['rejected_mean_scores']--D, {infoTensor(outputs['rejected_mean_scores'])}")
+            gd.debuginfo(prj="ds_chat", info=f"T loss--D, {infoTensor(loss)}")
             '''
             T batch['input_ids']--D: _Size([16, 128])_int64_cuda:1_
             T batch['attention_mask']--D: _Size([16, 128])_int64_cuda:1_
@@ -660,7 +655,7 @@ def main():
         print_rank_0('saving model ...', args.global_rank)
         # 将模型中的LoRA层转换为全连接层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         rm_model = convert_lora_to_linear_layer(rm_model)
-        print("ph2 convert_lora_to_linear_layer model:", rm_model)
+        gd.debuginfo(prj="ds_chat", info=f"ph2 convert_lora_to_linear_layer model, {rm_model}")
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:
@@ -669,7 +664,7 @@ def main():
 
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
-            gd.debuginfo(prj='ds-chat')
+            gd.debuginfo(prj="ds_chat")
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(rm_model,

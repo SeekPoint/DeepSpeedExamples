@@ -48,7 +48,7 @@ def create_hf_model(model_class,
     # 根据model_name_or_path从预训练模型获取模型配置model_config。
 	# 从预训练模型的路径或名称中加载模型配置
     model_config = AutoConfig.from_pretrained(model_name_or_path)
-    print("model_config is", model_config)  # 一直保留，以下同
+    gd.debuginfo(prj="ds_chat", info=f"model_config is:, {model_config}")
 
     # 如果disable_dropout为真，则将模型配置中的dropout设为0.0。
     if disable_dropout:
@@ -62,38 +62,37 @@ def create_hf_model(model_class,
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
         # ZeRO阶段3优化
         dschf = HfDeepSpeedConfig(ds_config)
-        print("dschf is", dschf)
+        gd.debuginfo(prj="ds_chat", info=f"dschf is:, {dschf}")
     else:
         dschf = None
 
     # 是否进行强化学习训练
     # 根据rlhf_training的值，确定是从配置中创建模型还是从预训练模型中加载模型。后面有补充区别
     if rlhf_training:
-        gd.debuginfo(prj="ds-chat", info = "将使用模型配置（而非预训练权重）来创建模型")
+        gd.debuginfo(prj="ds_chat", info=f"将使用模型配置（而非预训练权重）来创建模型")
 
         # the weight loading is handled by create critic model
         model = model_class.from_config(model_config)
-        print("model-A is", model)
+        gd.debuginfo(prj="ds_chat", info=f"model-A is:, {model}")
     else:
-        gd.debuginfo(prj="ds-chat", info="将从预训练模型中加载模型及其权重")
+        gd.debuginfo(prj="ds_chat", info=f"将从预训练模型中加载模型及其权重")
         # 如果模型的路径或名称包含".ckpt"，那么模型将从tf checkpoint加载权重。
         model = model_class.from_pretrained(
             model_name_or_path,
             from_tf=bool(".ckpt" in model_name_or_path),
             config=model_config)
-        print("model-B is", model)
+        gd.debuginfo(prj="ds_chat", info=f"model-B is:, {model}")
 
 
-    print("tokenizer.eos_token_id is:", tokenizer.eos_token_id)
-    print("model.config.eos_token_id is:", model.config.eos_token_id)
-    # 将模型的结束标记和填充标记设为分词器的结束标记id。
+    gd.debuginfo(prj="ds_chat", info=f"tokenizer.eos_token_id is::, {tokenizer.eos_token_id}")
+    gd.debuginfo(prj="ds_chat", info=f"model.config.eos_token_id is:, {model.config.eos_token_id}")
     # 将模型配置中的结束符号id和填充符号id设为tokenizer的结束符号id
     model.config.end_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = model.config.eos_token_id
 
     #不能放在上面
-    print("model.config.end_token_id is:", model.config.end_token_id)
-    print("model.config.pad_token_id is:", model.config.pad_token_id)
+    gd.debuginfo(prj="ds_chat", info=f"model.config.end_token_id is::, {model.config.end_token_id}")
+    gd.debuginfo(prj="ds_chat", info=f"model.config.pad_token_id is::, {model.config.pad_token_id}")
 
     # 调整模型的词汇表大小，使其为8的倍数 yknote????为了在某些硬件（如GPU）上提高效率。
     model.resize_token_embeddings(int(
@@ -101,7 +100,7 @@ def create_hf_model(model_class,
         math.ceil(len(tokenizer) / 8.0)))  # make the vocab size multiple of 8
 
     #按照Causal Language Modeling进行训练，例如GPT、OPT、LLaMA、BLOOM等。
-    print("model-C is", model)
+    gd.debuginfo(prj="ds_chat", info=f"model-C is:, {model}")
 
     return model
 
@@ -119,7 +118,7 @@ def create_critic_model(model_name_or_path,
     """此处的模型读取方法用的是“AutoModel”，因此此处critic_model只有主干部分"""
     critic_model = create_hf_model(AutoModel, model_name_or_path, tokenizer,
                                    ds_config, rlhf_training, disable_dropout)
-    print("critic_model-A is", critic_model)
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-A is:, {critic_model}")
     
     # 2. 在强化学习中评估动作的回报值
     # critic_model传入RewardModel进行改造！！
@@ -128,7 +127,7 @@ def create_critic_model(model_name_or_path,
         critic_model,
         tokenizer,
         num_padding_at_beginning=num_padding_at_beginning)
-    print("critic_model-B is", critic_model)
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-B is:, {critic_model}")
 
     # 在RLHF训练模式下，为critic model加载预训练权重，以便在后续的训练过程中用于评估生成模型的表现。
     if rlhf_training:
@@ -147,7 +146,7 @@ def create_critic_model(model_name_or_path,
         critic_model.load_state_dict(
             torch.load(model_ckpt_path, map_location='cpu'))
 
-    print("critic_model-C is", critic_model)
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-C is:, {critic_model}")
 
     return critic_model
 
