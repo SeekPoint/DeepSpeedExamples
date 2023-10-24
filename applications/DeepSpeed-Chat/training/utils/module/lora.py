@@ -106,8 +106,8 @@ class LinearLayer_LoRA(nn.Module):
         # 新的权重参数，shape = [lora_dim, rows]
         self.lora_left_weight = nn.Parameter(torch.zeros(lora_dim, rows))
 
-        gd.debuginfo(prj = "ds_chat", info = f"self.lora_right_weight : {self.lora_right_weight}")
-        gd.debuginfo(prj = "ds_chat", info = f"self.lora_left_weight : {self.lora_left_weight}")
+        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_right_weight : {self.lora_right_weight}")
+        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_left_weight : {self.lora_left_weight}")
         gd.debuginfo(prj = "ds_chat", info = f"T self.lora_right_weight : {infoTensor(self.lora_right_weight)}")
         gd.debuginfo(prj = "ds_chat", info = f"T self.lora_left_weight : {infoTensor(self.lora_left_weight)}")
 
@@ -296,7 +296,7 @@ def _z3_params_to_fetch(param_list):
     #yknote改写
     tmp = []
     for p in param_list:
-        gd.debuginfo(prj="ds_chat", info=f"p is {p}")
+        gd.debuginfo(prj="ds_chat", info=f"p is {infoTensor(p)}")
         if hasattr(p, 'ds_id') and p.ds_status == deepspeed.runtime.zero.partition_parameters.ZeroParamStatus.NOT_AVAILABLE:
             tmp.append(p)
     gd.debuginfo(prj="ds_chat", info=f"tmp is {tmp}")
@@ -382,4 +382,21 @@ tensor([[0., 0., 0.,  ..., 0., 0., 0.],
         ...,
         [0., 0., 0.,  ..., 0., 0., 0.]], requires_grad=True)
 
+
+ds_chat pid: 92669 at MZ32-00 File: training/utils/module/lora.py Func: __init__ Line#: 109 Info: self.lora_right_weight : Parameter containing:
+tensor([[0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.]], requires_grad=True)
+ds_chat pid: 92669 at MZ32-00 File: training/utils/module/lora.py Func: __init__ Line#: 110 Info: self.lora_left_weight : Parameter containing:
+tensor([[0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        ...,
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.],
+        [0., 0., 0.,  ..., 0., 0., 0.]], requires_grad=True)
 '''

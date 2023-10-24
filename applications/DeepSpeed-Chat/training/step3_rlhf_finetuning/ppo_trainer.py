@@ -943,26 +943,11 @@ class DeepSpeedPPOTrainer():
 		# 根据生成的动作序列seq，从actor_prob中提取出实际采用的动作对应的日志概率actor_log_prob
         actor_log_prob = gather_log_probs(actor_prob[:, :-1, :], seq[:, 1:])
 
-
-        gd.debuginfo(prj="ds_chat", info=f"actor_prob is: {actor_prob}")
-        gd.debuginfo(prj="ds_chat", info=f"actor_log_prob is: {actor_log_prob}")
         gd.debuginfo(prj="ds_chat", info=f"T actor_prob: {infoTensor(actor_prob)}")
         gd.debuginfo(prj="ds_chat", info=f"T actor_log_prob: {infoTensor(actor_log_prob)}")
         '''
         T actor_prob: _Size([4, 512, 50272])_float16_cuda:0_
         T actor_log_prob: _Size([4, 511])_float16_cuda:0_
-
-                actor_prob is: tensor([[[-6.6680e+00, -6.6641e+00,  2.8535e+00,  ..., -6.6484e+00,
-                  -6.6602e+00, -6.6328e+00],
-        ....
-                 [ 1.3191e-02,  2.1805e-02,  3.0352e+00,  ...,  7.7942e-02,
-                   2.4506e-02, -2.8662e-01]]], device='cuda:0', dtype=torch.float16,
-               grad_fn=<UnsafeViewBackward0>)
-        actor_log_prob is: actor_loss is: tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
-                 -1.4099e-02, -3.5980e-02],
-        ...
-                 -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16,
-               grad_fn=<SqueezeBackward1>)
         '''
 
         """
@@ -1036,6 +1021,7 @@ class DeepSpeedPPOTrainer():
         self.critic_model.backward(critic_loss)
 
         if self.args.align_overflow:
+            gd.enable(info=f"=========self.actor_model.optimizer.check_overflow")
             actor_overflow = self.actor_model.optimizer.check_overflow(
                 external=True)
             critic_overflow = self.critic_model.optimizer.check_overflow(
@@ -1043,6 +1029,7 @@ class DeepSpeedPPOTrainer():
 
             gd.debuginfo(prj="ds_chat", info=f"actor_overflow is: {actor_overflow}")
             gd.debuginfo(prj="ds_chat", info=f"critic_overflow is: {critic_overflow}")
+            gd.disable(info=f"=========self.actor_model.optimizer.check_overflow")
 
             rank = torch.distributed.get_rank()
             if actor_overflow and not critic_overflow:

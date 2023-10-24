@@ -88,16 +88,32 @@ class DeepSpeedRLHFEngine():
 
         # 用训练好的SFT模型初始化Actor模型
         # 此处的actor是模型经过DeepSpeed封装后得到的DeepSpeedHybridEngine对象
+        
+        logflag = f"self.actor = self._init_actor"
+        if args.local_rank == 0:
+            gd.enable_times(info=logflag)
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
+        if args.local_rank == 0:
+            gd.disable_times(info=logflag)
 
         gd.debuginfo(prj="ds_chat", info=f"self.actor is:,  {self.actor}")
 
+
         # 用训练好的SFT模型初始化SFT模型
-        #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
+        #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对
+
+        logflag = f"self.ref = self._init_ref"
+
+        if args.local_rank == 0:
+            gd.enable_times(info=logflag)
+
         self.ref = self._init_ref(
             actor_model_name_or_path=actor_model_name_or_path)
         gd.debuginfo(prj="ds_chat", info=f"self.ref is:,  {self.ref}")
+
+        if args.local_rank == 0:
+            gd.disable_times(info=logflag)
 
         self.actor_ema = None
 
@@ -159,7 +175,7 @@ class DeepSpeedRLHFEngine():
             enable_tensorboard=self.args.enable_tensorboard,
             tb_path=self.args.tensorboard_path,
             tb_name="step3_actor")
-        gd.debuginfo(prj="ds_chat", info=f"_init_actor ds_config train---1:,  {ds_config}")  # 一直打开
+        gd.debuginfo(prj="ds_chat", info=f"_init_actor ds_config train---1:,  {ds_config}")   
 
         ds_config[
             'train_micro_batch_size_per_gpu'] = self.args.per_device_mini_train_batch_size  # 每个GPU的微批次训练大小
@@ -226,7 +242,8 @@ class DeepSpeedRLHFEngine():
         # 确切地说还是个DeepSpeedHybridEngine实例，集成有HybridEngine的优化
 
         #TODO: move enable_hybrid_engine and pin_parameters to ds_config
-        gd.enable(info=f"#######ph3 actor_model deepspeed.initialize ########################")
+        logflag = f'ph3 actor_model deepspeed.initialize'
+        gd.enable_times(info=logflag)
         actor_engine, *_ = deepspeed.initialize(model=actor_model, # 需要训练的模型
                                                 optimizer=optim, # 优化器
                                                 lr_scheduler=lr_scheduler, # 学习率调度器
@@ -236,7 +253,7 @@ class DeepSpeedRLHFEngine():
         gd.debuginfo(prj="ds_chat", info=f"optim is:,  {optim}")
         gd.debuginfo(prj="ds_chat", info=f"lr_scheduler is:,  {lr_scheduler}")
         gd.debuginfo(prj="ds_chat", info=f"actor_engine is:,  {actor_engine}")
-        gd.disable(info=f"#######ph3 actor_model deepspeed.initialize ########################")
+        gd.disable_times(info=logflag)
 
         log_init("Actor", stime=stime)
 
@@ -289,11 +306,12 @@ class DeepSpeedRLHFEngine():
 									
         # DeepSpeed初始化
         # 参考模型不需要优化器和学习率调度器，所以在初始化DeepSpeed时只需要传入模型和配置即可。
-        gd.enable(info=f"#######ph3 ref_model deepspeed.initialize ################################################")
+        logflag = f'ph3 ref_model deepspeed.initialize'
+        gd.enable_times(info=logflag)
         ref_engine, *_ = deepspeed.initialize(model=ref_model,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ref_engine is:,  {ref_engine}")
-        gd.disable(info=f"#######ph3 ref_model deepspeed.initialize ################################################")
+        gd.disable_times(info=logflag)
 
         log_init("Ref", stime=stime)
         return ref_engine
@@ -345,13 +363,12 @@ class DeepSpeedRLHFEngine():
                 self.args.actor_lora_dim)
             gd.debuginfo(prj="ds_chat", info=f"s3 convert_linear_layer_to_lora actor_model_ema:,  {actor_model_ema}")
 
-        gd.enable(info=f"#######ph3 actor_model_ema deepspeed.initialize ################################################")
+        logflag = f'ph3 actor_model_ema deepspeed.initialize'
+        gd.enable_times(info=logflag)
         ema_engine, *_ = deepspeed.initialize(model=actor_model_ema,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ema_engine is:,  {ema_engine}")
-        gd.disable(info=f"#######ph3 actor_model_ema deepspeed.initialize ################################################")
-
-
+        gd.disable_times(info=logflag)
 
         log_init("EMA", stime=stime)
 
@@ -426,13 +443,14 @@ class DeepSpeedRLHFEngine():
         )
 
         # DeepSpeed Engine
-        gd.enable(info=f"#######ph3 critic_model deepspeed.initialize ###########################")
+        logflag = f'ph3 critic_model deepspeed.initialize'
+        gd.enable_times(info=logflag)
         critic_engine, *_ = deepspeed.initialize(model=critic_model,
                                                  optimizer=optim,
                                                  lr_scheduler=lr_scheduler,
                                                  config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"s3 critic_engine:,  {critic_engine}")
-        gd.disable(info=f"#######ph3 critic_model deepspeed.initialize ##########################")
+        gd.disable_times(info=logflag)
 
         log_init("Critic", stime=stime)
         return critic_engine
@@ -475,12 +493,12 @@ class DeepSpeedRLHFEngine():
             ds_config=ds_eval_config,
             num_padding_at_beginning=self.args.num_padding_at_beginning,
             rlhf_training=True)
-
-        gd.enable(info=f"#######ph3 reward_engine deepspeed.initialize ################################")
+        logflag = f'ph3 reward_engine deepspeed.initialize'
+        gd.enable_times(info=logflag)
         reward_engine, *_ = deepspeed.initialize(model=reward_model,
                                                  config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"s3 reward_engine:  {reward_engine}")
-        gd.disable(info=f"#######ph3 reward_engine deepspeed.initialize ###############################")
+        gd.disable_times(info=logflag)
 
         log_init("Reward", stime=stime)
         return reward_engine

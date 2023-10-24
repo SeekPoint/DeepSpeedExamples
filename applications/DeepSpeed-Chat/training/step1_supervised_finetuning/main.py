@@ -16,6 +16,7 @@ from torch.utils.data.distributed import DistributedSampler
 
 from pydebug import gd, infoTensor
 
+
 # 因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），
 # 默认的数据整理函数（default_data_collator）和获取优化器调度器的函数（get_scheduler）。
 from transformers import (
@@ -24,10 +25,17 @@ from transformers import (
     default_data_collator,
     get_scheduler,
 )
-
+gd.enable(info=f"#######ph1 import deepspeed ##################")
 import deepspeed
+gd.disable(info=f"#######ph1 import deepspeed #################")
+
+gd.enable(info=f"#######from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam##################")
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
+gd.disable(info=f"#######from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam#################")
+
+gd.enable(info=f"#######import deepspeed.comm as dist ##################")
 import deepspeed.comm as dist
+gd.disable(info=f"######import deepspeed.comm as dist #################")
 
 # 将当前脚本的父目录添加到系统路径中，以便可以从该目录下的utils目录导入一些自定义函数和模块。
 sys.path.append(
@@ -269,6 +277,7 @@ def parse_args():
 
     print('parser--1:', parser)
     # 这一行将DeepSpeed的配置参数添加到解析器中。
+    # if dist.get_rank() == 0:  ==dist没有初始化，不能使用
     gd.enable(info=f"####### deepspeed.add_config_arguments #################################")
     parser = deepspeed.add_config_arguments(parser)
     gd.disable(info=f"####### deepspeed.add_config_arguments ################################")
@@ -314,11 +323,16 @@ def main():
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # torch.distributed.init_process_group(backend='nccl')
         # 初始化分布式训练环境
-        # if dist.get_rank() == 0: #还没初始化，不能使用dist！！
-        gd.enable(info=f"deepspeed.init_distributed()")
+
+        #if dist.get_rank() == 0: # 还没初始化，不能使用dist！！
+        if args.local_rank == 0:
+            gd.enable(info=f"#######deepspeed.init_distributed() at rank {args.local_rank}")
+            pass
         deepspeed.init_distributed()
-        #if dist.get_rank() == 0:
-        gd.disable(info=f"deepspeed.init_distributed()")
+        if dist.get_rank() == 0: # dist初始化好了
+            gd.disable(info=f"#######deepspeed.init_distributed()")
+            pass
+
 		
     # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
@@ -335,7 +349,7 @@ def main():
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step1_model")
-    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--1: {ds_config}")  # 一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--1: {ds_config}")   
 
     # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应GPU的内存限制
     # 在配置中设置训练时每个GPU的微批次大小和总的批次大小。
@@ -349,7 +363,7 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
     ) * args.gradient_accumulation_steps
 
-    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--2: {ds_config}") #一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--2: {ds_config}")
     gd.debuginfo(prj="ds_chat", info=f"ds_config['train_batch_size']is: {ds_config['train_batch_size']}")  #8
     gd.debuginfo(prj="ds_chat", info=f"args.per_device_train_batch_size is: {args.per_device_train_batch_size}") #4
 
@@ -366,14 +380,14 @@ def main():
     # 加载预训练模型tokenizer，fast_tokenizer=True表示使用优化过的、速度更快的tokenizer。
     # 加载预训练模型对应的分词器。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
-    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --0: {tokenizer}") # 一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --0: {tokenizer}")  
 
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
 	# 将tokenizer的填充方向设置为'right'，表示在序列的右侧（末尾）添加填充符号。
     tokenizer.padding_side = 'right'
 
-    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --1: {tokenizer}") # 一直打开
+    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --1: {tokenizer}")
 
     # 创建预训练模型。 # 第2步：创建actor模型
     model = create_hf_model(AutoModelForCausalLM,
@@ -396,13 +410,16 @@ def main():
         # 将模型中指定的线性层转换为LoRA层
         # lora_module_name指定了要转换的模块的名称 , lora_dim指定了LoRA的维度
         if dist.get_rank() == 0:
-            gd.enable(info=f"deepspeed.init_distributed()")
+            gd.enable(info=f"convert_linear_layer_to_lora()")
+            pass
+
         model = convert_linear_layer_to_lora(model,
                                              args.lora_module_name,
                                              args.lora_dim)
         gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora: {model}")
         if dist.get_rank() == 0:
-            gd.disable(info=f"deepspeed.init_distributed()")
+            gd.disable(info=f"convert_linear_layer_to_lora()")
+            pass
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，训练过程中只有LoRA层的参数会被更新/优化
@@ -471,7 +488,12 @@ def main():
     # 权重衰减是防止模型过拟合的一种策略，通常只对模型的权重参数应用。
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(model, args.weight_decay)
 	
-    gd.debuginfo(prj="ds_chat", info=f"optimizer_grouped_parameters: {optimizer_grouped_parameters}")
+    # gd.debuginfo(prj="ds_chat", info=f"optimizer_grouped_parameters: {optimizer_grouped_parameters}")
+    # 这里结构比较复杂，各种场景都有
+    # for p in optimizer_grouped_parameters:
+    #     for k, v in p.items():
+    #         gd.debuginfo(prj="ds_chat", info=f"{k} is: {infoTensor(v)}")
+    # assert 0
     # debugOGP(optimizer_grouped_parameters) #因为在cpu上，即使使用print_rank0也打印了两次！
     gd.debuginfo(prj="ds_chat", info=f"len of optimizer_grouped_parameters: {len(optimizer_grouped_parameters)}")
 
@@ -492,12 +514,17 @@ def main():
     # 创建优化器
     if dist.get_rank() == 0:
         gd.enable(info=f"optimizer = AdamOptimizer")
+        pass
+
+    # 这里会触发c++的编译op过程！！
+    # 是否重新编译是nvcc编译器决定的，和ds无关！
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
     gd.debuginfo(prj="ds_chat", info=f"optimizer: {optimizer}")
     if dist.get_rank() == 0:
         gd.disable(info=f"optimizer = AdamOptimizer")
+        pass
 
     # 计算每个epoch需要进行的更新步数，等于训练数据集大小除以梯度累积步数（对结果向上取整）
     num_update_steps_per_epoch = math.ceil(
@@ -517,7 +544,10 @@ def main():
     # lr_scheduler : <torch.optim.lr_scheduler.LambdaLR object at 0x7f469aea9fd0>
 
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
-    gd.enable(info=f"#######ph1 deepspeed.initialize ################################################")
+    if args.local_rank == 0:
+        gd.enable(info=f"#######ph1 deepspeed.initialize ################################################")
+        pass
+
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
@@ -528,7 +558,10 @@ def main():
     gd.debuginfo(prj="ds_chat", info=f"model---3: {model}")
     gd.debuginfo(prj="ds_chat", info=f"optimizer---3: {optimizer}")
     gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---3: {lr_scheduler}")
-    gd.disable(info=f"#######ph1 deepspeed.initialize ################################################")
+
+    if args.local_rank == 0:
+        gd.disable(info=f"#######ph1 deepspeed.initialize ################################################")
+        pass
 
 
     # 如果启用了梯度检查点，那么在模型中也启用梯度检查点。

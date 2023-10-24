@@ -465,7 +465,8 @@ def main():
     CONSTANT_WITH_WARMUP：带预热的常数调度器，学习率在一开始的一段时间内线性增加，然后保持不变。
     '''
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
-    gd.enable(info=f"#######ph2 deepspeed.initialize ################################################")
+    if args.local_rank == 0:
+        gd.enable(info=f"#######ph2 deepspeed.initialize ################################################")
     rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=rm_model, # 模型
         optimizer=optimizer, # 优化器
@@ -477,7 +478,8 @@ def main():
     gd.debuginfo(prj="ds_chat", info=f"rm_model---4 , {rm_model}")
     gd.debuginfo(prj="ds_chat", info=f"optimizer---4 , {optimizer}")
     gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---4 , {lr_scheduler}")
-    gd.disable(info=f"#######ph2 deepspeed.initialize ################################################")
+    if args.local_rank == 0:
+        gd.disable(info=f"#######ph2 deepspeed.initialize ################################################")
 
     if args.gradient_checkpointing:
         # 在模型中启用梯度检查点
