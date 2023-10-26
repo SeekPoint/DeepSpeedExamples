@@ -9,6 +9,7 @@ import os
 import deepspeed
 # ZeroParamStatus : 用于在DeepSpeed的Zero Redundancy Optimizer（零冗余优化器）中跟踪参数状态的工具
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
 
 # 将父目录的路径添加到了系统路径中
 # os.path.dirname(__file__) : 获取当前文件的目录
@@ -170,6 +171,10 @@ class DeepSpeedPPOTrainer():
         self.reward_model = self.rlhf_engine.reward # reward模型，用于计算奖励
         self.tokenizer = self.rlhf_engine.tokenizer # tokenizer，用于文本的编码和解码
 
+        estimate_zero2_model_states_mem_needs_all_live(self.actor_model, num_gpus_per_node=1, num_nodes=1)
+        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+        estimate_zero3_model_states_mem_needs_all_live(self.actor_model, num_gpus_per_node=1, num_nodes=1)
+
         self.args = args  # 传入的参数
 
         # 执行生成答案时，最大的答案序列长度
@@ -271,7 +276,7 @@ class DeepSpeedPPOTrainer():
         gd.debuginfo(prj="ds_chat", info=f"valid_ans_len--2 is: {valid_ans_len}")
 
 
-        gd.debuginfo(prj="ds_chat", info=f"T ans--2 : {infoTensor(ans)}")  #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"T ans--2={infoTensor(ans)}")  #only ph3 x1
         gd.debuginfo(prj="ds_chat", info=f"T valid_ans_len--2 is: {infoTensor(valid_ans_len)}") #only ph3 x1
         '''
         T seq--2  : _Size([4, 512])_int64_cuda:0_   
@@ -386,8 +391,8 @@ class DeepSpeedPPOTrainer():
 		# 生成序列
         seq = self._generate_sequence(prompts, mask, step)
 
-        gd.debuginfo(prj="ds_chat", info=f"seq-1 : {seq}")
-        gd.debuginfo(prj="ds_chat", info=f"T ans-1 : {infoTensor(seq)}") #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"seq-1={seq}")
+        gd.debuginfo(prj="ds_chat", info=f"T ans-1={infoTensor(seq)}") #only ph3 x1
         # T ans-1 : _Size([4, 512])_int64_cuda:1_
         ''' 
         seq-1 : tensor([[    2,     2,     2,  ...,    17,    46,     6],
@@ -407,9 +412,9 @@ class DeepSpeedPPOTrainer():
         # 创建新的注意力掩码，如果seq中的元素是填充符，那么掩码中的相应位置就是0，否则就是1。 
         attention_mask = seq.not_equal(pad_token_id).long()  #ph3+zero3出错！seq可能为空！
         
-        gd.debuginfo(prj="ds_chat", info=f"pad_token_id-1 : {pad_token_id}")
-        gd.debuginfo(prj="ds_chat", info=f"attention_mask-1 : {attention_mask}")
-        gd.debuginfo(prj="ds_chat", info=f"T attention_mask : {infoTensor(attention_mask)}") #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"pad_token_id-1={pad_token_id}")
+        gd.debuginfo(prj="ds_chat", info=f"attention_mask-1={attention_mask}")
+        gd.debuginfo(prj="ds_chat", info=f"T attention_mask={infoTensor(attention_mask)}") #only ph3 x1
         #T attention_mask : _Size([4, 512])_int64_cuda:1_
         '''
         pad_token_id-1 : 2
@@ -450,8 +455,8 @@ class DeepSpeedPPOTrainer():
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
 
             #巨大
-            gd.debuginfo(prj="ds_chat", info=f"output-1 : {output}")
-            gd.debuginfo(prj="ds_chat", info=f"output_ref-1 : {output_ref}")
+            gd.debuginfo(prj="ds_chat", info=f"output-1={output}")
+            gd.debuginfo(prj="ds_chat", info=f"output_ref-1={output_ref}")
 
             # 然后利用reward model和ciric model对输出的prompt+answer进行打分
             # （PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
@@ -474,7 +479,7 @@ class DeepSpeedPPOTrainer():
 				
             #巨大
             gd.debuginfo(prj="ds_chat", info=f"reward_score-1: {reward_score}")
-            gd.debuginfo(prj="ds_chat", info=f"T reward_score-1 : {infoTensor(reward_score)}")
+            gd.debuginfo(prj="ds_chat", info=f"T reward_score-1={infoTensor(reward_score)}")
             # #only ph3 x1 T T reward_score-1 : _Size([4])_float16_cuda:0_
             '''
             reward_score-1: tensor([ 0.5713,  0.9023, -0.4629,  0.4783], device='cuda:0',
@@ -493,8 +498,8 @@ class DeepSpeedPPOTrainer():
             values = self.critic_model.forward_value(
                 seq, attention_mask, return_value_only=True).detach()[:, :-1]
 
-            gd.debuginfo(prj="ds_chat", info=f"values-1 : {values}")
-            gd.debuginfo(prj="ds_chat", info=f"T values-1 : {infoTensor(values)}")
+            gd.debuginfo(prj="ds_chat", info=f"values-1={values}")
+            gd.debuginfo(prj="ds_chat", info=f"T values-1={infoTensor(values)}")
             # #T values-1 : _Size([4, 511])_float16_cuda:1_  only ph3 x1
 
         '''知识补充:
@@ -504,16 +509,16 @@ class DeepSpeedPPOTrainer():
 		# logits是actor_model的输出，代表了在每个可能的输出位置，每种可能的词或字符的原始未归一化的分数。
         # (seq_bs, max_seq_len, vocab_size)
         logits = output.logits
-        gd.debuginfo(prj="ds_chat", info=f"logits-1 : {logits}")
+        gd.debuginfo(prj="ds_chat", info=f"logits-1={logits}")
 
         # logits_ref是ref_model的输出，代表了在每个可能的输出位置，每种可能的词或字符的原始未归一化的分数。
         # (seq_bs, max_seq_len, vocab_size)
         logits_ref = output_ref.logits
-        gd.debuginfo(prj="ds_chat", info=f"logits_ref-1 : {logits_ref}")
+        gd.debuginfo(prj="ds_chat", info=f"logits_ref-1={logits_ref}")
 
 
-        gd.debuginfo(prj="ds_chat", info=f"T logits-1 : {infoTensor(logits)}")  #only ph3 x1
-        gd.debuginfo(prj="ds_chat", info=f"T logits_ref-1 : {infoTensor(logits_ref)}") #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"T logits-1={infoTensor(logits)}")  #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"T logits_ref-1={infoTensor(logits_ref)}") #only ph3 x1
         # T logits-1 : _Size([4, 512, 50272])_float16_cuda:1_
         # T logits_ref-1 : _Size([4, 512, 50272])_float16_cuda:1_
         '''

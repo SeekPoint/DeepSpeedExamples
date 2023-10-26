@@ -418,10 +418,10 @@ def parse_args():
                         help='Print prompt and answers during training')
 
     parser = deepspeed.add_config_arguments(parser)
-    gd.debuginfo(prj="ds_chat", info=f"ph3 parser is:, {parser}")
+    gd.debuginfo(prj="ds_chat", info=f"ph3 parser={parser}")
 
     args = parser.parse_args()
-    gd.debuginfo(prj="ds_chat", info=f"ph3 args is:, {args}")
+    gd.debuginfo(prj="ds_chat", info=f"ph3 args={args}")
 
     if args.enable_tensorboard:
         print(f"Tensorboard logs going to: {args.tensorboard_path}/step3_tensorboard_logs")
@@ -599,10 +599,10 @@ def main():
     # torch.distributed.get_rank()返回的是一个整数，这个整数在整个分布式训练环境中是唯一的，用于表示当前进程。
     # 对于非分布式训练环境，这个函数默认返回0。
     args.global_rank = torch.distributed.get_rank()
-    gd.debuginfo(prj="ds_chat", info=f"args.global_rank is:, {args.global_rank}")
+    gd.debuginfo(prj="ds_chat", info=f"args.global_rank={args.global_rank}")
 
     unsupervised_training_enabled = args.unsupervised_dataset_name and args.unsupervised_dataset_config_name
-    gd.debuginfo(prj="ds_chat", info=f"unsupervised_training_enabled is:, {unsupervised_training_enabled}")
+    gd.debuginfo(prj="ds_chat", info=f"unsupervised_training_enabled={unsupervised_training_enabled}")
 
     # 如果启用无监督训练
     if unsupervised_training_enabled:
@@ -632,7 +632,7 @@ def main():
     # 创建了一个基于actor模型的分词器
     tokenizer = load_hf_tokenizer(args.actor_model_name_or_path,
                                   fast_tokenizer=True)
-    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -1 is:, {tokenizer}")
+    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -1={tokenizer}")
 
     # 超出原序列长度的部分就会被填充为eos_token。
     tokenizer.pad_token = tokenizer.eos_token
@@ -641,7 +641,7 @@ def main():
     # 填充方式为右填充
     tokenizer.padding_side = 'right'
 
-    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -2 is:, {tokenizer}")
+    gd.debuginfo(prj="ds_chat", info=f"ph3 tokenizer -2={tokenizer}")
 
     # 创建数据集，并获取训练数据dataloader以及总的迭代次数
     prompt_train_dataloader, unsupervised_train_dataloader, num_total_iters = create_datasets(
@@ -670,7 +670,7 @@ def main():
     if args.local_rank == 0:
         gd.disable_times(info=logflag)
 
-    gd.debuginfo(prj="ds_chat", info=f"rlhf_engine is:, {rlhf_engine}")
+    gd.debuginfo(prj="ds_chat", info=f"rlhf_engine={rlhf_engine}")
     # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
 
     # 该字段的值为一个空字符串，用于表示一个对话的结束
@@ -689,8 +689,8 @@ def main():
         gd.disable_times(info=logflag)
 
 
-    gd.debuginfo(prj="ds_chat", info=f"ppo_trainer is:, {ppo_trainer}")
-    gd.debuginfo(prj="ds_chat", info=f"trainer is:, {trainer}")
+    gd.debuginfo(prj="ds_chat", info=f"ppo_trainer={ppo_trainer}")
+    gd.debuginfo(prj="ds_chat", info=f"trainer={trainer}")
     # ppo_trainer is: <class 'ppo_trainer.DeepSpeedPPOTrainer'>
     # trainer is: <ppo_trainer.DeepSpeedPPOTrainer object at 0x7f939c0b7160>
 
@@ -702,8 +702,8 @@ def main():
     unsup_mini_dataset = MiniDataset(args.generation_batch_numbers,
                                      args.per_device_mini_train_batch_size)
 
-    gd.debuginfo(prj="ds_chat", info=f"exp_mini_dataset is:, {exp_mini_dataset}")
-    gd.debuginfo(prj="ds_chat", info=f"unsup_mini_dataset is:, {unsup_mini_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"exp_mini_dataset={exp_mini_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"unsup_mini_dataset={unsup_mini_dataset}")
 
     # Train!
     print_rank_0("***** Running training *****", args.global_rank)
@@ -768,7 +768,7 @@ def main():
             '''
 
             exp_dataset = exp_mini_dataset.add(out)
-            gd.debuginfo(prj="ds_chat", info=f"exp_dataset is:, {exp_dataset}")
+            gd.debuginfo(prj="ds_chat", info=f"exp_dataset={exp_dataset}")
             if exp_dataset: #可能是None
                 gd.debuginfo(prj="ds_chat", info=f"len of exp_dataset: {len(exp_dataset)}")
                 gd.debuginfo(prj="ds_chat", info=f"T exp_dataset[0]['prompts']:, {infoTensor(exp_dataset[0]['prompts'])}")
@@ -814,13 +814,13 @@ def main():
                 '''
                 # 从经验池中进行学习Epoch轮
                 for ppo_ep in range(args.ppo_epochs):
-                    gd.debuginfo(prj="ds_chat", info = f"ppo_ep is {ppo_ep}")
+                    gd.debuginfo(prj="ds_chat", info = f"ppo_ep={ppo_ep}")
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
                             zip(exp_dataset, unsup_dataset)):
                         gd.debuginfo(prj="ds_chat")
-                        gd.debuginfo(prj="ds_chat", info=f"exp_data is:, {exp_data}")
-                        gd.debuginfo(prj="ds_chat", info=f"unsup_dataset is:, {unsup_dataset}")
+                        gd.debuginfo(prj="ds_chat", info=f"exp_data={exp_data}")
+                        gd.debuginfo(prj="ds_chat", info=f"unsup_dataset={unsup_dataset}")
 
                         gd.debuginfo(prj="ds_chat", info=f"T exp_data['prompts']:, {infoTensor(exp_data['prompts'])}")
                         gd.debuginfo(prj="ds_chat", info=f"T exp_data['logprobs']:, {infoTensor(exp_data['logprobs'])}")
@@ -871,7 +871,7 @@ def main():
                                 gd.disable_times(info=logflag)
 
 
-                            gd.debuginfo(prj="ds_chat", info=f"unsup_loss is {unsup_loss}")
+                            gd.debuginfo(prj="ds_chat", info=f"unsup_loss={unsup_loss}")
 
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()

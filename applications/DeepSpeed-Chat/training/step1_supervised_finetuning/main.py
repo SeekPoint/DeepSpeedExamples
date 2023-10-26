@@ -13,6 +13,7 @@ import sys
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
 
 from pydebug import gd, infoTensor
 
@@ -396,6 +397,10 @@ def main():
                             ds_config,
                             disable_dropout=args.disable_dropout)
 
+    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+
     gd.debuginfo(prj="ds_chat", info=f"s1 model create_hf_model: {model}")
 
     # 判断是否启用LoRA模式
@@ -417,6 +422,11 @@ def main():
                                              args.lora_module_name,
                                              args.lora_dim)
         gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora: {model}")
+
+        estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+        estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+
         if dist.get_rank() == 0:
             gd.disable(info=f"convert_linear_layer_to_lora()")
             pass
@@ -425,6 +435,9 @@ def main():
             # 将模型中非LoRA层的参数的requires_grad属性设为False，训练过程中只有LoRA层的参数会被更新/优化
             model = only_optimize_lora_parameters(model)
             gd.debuginfo(prj="ds_chat", info=f"s1 only_optimize_lora_parameters: {model}")
+            estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+            estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
 
     # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
@@ -730,6 +743,9 @@ def main():
         # 将模型中的LoRA层转换为标准的线性层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         model = convert_lora_to_linear_layer(model)
         gd.debuginfo(prj="ds_chat", info=f"ph1 convert_lora_to_linear_layer model {model}")
+        estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+        estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:

@@ -14,6 +14,8 @@ from transformers.deepspeed import HfDeepSpeedConfig
 
 from .reward_model import RewardModel
 
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+
 from pydebug import gd, infoTensor
 
 """
@@ -48,7 +50,7 @@ def create_hf_model(model_class,
     # 根据model_name_or_path从预训练模型获取模型配置model_config。
 	# 从预训练模型的路径或名称中加载模型配置
     model_config = AutoConfig.from_pretrained(model_name_or_path)
-    gd.debuginfo(prj="ds_chat", info=f"model_config is:, {model_config}")
+    gd.debuginfo(prj="ds_chat", info=f"model_config={model_config}")
 
     # 如果disable_dropout为真，则将模型配置中的dropout设为0.0。
     if disable_dropout:
@@ -62,7 +64,7 @@ def create_hf_model(model_class,
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
         # ZeRO阶段3优化
         dschf = HfDeepSpeedConfig(ds_config)
-        gd.debuginfo(prj="ds_chat", info=f"dschf is:, {dschf}")
+        gd.debuginfo(prj="ds_chat", info=f"dschf={dschf}")
     else:
         dschf = None
 
@@ -73,7 +75,7 @@ def create_hf_model(model_class,
 
         # the weight loading is handled by create critic model
         model = model_class.from_config(model_config)
-        gd.debuginfo(prj="ds_chat", info=f"model-A is:, {model}")
+        gd.debuginfo(prj="ds_chat", info=f"model-A={model}")
     else:
         gd.debuginfo(prj="ds_chat", info=f"将从预训练模型中加载模型及其权重")
         # 如果模型的路径或名称包含".ckpt"，那么模型将从tf checkpoint加载权重。
@@ -81,11 +83,15 @@ def create_hf_model(model_class,
             model_name_or_path,
             from_tf=bool(".ckpt" in model_name_or_path),
             config=model_config)
-        gd.debuginfo(prj="ds_chat", info=f"model-B is:, {model}")
+        gd.debuginfo(prj="ds_chat", info=f"model-B={model}")
+
+    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
 
 
     gd.debuginfo(prj="ds_chat", info=f"tokenizer.eos_token_id is::, {tokenizer.eos_token_id}")
-    gd.debuginfo(prj="ds_chat", info=f"model.config.eos_token_id is:, {model.config.eos_token_id}")
+    gd.debuginfo(prj="ds_chat", info=f"model.config.eos_token_id={model.config.eos_token_id}")
     # 将模型配置中的结束符号id和填充符号id设为tokenizer的结束符号id
     model.config.end_token_id = tokenizer.eos_token_id
     model.config.pad_token_id = model.config.eos_token_id
@@ -100,7 +106,7 @@ def create_hf_model(model_class,
         math.ceil(len(tokenizer) / 8.0)))  # make the vocab size multiple of 8
 
     #按照Causal Language Modeling进行训练，例如GPT、OPT、LLaMA、BLOOM等。
-    gd.debuginfo(prj="ds_chat", info=f"model-C is:, {model}")
+    gd.debuginfo(prj="ds_chat", info=f"model-C={model}")
 
     return model
 
@@ -118,7 +124,11 @@ def create_critic_model(model_name_or_path,
     """此处的模型读取方法用的是“AutoModel”，因此此处critic_model只有主干部分"""
     critic_model = create_hf_model(AutoModel, model_name_or_path, tokenizer,
                                    ds_config, rlhf_training, disable_dropout)
-    gd.debuginfo(prj="ds_chat", info=f"critic_model-A is:, {critic_model}")
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-A={critic_model}")
+
+    estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
     
     # 2. 在强化学习中评估动作的回报值
     # critic_model传入RewardModel进行改造！！
@@ -127,7 +137,11 @@ def create_critic_model(model_name_or_path,
         critic_model,
         tokenizer,
         num_padding_at_beginning=num_padding_at_beginning)
-    gd.debuginfo(prj="ds_chat", info=f"critic_model-B is:, {critic_model}")
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-B={critic_model}")
+
+    estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
 
     # 在RLHF训练模式下，为critic model加载预训练权重，以便在后续的训练过程中用于评估生成模型的表现。
     if rlhf_training:
@@ -146,7 +160,7 @@ def create_critic_model(model_name_or_path,
         critic_model.load_state_dict(
             torch.load(model_ckpt_path, map_location='cpu'))
 
-    gd.debuginfo(prj="ds_chat", info=f"critic_model-C is:, {critic_model}")
+    gd.debuginfo(prj="ds_chat", info=f"critic_model-C={critic_model}")
 
     return critic_model
 

@@ -15,6 +15,8 @@ from utils.model.model_utils import create_critic_model
 from utils.utils import to_device
 from utils.utils import load_hf_tokenizer
 
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+
 from pydebug import gd, infoTensor
 
 # 解析命令行参数
@@ -53,6 +55,10 @@ def load_stuff(model_name_or_path, num_padding_at_beginning):
     # 创建奖励模型
     model = create_critic_model(model_name_or_path, tokenizer, None,
                                 num_padding_at_beginning, True)
+
+    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
 
     return model, tokenizer
 

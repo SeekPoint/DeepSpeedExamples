@@ -12,6 +12,8 @@ import json
 from transformers import pipeline, set_seed
 from transformers import AutoConfig, OPTForCausalLM, AutoTokenizer
 
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+
 # AutoConfig : 自动从预训练模型中加载配置
 # OPTForCausalLM : 预训练的GPT模型，用于因果语言建模任务
 # AutoTokenizer : 自动从预训练模型中加载词汇表和分词器
@@ -91,6 +93,10 @@ def get_generator(path):
     model = OPTForCausalLM.from_pretrained(path,
                                            from_tf=bool(".ckpt" in path),
                                            config=model_config).half()
+
+    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
 
     # 设置模型配置的 end_token_id 为 tokenizer 的 eos_token_id。
     # 将模型的结束token ID 和 填充token ID设置为分词器的结束token ID

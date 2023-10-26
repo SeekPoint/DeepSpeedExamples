@@ -99,17 +99,16 @@ class LinearLayer_LoRA(nn.Module):
         # 然后初始化 LoRA 的左右两个权重矩阵，并设置它们为可学习的参数。
         # 新的权重参数，shape = [columns, lora_dim]
         # 用于在低维空间中对原始权重进行适应(adapter)
-        self.lora_right_weight = nn.Parameter(torch.zeros(
-            columns,
-            lora_dim))  # apply transpose so in forward we do not need to
+        self.lora_right_weight = nn.Parameter(
+            torch.zeros(columns, lora_dim))  # apply transpose so in forward we do not need to
 
         # 新的权重参数，shape = [lora_dim, rows]
         self.lora_left_weight = nn.Parameter(torch.zeros(lora_dim, rows))
 
-        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_right_weight : {self.lora_right_weight}")
-        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_left_weight : {self.lora_left_weight}")
-        gd.debuginfo(prj = "ds_chat", info = f"T self.lora_right_weight : {infoTensor(self.lora_right_weight)}")
-        gd.debuginfo(prj = "ds_chat", info = f"T self.lora_left_weight : {infoTensor(self.lora_left_weight)}")
+        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_right_weight={self.lora_right_weight}")
+        # gd.debuginfo(prj = "ds_chat", info = f"self.lora_left_weight={self.lora_left_weight}")
+        gd.debuginfo(prj = "ds_chat", info = f"T self.lora_right_weight={infoTensor(self.lora_right_weight)}")
+        gd.debuginfo(prj = "ds_chat", info = f"T self.lora_left_weight={infoTensor(self.lora_left_weight)}")
 
         # 缩放因子，用于调整LoRA参数的影响大小
         self.lora_scaling = lora_scaling / lora_dim
@@ -244,11 +243,11 @@ def convert_linear_layer_to_lora(model,
     # 函数首先遍历模型中的所有模块（model.named_modules()），找出名称中包含 part_module_name 的线性层（nn.Linear），
     # 并将这些层的名称添加到 repalce_name 列表中。
     for name, module in model.named_modules():
-        gd.debuginfo(prj="ds_chat", info=f"name is:{name} +++ module is:{module}")
+        gd.debuginfo(prj="ds_chat", info=f"name={name} +++ module={module}")
         if isinstance(module, nn.Linear) and part_module_name in name:
             repalce_name.append(name)
 
-    gd.debuginfo(prj="ds_chat", info=f"ALL repalce_name is: {repalce_name}")
+   # gd.debuginfo(prj="ds_chat", info=f"ALL repalce_name is: {repalce_name}")
 
     # 然后，函数遍历 repalce_name 列表，使用 recursive_getattr 函数获取模型中对应名称的模块。
     # 这些模块是需要被替换成 LoRA 层的线性层。
@@ -256,7 +255,7 @@ def convert_linear_layer_to_lora(model,
         """recursive_getattr实现了从model中根据属性名取出对应原始结构"""
         # 获取模型中对应的模块
         module = recursive_getattr(model, name)
-        gd.debuginfo(prj="ds_chat", info=f"name -{name}- modele is {module}")
+        gd.debuginfo(prj="ds_chat", info=f"name={name} +++ modele={module}")
 
         # 使用LinearLayer_LoRA类创建一个新的LoRA层，该层的权重、偏置以及其他参数从原模块中继承，
         # 并且将其移到了原模块的设备和数据类型上。
@@ -296,13 +295,12 @@ def _z3_params_to_fetch(param_list):
     #yknote改写
     tmp = []
     for p in param_list:
-        gd.debuginfo(prj="ds_chat", info=f"p is {infoTensor(p)}")
+        gd.debuginfo(prj="ds_chat", info=f"p={infoTensor(p)}")
         if hasattr(p, 'ds_id') and p.ds_status == deepspeed.runtime.zero.partition_parameters.ZeroParamStatus.NOT_AVAILABLE:
             tmp.append(p)
-    gd.debuginfo(prj="ds_chat", info=f"tmp is {tmp}")
+    gd.debuginfo(prj="ds_chat", info=f"tmp={tmp}")
     return tmp
             
-    
 
 # 这个函数 convert_lora_to_linear_layer 是用来将模型中的 LoRA 层转换回线性层的。
 # 在训练深度学习模型时，这个操作可以用于在训练完 LoRA 层后，将模型恢复到原始的状态，
@@ -314,18 +312,18 @@ def convert_lora_to_linear_layer(model):
     # 函数首先遍历模型中的所有模块（model.named_modules()），找出所有的 LoRA 层（LinearLayer_LoRA），
     # 并将这些层的名称添加到 repalce_name 列表中。
     for name, module in model.named_modules():
-        gd.debuginfo(prj="ds_chat", info=f"name is:{name} +++ module is:{module}")
+        gd.debuginfo(prj="ds_chat", info=f"name={name} +++ module={module}")
         # 如果某个模块是LoRA层，那么将其名字添加到repalce_name列表中。
         if isinstance(module, LinearLayer_LoRA):
             repalce_name.append(name)
 
-    gd.debuginfo(prj="ds_chat", info=f"ALL repalce_name is: {repalce_name}")
+    # gd.debuginfo(prj="ds_chat", info=f"ALL repalce_name is: {repalce_name}")
 
     # 然后，函数遍历 repalce_name 列表，使用 recursive_getattr 函数获取模型中对应名称的 LoRA 层
     for name in repalce_name:
         # 获取对应的模块
         module = recursive_getattr(model, name)
-        gd.debuginfo(prj="ds_chat", info=f"name is:{name} +++ module is:{module}")
+        gd.debuginfo(prj="ds_chat", info=f"name={name} +++ module={module}")
 
         # 对于每一个 LoRA 层，函数首先检查是否处于 zero stage 3（DeepSpeed 的一个特性，用于在多GPU训练中减少内存占用）。
         # 如果是，则设置 zero_stage_3 为 True。这里就是检测是否使用了DeepSpeed的ZeRO-3优化策略
@@ -349,24 +347,21 @@ def convert_lora_to_linear_layer(model):
 # 这个函数的作用是关闭模型中除LoRA参数之外的所有参数的梯度。这意味着在训练过程中，只有LoRA参数会被优化，其他参数保持不变。
 def only_optimize_lora_parameters(model):
     gd.debuginfo(prj="ds_chat")
-
     # turn off the gradient of all the parameters except the LoRA parameters
-    # 遍历模型的所有参数。每个参数都有一个唯一的名称name和对应的参数值param。
-    '''目标是让模型只优化LoRA参数'''
-    # 获取模型的所有参数及其名称
+    # 遍历模型的所有参数，每个参数都有一个唯一的名称name和对应的参数值param。
+    # 目标是让模型只优化LoRA参数， 获取模型的所有参数及其名称
     for name, param in model.named_parameters():
-        gd.debuginfo(prj="ds_chat", info=f"name is:{name} +++ param is:{param}")
         # 查当前参数的名称是否包含lora_right_weight或lora_left_weight。
         # 这是因为在LoRA（Low-Rank Adaptation）中，只有这两种参数是需要优化的。
 		# 如果参数名称中含有"lora_right_weight"或"lora_left_weight"（这是LoRA层中权重的参数名），
         # 就将该参数的requires_grad属性设置为True，使得该参数在接下来的训练中可以被优化。
         if "lora_right_weight" in name or "lora_left_weight" in name:
-            gd.debuginfo(prj="ds_chat")
+            gd.debuginfo(prj="ds_chat", info=f"name={name} +++ param={param} set requires_grad=true")
             # param.requires_grad = True 如果参数名包含lora_right_weight或lora_left_weight，
             # 则设置参数的requires_grad属性为True，表示需要对此参数进行梯度下降优化。
             param.requires_grad = True
         else:
-            gd.debuginfo(prj="ds_chat")
+            gd.debuginfo(prj="ds_chat", info=f"name={name} +++ param={param} set requires_grad=false")
             # 否则，不被优化
             param.requires_grad = False
     return model

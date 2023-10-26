@@ -29,7 +29,7 @@ from utils.data.data_utils import create_prompt_dataset, DataCollatorReward
 from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
 from utils.ds_utils import get_train_ds_config
 from utils.module.lora import convert_linear_layer_to_lora, convert_lora_to_linear_layer, only_optimize_lora_parameters
-
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -321,6 +321,9 @@ def main():
                                    disable_dropout=args.disable_dropout)
 
     gd.debuginfo(prj="ds_chat", info=f"s2 create_critic_model rm_model, {rm_model}")
+    estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+    estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
 
     if args.lora_dim > 0:
         # 将模型中指定的线性层转换为LoRA层
@@ -329,11 +332,17 @@ def main():
                                                 args.lora_module_name,
                                                 args.lora_dim)
         gd.debuginfo(prj="ds_chat", info=f"s2 convert_linear_layer_to_lora rm_model, {rm_model}")
+        estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+        estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，在训练过程中只有LoRA层的参数会被更新。
             rm_model = only_optimize_lora_parameters(rm_model)
             gd.debuginfo(prj="ds_chat", info=f"s2 only_optimize_lora_parameters rm_model, {rm_model}")
+            estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+            estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
 
     # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
@@ -658,6 +667,9 @@ def main():
         # 将模型中的LoRA层转换为全连接层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         rm_model = convert_lora_to_linear_layer(rm_model)
         gd.debuginfo(prj="ds_chat", info=f"ph2 convert_lora_to_linear_layer model, {rm_model}")
+        estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
+        estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:

@@ -100,18 +100,18 @@ class RewardModel(nn.Module):
             self.v_head = nn.Linear(self.config.word_embed_proj_dim,
                                     1,
                                     bias=False)
-            gd.debuginfo(prj="ds_chat", info=f"self.v_head is {self.v_head}")
+            gd.debuginfo(prj="ds_chat", info=f"self.v_head={self.v_head}")
         else:
             # `gpt-neo(x)` models use `hidden_size` attribute names instead of `n_embd``
 
             # 检查配置是否包含hidden_size属性。如果包含，那么将其赋值给n_embd
             self.config.n_embd = self.config.hidden_size if hasattr(
                 self.config, "hidden_size") else self.config.n_embd
-            gd.debuginfo(prj="ds_chat", info=f"self.config.n_embd is {self.config.n_embd}")
+            gd.debuginfo(prj="ds_chat", info=f"self.config.n_embd={self.config.n_embd}")
 
             # 使用一个线性层self.v_head将n_embd映射到1，这个线性层没有偏置。
             self.v_head = nn.Linear(self.config.n_embd, 1, bias=False)
-            gd.debuginfo(prj="ds_chat", info=f"self.v_head is {self.v_head}")
+            gd.debuginfo(prj="ds_chat", info=f"self.v_head={self.v_head}")
 
         # base_model即为主干网络，因此RM最终由1个主干网络和1个线性层构成
         self.rwtranrsformer = base_model
@@ -215,7 +215,7 @@ class RewardModel(nn.Module):
          [0.7, 0.8, 0.9]]
         '''
         rewards = self.v_head(hidden_states).squeeze(-1)
-        gd.debuginfo(prj="ds_chat", info=f"rewards is:, {rewards}")
+        gd.debuginfo(prj="ds_chat", info=f"rewards={rewards}")
 
 
         gd.debuginfo(prj="ds_chat", info=f"T hidden_states is: {infoTensor(hidden_states)}") #only ph2
@@ -404,8 +404,8 @@ class RewardModel(nn.Module):
             # 基于差异位置和结束位置，截取被选定序列和被拒绝序列的奖励部分
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
-            gd.debuginfo(prj="ds_chat", info=f"c_truncated_reward is {c_truncated_reward}")
-            gd.debuginfo(prj="ds_chat", info=f"r_truncated_reward is {r_truncated_reward}")
+            gd.debuginfo(prj="ds_chat", info=f"c_truncated_reward={c_truncated_reward}")
+            gd.debuginfo(prj="ds_chat", info=f"r_truncated_reward={r_truncated_reward}")
 
             # 从截取的奖励中计算平均值并添加到被选定和被拒绝的平均分列表中
             # 选择最后一个非填充token的奖励值添加到得分列表，可能是因为最后一个token往往包含了模型对整个输入序列的最终评价

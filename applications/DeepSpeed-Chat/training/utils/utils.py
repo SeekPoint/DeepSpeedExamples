@@ -352,10 +352,10 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
         # 遍历模型的所有参数
         for k, v in model_to_save.named_parameters():
-            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model k is {k}")
+            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model k={k}")
             # save_zero_three_model k is model.decoder.layers.5.self_attn.q_proj.weight
 
-            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model v is {v}")
+            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model v={v}")
             gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model is" + infoTensor(save_zero_three_model))
 
             # 如果参数在分布式环境中（即 v.ds_id 存在）
