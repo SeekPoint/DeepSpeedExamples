@@ -132,3 +132,10 @@ DeepSpeed - 用ZeRO训练大模型原理解析  ===主要是z3的动画！
 
 https://zhuanlan.zhihu.com/p/642819809
 Deepspeed多卡多机ZeRo-3训练踩的坑  ==done,信息少
+
+
+
+
+https://blog.csdn.net/v_JULY_v/article/details/129880836
+ChatGLM两代的部署/微调/实现：从基座GLM、ChatGLM的LoRA/P-Tuning微调、6B源码解读到ChatGLM2的微调与实现
+
