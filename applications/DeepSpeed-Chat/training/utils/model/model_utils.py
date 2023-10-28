@@ -14,8 +14,11 @@ from transformers.deepspeed import HfDeepSpeedConfig
 
 from .reward_model import RewardModel
 
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
-
+import sys
+import os
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from utils.utils import mem_estimate_log
 from pydebug import gd, infoTensor
 
 """
@@ -85,10 +88,7 @@ def create_hf_model(model_class,
             config=model_config)
         gd.debuginfo(prj="ds_chat", info=f"model-B={model}")
 
-    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-
+    mem_estimate_log(args=None, exstr = '-0', model=model, num_gpus_per_node=2, num_nodes=1)
 
     gd.debuginfo(prj="ds_chat", info=f"tokenizer.eos_token_id is::, {tokenizer.eos_token_id}")
     gd.debuginfo(prj="ds_chat", info=f"model.config.eos_token_id={model.config.eos_token_id}")
@@ -126,9 +126,7 @@ def create_critic_model(model_name_or_path,
                                    ds_config, rlhf_training, disable_dropout)
     gd.debuginfo(prj="ds_chat", info=f"critic_model-A={critic_model}")
 
-    estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
-    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-    estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+    mem_estimate_log(args=None, exstr = 'ph2-0', model=critic_model, num_gpus_per_node=2, num_nodes=1)
     
     # 2. 在强化学习中评估动作的回报值
     # critic_model传入RewardModel进行改造！！
@@ -139,9 +137,7 @@ def create_critic_model(model_name_or_path,
         num_padding_at_beginning=num_padding_at_beginning)
     gd.debuginfo(prj="ds_chat", info=f"critic_model-B={critic_model}")
 
-    estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
-    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-    estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+    mem_estimate_log(args=None, exstr = 'ph2-1', model=critic_model, num_gpus_per_node=2, num_nodes=1)
 
     # 在RLHF训练模式下，为critic model加载预训练权重，以便在后续的训练过程中用于评估生成模型的表现。
     if rlhf_training:

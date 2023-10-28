@@ -10,7 +10,8 @@ from transformers import set_seed, AutoTokenizer
 import json
 import deepspeed
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
-
+from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live
+from deepspeed.runtime.zero.stage_1_and_2 import estimate_zero2_model_states_mem_needs_all_live
 from pydebug import gd, infoTensor
 
 # 在rank0也就是master rank打印信息，防止每个机器或GPU都打印消息造成大量重复信息
@@ -279,17 +280,17 @@ def moving_average(model, # 原模型
     # 是否在使用DeepSpeed的ZeRO-3阶段，
     # ZeRO-3是一种内存优化策略，用于分布式训练，它会将模型参数、优化器状态、和梯度分布在多个GPU上。
     zero_stage_3 = (zero_stage == 3)
-    gd.debuginfo(prj="ds_chat", info=f"zero_stage_3 is: {zero_stage_3}")
+    gd.debuginfo(prj="ds_chat", info=f"zero_stage_3={zero_stage_3}")
     with torch.no_grad():
         # 遍历模型的每个参数及其对应的滑动平均参数
         for param, param_ema in zip(model.parameters(),
                                     model_ema.parameters()):
-            gd.debuginfo(prj="ds_chat", info=f'param:{param} #### param_ema:{param_ema}')
+            gd.debuginfo(prj="ds_chat", info=f'param={param} #### param_ema={param_ema}')
             # TODO: use prefiltering for efficiency
             # 如果使用ZeRO-3阶段，找出列表中需要从其他GPU收集的参数。否则，返回空列表。
             params_to_fetch = _z3_params_to_fetch([param, param_ema
                                                    ]) if zero_stage_3 else []
-            gd.debuginfo(prj="ds_chat", info=f"params_to_fetch is: {params_to_fetch}")
+            gd.debuginfo(prj="ds_chat", info=f"params_to_fetch={params_to_fetch}")
 
             # 是否需要在多个设备之间同步参数
             should_gather_param = len(params_to_fetch) > 0
@@ -352,11 +353,11 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
         # 遍历模型的所有参数
         for k, v in model_to_save.named_parameters():
-            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model k={k}")
+            gd.debuginfo(prj="ds_chat", info=f"k={k}")
             # save_zero_three_model k is model.decoder.layers.5.self_attn.q_proj.weight
 
-            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model v={v}")
-            gd.debuginfo(prj="ds_chat", info=f"save_zero_three_model is" + infoTensor(save_zero_three_model))
+            # gd.debuginfo(prj="ds_chat", info=f"v={v}")
+            gd.debuginfo(prj="ds_chat", info=f"T: v={infoTensor(v)}")
 
             # 如果参数在分布式环境中（即 v.ds_id 存在）
             if hasattr(v, 'ds_id'):
@@ -364,25 +365,27 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
                 # deepspeed.zero.GatheredParameters是DeepSpeed提供的一个上下文管理器，
                 # 它可以将分布在多个设备上的参数收集到一起。这部分参数保存在CPU上。
 
-                gd.debuginfo(prj="ds_chat", info=f"[v] is: {[v]}")
-                # [v] is: [Parameter containing:
+                # gd.debuginfo(prj="ds_chat", info=f"[v]={[v]}")
+                # [v]=[Parameter containing:
                 # tensor([], device='cuda:1', dtype=torch.float16, requires_grad=True)]
 
+                gd.debuginfo(prj="ds_chat", info=f"T: v={infoTensor(v)}")
+
                 tmpz3 = _z3_params_to_fetch([v])
-                gd.debuginfo(prj="ds_chat", info=f"tmpz3 is: {tmpz3}")
-                # tmpz3 is: [Parameter containing:
+                gd.debuginfo(prj="ds_chat", info=f"tmpz3={tmpz3}")
+                # tmpz3=[Parameter containing:
                 # tensor([], device='cuda:0', dtype=torch.float16, requires_grad=True)]
 
 
                 with deepspeed.zero.GatheredParameters(tmpz3,
                                                        enabled=zero_stage_3):
                     v_p = v.data.cpu()
-                    gd.debuginfo(prj="ds_chat", info=f"v_p---1 is: {v_p}")
-                    gd.debuginfo(prj="ds_chat", info=f"v_p---1 is + {infoTensor(v_p)}")
+                    # gd.debuginfo(prj="ds_chat", info=f"v_p---1={v_p}")
+                    gd.debuginfo(prj="ds_chat", info=f"T: v_p---1 is + {infoTensor(v_p)}")
             else:
                 # 直接获取参数值
                 v_p = v.cpu()
-                gd.debuginfo(prj="ds_chat", info=f"v_p---2 is: {v_p}")
+                gd.debuginfo(prj="ds_chat", info=f"T: v_p---2={infoTensor(v_p)}")
 
             # 在主节点上，如果参数名称中不包含lora，将参数值添加到output_state_dict中。
             # 然后，将收集好的参数（并且不包含“lora”关键字的参数）添加到输出状态字典中。
@@ -399,22 +402,65 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
         z123都可能是空的字典
         或者非常大的输出
         '''
-        gd.debuginfo(prj="ds_chat", info=f"++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
+        gd.debuginfo(prj="ds_chat", info=f"+++++++content of output_state_dict +++++++++++++++++")
         if len(output_state_dict.keys()) != 0:
             for k in output_state_dict.keys():
                 infoTen = infoTensor(output_state_dict[k])
-                gd.debuginfo(prj="ds_chat", info=f"(### {k} is: {infoTen}")
+                gd.debuginfo(prj="ds_chat", info=f"(### {k}={infoTen}")
         else:
-            gd.debuginfo(prj="ds_chat", info=f"output_state_dict is: {output_state_dict}")
+            gd.debuginfo(prj="ds_chat", info=f"output_state_dict={output_state_dict}")
         gd.debuginfo(prj="ds_chat", info=f"++++++++++++++++++content of output_state_dict ++++++++++++++++++++++++")
 
 
         # 同时为了节省内存，使用del关键字删除了存储参数的字典。
         del output_state_dict
 
+def mem_estimate_log(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
+    logf = f'estimate_zeroX_model_states_mem_needs_all_live' + exstr
+    if args is not None:
+        if args.local_rank == 0:
+            logf += f'_z{args.zero_stage}'
+            gd.enable(info=logf)
+
+        gd.debuginfo(prj='ds_chat', info=f"args.zero_stage={args.zero_stage}")
+
+        if args.zero_stage == 2:
+            estimate_zero2_model_states_mem_needs_all_live(model,
+                                                           num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+        if args.zero_stage == 3:
+            estimate_zero3_model_states_mem_needs_all_live(model,
+                                                           num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+
+        if args.local_rank == 0:
+            gd.disable(info=logf)
+    else:
+        gd.enable(info=logf)
+        estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+        estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+        gd.disable(info=logf)
+
+def mem_estimate_log_v2(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
+    logf = f'estimate_zeroX_model_states_mem_needs_all_live' + exstr
+    if args is not None:
+        logf += f'_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}'
+        if args.local_rank == 0:
+            gd.enable(info=logf)
+
+        gd.debuginfo(prj='ds_chat', info=f"args.actor_zero_stage={args.actor_zero_stage}")
+
+        if args.actor_zero_stage == 2:
+            estimate_zero2_model_states_mem_needs_all_live(model,
+                                                           num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+        if args.actor_zero_stage == 3:
+            estimate_zero3_model_states_mem_needs_all_live(model,
+                                                           num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
+        if args.local_rank == 0:
+            gd.disable(info=logf)
+
+
 
 '''
-v_p---1 is: tensor([-0.1528,  0.1247, -0.0771,  0.0391,  0.0133,  0.0101, -0.1174, -0.1603,
+v_p---1=tensor([-0.1528,  0.1247, -0.0771,  0.0391,  0.0133,  0.0101, -0.1174, -0.1603,
         -0.1559,  0.1505, -0.0884,  0.1022, -0.0716,  0.1163, -0.0853,  0.1059],
        dtype=torch.float16)
 

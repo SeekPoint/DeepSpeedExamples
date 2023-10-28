@@ -588,12 +588,12 @@ def main():
 
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # 初始化分布式环境
-        logflag=f'ph3 deepspeed.init_distributed()'
         if args.local_rank == 0:
-            gd.enable_times(info=logflag)
+            logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_deepspeed.init_distributed'
+            gd.enable(info=logf)
         deepspeed.init_distributed()
         if args.local_rank == 0:
-            gd.disable_times(info=logflag)
+            gd.disable(info=logf)
 
     # 在分布式训练环境中获取当前进程的全局唯一标识符，即全局进程ID。
     # torch.distributed.get_rank()返回的是一个整数，这个整数在整个分布式训练环境中是唯一的，用于表示当前进程。
@@ -655,9 +655,9 @@ def main():
     当然其内部仍旧调用了“create_hf_model”方法来读取模型，
     但其中实现了更为精细的DeepSpeed控制
     """
-    logflag = f'rlhf_engine = DeepSpeedRLHFEngine'
     if args.local_rank == 0:
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_DeepSpeedRLHFEngine_init'
+        gd.enable(info=logf)
 
     # 4.3.1初始化DeepSpeedRLHFEngine：
     # 获得一个DeepSpeedRLHFEngine对象，用于初始化一系列模型，包括Actor、Critic、Reference和Reward。
@@ -668,7 +668,7 @@ def main():
         num_total_iters=num_total_iters, # 总的训练迭代次数
         args=args)
     if args.local_rank == 0:
-        gd.disable_times(info=logflag)
+        gd.disable(info=logf)
 
     gd.debuginfo(prj="ds_chat", info=f"rlhf_engine={rlhf_engine}")
     # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
@@ -679,14 +679,14 @@ def main():
     # 根据是否启用了无监督训练，选择了不同的PPO训练器类进行实例化。
     # ① 启用无监督 : 针对无监督训练环境（即模型只根据自身生成的数据进行训练，而不依赖人工标注的数据）设计的PPO训练器
     # ② 没有启用无监督 : 一个更通用的PPO训练器
-    logflag = f'trainer = ppo_trainer(rlhf_engine, args)'
+    logf= f'trainer-ppo_trainer_init'
     if args.local_rank == 0:
-        gd.enable_times(info=logflag)
+        gd.enable_times(info=logf)
     ppo_trainer = DeepSpeedPPOTrainerUnsupervised if unsupervised_training_enabled else DeepSpeedPPOTrainer
+
     trainer = ppo_trainer(rlhf_engine, args)
-    logflag = f'trainer.train_unsupervised'
     if args.local_rank == 0:
-        gd.disable_times(info=logflag)
+        gd.disable(info=logf)
 
 
     gd.debuginfo(prj="ds_chat", info=f"ppo_trainer={ppo_trainer}")
@@ -847,12 +847,12 @@ def main():
 
                         #经验数据训练，返回actor_loss和critic_loss
                         # 得到actor和critic loss，详见（3.2）
-                        logflag = f'trainer.train_rlhf'
+                        logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_trainer.train_rlhf'
                         if args.local_rank == 0:
-                            gd.enable_times(info=logflag)
+                            gd.enable_times(info=logf)
                         actor_loss, critic_loss = trainer.train_rlhf(exp_data)
                         if args.local_rank == 0:
-                            gd.disable_times(info=logflag)
+                            gd.disable(info=logf)
 
                         #累加本ppo_step的指标，后续将除以内层迭代次数计算均值
                         actor_loss_sum += actor_loss.item()
@@ -862,13 +862,13 @@ def main():
                         #无监督数据训练
                         if unsupervised_training_enabled:
                             # 返回无监督损失
-                            logflag = f'trainer.train_unsupervised'
+                            logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_trainer.train_unsupervised'
                             if args.local_rank == 0:
-                                gd.enable_times(info=logflag)
+                                gd.enable_times(info=logf)
                             unsup_loss = trainer.train_unsupervised(
                                 unsup_data, args.unsup_coef)
                             if args.local_rank == 0:
-                                gd.disable_times(info=logflag)
+                                gd.disable(info=logf)
 
 
                             gd.debuginfo(prj="ds_chat", info=f"unsup_loss={unsup_loss}")

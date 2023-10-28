@@ -12,7 +12,7 @@ import json
 from transformers import pipeline, set_seed
 from transformers import AutoConfig, OPTForCausalLM, AutoTokenizer
 
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+from DeepSpeedExamples.training.utils.utils import mem_estimate_log
 
 # AutoConfig : 自动从预训练模型中加载配置
 # OPTForCausalLM : 预训练的GPT模型，用于因果语言建模任务

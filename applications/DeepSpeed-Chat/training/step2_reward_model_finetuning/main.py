@@ -26,10 +26,10 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from utils.model.model_utils import create_critic_model
 from utils.data.data_utils import create_prompt_dataset, DataCollatorReward
-from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer
+from utils.utils import print_rank_0, to_device, save_hf_format, set_random_seed, get_all_reduce_mean, get_optimizer_grouped_parameters, save_zero_three_model, load_hf_tokenizer, mem_estimate_log
 from utils.ds_utils import get_train_ds_config
 from utils.module.lora import convert_linear_layer_to_lora, convert_lora_to_linear_layer, only_optimize_lora_parameters
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+from utils.utils import mem_estimate_log
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -321,9 +321,8 @@ def main():
                                    disable_dropout=args.disable_dropout)
 
     gd.debuginfo(prj="ds_chat", info=f"s2 create_critic_model rm_model, {rm_model}")
-    estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
-    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-    estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+    if args.zero_stage == 2 or args.zero_stage == 3:
+        mem_estimate_log(args=args, exstr = '-ph2-0', model=rm_model, num_gpus_per_node=2, num_nodes=1)
 
     if args.lora_dim > 0:
         # 将模型中指定的线性层转换为LoRA层
@@ -332,17 +331,15 @@ def main():
                                                 args.lora_module_name,
                                                 args.lora_dim)
         gd.debuginfo(prj="ds_chat", info=f"s2 convert_linear_layer_to_lora rm_model, {rm_model}")
-        estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+        if args.zero_stage == 2 or args.zero_stage == 3:
+            mem_estimate_log(args=args, exstr = '-ph2-1', model=rm_model, num_gpus_per_node=2, num_nodes=1)
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，在训练过程中只有LoRA层的参数会被更新。
             rm_model = only_optimize_lora_parameters(rm_model)
             gd.debuginfo(prj="ds_chat", info=f"s2 only_optimize_lora_parameters rm_model, {rm_model}")
-            estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
-            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-            estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+            if args.zero_stage == 2 or args.zero_stage == 3:
+                mem_estimate_log(args=args, exstr = '-ph2-2', model=rm_model, num_gpus_per_node=2, num_nodes=1)
 
     # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
@@ -475,7 +472,8 @@ def main():
     '''
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
     if args.local_rank == 0:
-        gd.enable(info=f"#######ph2 deepspeed.initialize ################################################")
+        logf = f'ph2_z{args.zero_stage}_deepspeed.initialize'
+        gd.enable(info=logf)
     rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=rm_model, # 模型
         optimizer=optimizer, # 优化器
@@ -488,7 +486,7 @@ def main():
     gd.debuginfo(prj="ds_chat", info=f"optimizer---4 , {optimizer}")
     gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---4 , {lr_scheduler}")
     if args.local_rank == 0:
-        gd.disable(info=f"#######ph2 deepspeed.initialize ################################################")
+        gd.disable(info=logf)
 
     if args.gradient_checkpointing:
         # 在模型中启用梯度检查点
@@ -591,10 +589,16 @@ def main():
         args.global_rank)
 
     # 在训练集上评估模型的奖励值
+    if args.local_rank == 0:
+        logf = f'ph2_z{args.zero_stage}_evaluation_reward-B'
+        gd.enable(info=logf)
     reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
     print_rank_0(
         f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
         args.global_rank)
+    if args.local_rank == 0:
+        logf = f'ph2_z{args.zero_stage}_deepspeed.initialize'
+        gd.disable(info=logf)
 
     # 模型训练
     for epoch in range(args.num_train_epochs):
@@ -602,10 +606,20 @@ def main():
             f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
             args.global_rank)
 
+        logf = f'ph2_z{args.zero_stage}_rm_model.train model'
+        if args.local_rank == 0:
+            gd.enable(info=logf)
         # 训练模式
         rm_model.train()
         mean_loss = 0
+        if args.local_rank == 0:
+            gd.disable(info=logf)
+
         for step, batch in enumerate(train_dataloader):
+            logf = f'ph2_z{args.zero_stage}_rm_model.train one batch'
+            if args.local_rank == 0:
+                gd.enable_times(info=logf)
+
             batch = to_device(batch, device)
 			
             # 将批数据输入模型并获取输出
@@ -640,6 +654,8 @@ def main():
 
             # 计算所有批次的平均损失
             mean_loss += loss.item()
+            if args.local_rank == 0:
+                gd.disable_times(info=logf)
 
         print_rank_0(
             f"Epoch {epoch+1}/{args.num_train_epochs} with loss {mean_loss/(step+1)}",
@@ -651,7 +667,12 @@ def main():
             args.global_rank)
 
         # 在每个epoch结束后，模型在验证数据集上进行评估。
+        logf = f'ph2_z{args.zero_stage}_evaluation_reward-A'
+        if args.local_rank == 0:
+            gd.enable(info=logf)
         reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
+        if args.local_rank == 0:
+            gd.disable(info=logf)
 
         print_rank_0(
             f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
@@ -667,9 +688,8 @@ def main():
         # 将模型中的LoRA层转换为全连接层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         rm_model = convert_lora_to_linear_layer(rm_model)
         gd.debuginfo(prj="ds_chat", info=f"ph2 convert_lora_to_linear_layer model, {rm_model}")
-        estimate_zero2_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(rm_model, num_gpus_per_node=1, num_nodes=1)
+
+        mem_estimate_log(args=args, exstr = '-ph2-3', model=rm_model, num_gpus_per_node=2, num_nodes=1)
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:
@@ -678,13 +698,18 @@ def main():
 
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
-            gd.debuginfo(prj="ds_chat")
+            logf = f'ph2_z{args.zero_stage}_save_zero_three_model'
+            if args.local_rank == 0:
+                gd.enable(info=logf)
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(rm_model,
                                   args.global_rank,
                                   args.output_dir,
                                   zero_stage=args.zero_stage)
+            if args.local_rank == 0:
+                gd.disable(info=logf)
+
 
 
 if __name__ == "__main__":

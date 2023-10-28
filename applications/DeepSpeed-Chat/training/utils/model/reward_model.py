@@ -5,7 +5,11 @@
 import torch
 from torch import nn
 from pydebug import gd, infoTensor
-
+import sys
+import os
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from utils.utils import mem_estimate_log
 '''
 3.3.3.3 奖励reward_score和价值估计values的获取
 奖励模型的模型类RewardModel中实现了相应的方法forward_value()，可支持输入“一句对话”返回“环境奖励与价值估计”。
@@ -189,7 +193,7 @@ class RewardModel(nn.Module):
         # hidden_states.shape: (bs * 2, max_seq_len, hidden_size)
         # 是transformer模型的主要输出，表示模型对输入的隐藏表示。
         hidden_states = transformer_outputs[0]
-        gd.debuginfo(prj="ds_chat", info=f"hidden_states is: {hidden_states}")
+        gd.debuginfo(prj="ds_chat", info=f"hidden_states={hidden_states}")
 
         # 将hidden_states传递到self.v_head（一个全连接层）并删除最后一个维度（通过squeeze(-1)）来计算reward。
         # 这个值可以被视为模型对每个输入token的奖励
@@ -215,12 +219,12 @@ class RewardModel(nn.Module):
          [0.7, 0.8, 0.9]]
         '''
         rewards = self.v_head(hidden_states).squeeze(-1)
-        gd.debuginfo(prj="ds_chat", info=f"rewards={rewards}")
+        # gd.debuginfo(prj="ds_chat", info=f"rewards={rewards}")
 
 
-        gd.debuginfo(prj="ds_chat", info=f"T hidden_states is: {infoTensor(hidden_states)}") #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T hidden_states={infoTensor(hidden_states)}") #only ph2
         # T hidden_states: _Size([16, 128, 768])_float16_cuda:1_
-        gd.debuginfo(prj="ds_chat", info=f"T rewards is: {infoTensor(rewards)}") #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T rewards={infoTensor(rewards)}") #only ph2
 
         # 模型选择或拒绝某些特定输入的平均分数
         chosen_mean_scores = []
@@ -257,19 +261,19 @@ class RewardModel(nn.Module):
         # 后半部分被拒绝的奖励
         rejected_rewards = rewards[bs:]
 
-        gd.debuginfo(prj="ds_chat", info=f"len of chosen_ids is: {len(chosen_ids)}")
-        gd.debuginfo(prj="ds_chat", info=f"len of rejected_ids is: {len(rejected_ids)}")
-        gd.debuginfo(prj="ds_chat", info=f"len of chosen_rewards is: {len(chosen_rewards)}")
-        gd.debuginfo(prj="ds_chat", info=f"len of rejected_rewards is: {len(rejected_rewards)}")
-        gd.debuginfo(prj="ds_chat", info=f"bs is: {bs}")
-        gd.debuginfo(prj="ds_chat", info=f"seq_len is: {seq_len}")
+        gd.debuginfo(prj="ds_chat", info=f"len of chosen_ids={len(chosen_ids)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of rejected_ids={len(rejected_ids)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of chosen_rewards={len(chosen_rewards)}")
+        gd.debuginfo(prj="ds_chat", info=f"len of rejected_rewards={len(rejected_rewards)}")
+        gd.debuginfo(prj="ds_chat", info=f"bs={bs}")
+        gd.debuginfo(prj="ds_chat", info=f"seq_len={seq_len}")
         '''
-        len of chosen_ids is: 8
-        len of rejected_ids is: 8
-        len of chosen_rewards is: 8
-        len of rejected_rewards is: 8
-        bs is: 8
-        seq_len is: 128
+        len of chosen_ids=8
+        len of rejected_ids=8
+        len of chosen_rewards=8
+        len of rejected_rewards=8
+        bs=8
+        seq_len=128
         '''
 
         # 计算配对损失，应用于强化学习中，主要目的是比较生成模型生成的不同序列（被接受和被拒绝的序列）的奖励
@@ -284,19 +288,19 @@ class RewardModel(nn.Module):
             # chosen_id.shape: (max_seq_len,)
             # 获得一个chosen样本（正样本）
             chosen_id = chosen_ids[i]
-            gd.debuginfo(prj="ds_chat", info=f"chosen_id is: {chosen_id}")
+            gd.debuginfo(prj="ds_chat", info=f"chosen_id={chosen_id}")
 
             # 获得一个rejected样本（负样本）
             rejected_id = rejected_ids[i]
-            gd.debuginfo(prj="ds_chat", info=f"rejected_id is: {rejected_id}")
+            gd.debuginfo(prj="ds_chat", info=f"rejected_id={rejected_id}")
 
             # 当前正样本的得分
             chosen_reward = chosen_rewards[i]
-            gd.debuginfo(prj="ds_chat", info=f"chosen_reward is: {chosen_reward}")
+            gd.debuginfo(prj="ds_chat", info=f"chosen_reward={chosen_reward}")
 
             # 当前负样本的得分
             rejected_reward = rejected_rewards[i]
-            gd.debuginfo(prj="ds_chat", info=f"rejected_reward is: {rejected_reward}")
+            gd.debuginfo(prj="ds_chat", info=f"rejected_reward={rejected_reward}")
 
 
             gd.debuginfo(prj="ds_chat", info=f"T chosen_id--5: {infoTensor(chosen_id)}")
@@ -342,7 +346,7 @@ class RewardModel(nn.Module):
             # PyTorch 中的nonzero()方法，这个方法会返回输入张量中所有非零元素的索引
             # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
-            gd.debuginfo(prj="ds_chat", info=f"c_inds is: {c_inds}")
+            gd.debuginfo(prj="ds_chat", info=f"c_inds={c_inds}")
 
             # 如果是OPT，那么第0个一定是OPT模型默认在input最前面的padding token，不予考虑
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
@@ -350,12 +354,12 @@ class RewardModel(nn.Module):
             ) > self.num_padding_at_beginning else seq_len
             # OPT model pads the first token, so we need to use the second padding token as the end of the sequence
 
-            gd.debuginfo(prj="ds_chat", info=f"c_ind is: {c_ind}")
+            gd.debuginfo(prj="ds_chat", info=f"c_ind={c_ind}")
 
             # 获取不同id的索引
             # 查找被选定序列和被拒绝序列之间的差异位置，这里的差异位置是指这两个序列第一个不同的标记的位置。
             check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
-            gd.debuginfo(prj="ds_chat", info=f"check_divergence is: {check_divergence}")
+            gd.debuginfo(prj="ds_chat", info=f"check_divergence={check_divergence}")
 
             # 如果两个序列完全相同，则结束位置设置为序列的最后一位，差异位置设置为结束位置的前一位。
             # 说明不存在相等的padding token
@@ -575,51 +579,51 @@ class RewardModel(nn.Module):
 
 
 '''
-hidden_states is: tensor([[[-0.8462, -5.7422,  0.7568,  ..., -2.2910, -1.5664,  0.4041],
+hidden_states=tensor([[[-0.8462, -5.7422,  0.7568,  ..., -2.2910, -1.5664,  0.4041],
  ....
  [-0.8838, -3.8242,  0.0475,  ..., -0.6792,  0.3499,  3.2148]]], device='cuda:1', dtype=torch.float16)
-rewards is: tensor([[-0.4866, -0.3369, -0.3350,  ..., -0.2542, -0.2542, -0.2542],
+rewards=tensor([[-0.4866, -0.3369, -0.3350,  ..., -0.2542, -0.2542, -0.2542],
         ...,
         [-0.4866, -0.3369, -0.3350,  ..., -0.0409,  0.3579,  0.1017]], device='cuda:1', dtype=torch.float16)
 '''
 
 '''
-chosen_id is: tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
+chosen_id=tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
         ...
            33,    10,   182,  2166,  2465,   516,     8,  5929],
        device='cuda:0')
-rejected_id is: tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
+rejected_id=tensor([    2, 50118, 50118, 33837,    35,   653,   109,    47,  1669,   206,
         ...
            33,    10,   182,  2166,  2465,   516,     8,  5929],
        device='cuda:0')
-chosen_reward is: tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.3831,  0.0515,  0.1240,
+chosen_reward=tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.3831,  0.0515,  0.1240,
         ...
         -0.0613,  0.6763, -0.2629,  0.5146,  0.2266, -0.4478, -0.4583, -0.7490],
        device='cuda:1', dtype=torch.float16)
-rejected_reward is: tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.1185,  0.6387,  0.4653,
+rejected_reward=tensor([-0.4866, -0.3369, -0.3350, -0.3252, -0.3557,  0.1185,  0.6387,  0.4653,
         ...
         -0.7280,  0.4292,  0.0875,  0.0076,  0.2520,  0.3594, -0.3235,  0.1514],
        device='cuda:0', dtype=torch.float16)
 '''
 
 '''
-c_ind is: 87
-c_inds is: tensor([[ 50],
+c_ind=87
+c_inds=tensor([[ 50],
         [ 51],
 ...
         [ 99],
         [100]], device='cuda:0')
-c_truncated_reward is: tensor([[  0],
+c_truncated_reward=tensor([[  0],
         [ 83],
 ...
         [126],
         [127]], device='cuda:1')
-check_divergence is: tensor([-0.7969, -0.9590, -0.7002, -0.7397, -1.0400, -1.1787, -1.1152, -1.8379,
+check_divergence=tensor([-0.7969, -0.9590, -0.7002, -0.7397, -1.0400, -1.1787, -1.1152, -1.8379,
         -2.3906, -2.6797, -2.9160, -2.8047, -3.2949, -3.1367, -2.9453, -2.7754,
 ...
         -1.4961, -1.4961, -1.4961], device='cuda:0', dtype=torch.float16,
        grad_fn=<SliceBackward0>)
-r_truncated_reward is: tensor([-1.2334, -1.8516, -2.3652, -2.6016, -2.6055, -2.8008, -2.8809, -2.7012,
+r_truncated_reward=tensor([-1.2334, -1.8516, -2.3652, -2.6016, -2.6055, -2.8008, -2.8809, -2.7012,
         -3.0293, -2.9863, -3.3477, -3.1641, -2.8906, -3.1367, -3.3398, -3.4160,
 ...
         -2.3105, -2.2109, -2.3320], device='cuda:0', dtype=torch.float16,

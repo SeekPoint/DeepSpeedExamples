@@ -13,10 +13,12 @@ import sys
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+
+sys.path.append(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
+from utils.utils import mem_estimate_log
 
 from pydebug import gd, infoTensor
-
 
 # 因果语言建模的模型（AutoModelForCausalLM），优化器调度类型（SchedulerType），
 # 默认的数据整理函数（default_data_collator）和获取优化器调度器的函数（get_scheduler）。
@@ -24,19 +26,22 @@ from transformers import (
     AutoModelForCausalLM,
     SchedulerType,
     default_data_collator,
-    get_scheduler,
-)
-gd.enable(info=f"#######ph1 import deepspeed ##################")
+    get_scheduler)
+
+logf = f'ph1-import_deepspeed'
+gd.enable(info=logf)
 import deepspeed
-gd.disable(info=f"#######ph1 import deepspeed #################")
+gd.disable(info=logf)
 
-gd.enable(info=f"#######from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam##################")
+logf = f"ph1-import_deepspeed.ops.adam"
+gd.enable(info=logf)
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-gd.disable(info=f"#######from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam#################")
+gd.disable(info=logf)
 
-gd.enable(info=f"#######import deepspeed.comm as dist ##################")
+logf = f"ph1-import_deepspeed.comm"
+gd.enable(info=logf)
 import deepspeed.comm as dist
-gd.disable(info=f"######import deepspeed.comm as dist #################")
+gd.disable(info=logf)
 
 # 将当前脚本的父目录添加到系统路径中，以便可以从该目录下的utils目录导入一些自定义函数和模块。
 sys.path.append(
@@ -278,10 +283,12 @@ def parse_args():
 
     print('parser--1:', parser)
     # 这一行将DeepSpeed的配置参数添加到解析器中。
+
     # if dist.get_rank() == 0:  ==dist没有初始化，不能使用
-    gd.enable(info=f"####### deepspeed.add_config_arguments #################################")
+    logf = f'ph1-deepspeed.add_config_arguments'
+    gd.enable(info=logf)
     parser = deepspeed.add_config_arguments(parser)
-    gd.disable(info=f"####### deepspeed.add_config_arguments ################################")
+    gd.disable(info=logf)
 
     print('parser--2:', parser)  #yknote-TBD,比较变化
 
@@ -305,7 +312,7 @@ def parse_args():
 def main():
     # 第1步：超参数配 解析命令行参数。
     args = parse_args()
-    gd.debuginfo(prj="ds_chat", info=f"args is: {args}")  #yknote---TBD
+    gd.debuginfo(prj="ds_chat", info=f"args is={args}")  #yknote---TBD
 
     # 如果local_rank为-1，说明不在分布式训练环境下，设备设置为"cuda"；
     # 否则根据args.local_rank设置对应的cuda设备，并初始化分布式训练。
@@ -319,7 +326,7 @@ def main():
 
         # 确保tensor被创建或移动到正确的device上
         device = torch.device("cuda", args.local_rank)
-        gd.debuginfo(prj="ds_chat", info=f"device is--1: {device}") #yknote---TBD.
+        gd.debuginfo(prj="ds_chat", info=f"device is--1={device}") #yknote---TBD.
 
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # torch.distributed.init_process_group(backend='nccl')
@@ -327,17 +334,18 @@ def main():
 
         #if dist.get_rank() == 0: # 还没初始化，不能使用dist！！
         if args.local_rank == 0:
-            gd.enable(info=f"#######deepspeed.init_distributed() at rank {args.local_rank}")
+            logf = f'ph1_z{args.zero_stage}_deepspeed.init_distributed'
+            gd.enable(info=logf)
             pass
         deepspeed.init_distributed()
         if dist.get_rank() == 0: # dist初始化好了
-            gd.disable(info=f"#######deepspeed.init_distributed()")
+            gd.disable(info=logf)
             pass
 
 		
     # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
-    gd.debuginfo(prj="ds_chat", info=f"args.global_rank is: {args.global_rank}")
+    gd.debuginfo(prj="ds_chat", info=f"args.global_rank is={args.global_rank}")
     '''
     两张卡
     args.global_rank is: 1
@@ -350,7 +358,7 @@ def main():
                                     enable_tensorboard=args.enable_tensorboard,
                                     tb_path=args.tensorboard_path,
                                     tb_name="step1_model")
-    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--1: {ds_config}")   
+    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--1={ds_config}")
 
     # micro_batch训练是一种分布式训练技术，可以将一个大批次的数据分解成多个小批次，以适应GPU的内存限制
     # 在配置中设置训练时每个GPU的微批次大小和总的批次大小。
@@ -364,9 +372,9 @@ def main():
         'train_batch_size'] = args.per_device_train_batch_size * torch.distributed.get_world_size(
     ) * args.gradient_accumulation_steps
 
-    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--2: {ds_config}")
-    gd.debuginfo(prj="ds_chat", info=f"ds_config['train_batch_size']is: {ds_config['train_batch_size']}")  #8
-    gd.debuginfo(prj="ds_chat", info=f"args.per_device_train_batch_size is: {args.per_device_train_batch_size}") #4
+    gd.debuginfo(prj="ds_chat", info=f"ph1 ds_config train is--2={ds_config}")
+    gd.debuginfo(prj="ds_chat", info=f"ds_config['train_batch_size']is={ds_config['train_batch_size']}")  #8
+    gd.debuginfo(prj="ds_chat", info=f"args.per_device_train_batch_size is={args.per_device_train_batch_size}") #4
 
 
     # If passed along, set the training seed now.
@@ -381,14 +389,14 @@ def main():
     # 加载预训练模型tokenizer，fast_tokenizer=True表示使用优化过的、速度更快的tokenizer。
     # 加载预训练模型对应的分词器。
     tokenizer = load_hf_tokenizer(args.model_name_or_path, fast_tokenizer=True)
-    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --0: {tokenizer}")  
+    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --0={tokenizer}")
 
     tokenizer.pad_token = tokenizer.eos_token
     # make sure tokenizer is right pad in our logic
 	# 将tokenizer的填充方向设置为'right'，表示在序列的右侧（末尾）添加填充符号。
     tokenizer.padding_side = 'right'
 
-    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --1: {tokenizer}")
+    gd.debuginfo(prj="ds_chat", info=f"ph1 tokenizer --1={tokenizer}")
 
     # 创建预训练模型。 # 第2步：创建actor模型
     model = create_hf_model(AutoModelForCausalLM,
@@ -396,12 +404,9 @@ def main():
                             tokenizer,
                             ds_config,
                             disable_dropout=args.disable_dropout)
-
-    estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-    print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-    estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-
-    gd.debuginfo(prj="ds_chat", info=f"s1 model create_hf_model: {model}")
+    if args.zero_stage == 2 or args.zero_stage == 3:
+        mem_estimate_log(args=args, exstr='-ph1-0', model = model, num_gpus_per_node=2, num_nodes=1)
+    gd.debuginfo(prj="ds_chat", info=f"s1 model create_hf_model={model}")
 
     # 判断是否启用LoRA模式
     # 如果参数lora_dim大于0，将模型的线性层转换为LoRa层；如果只优化LoRa参数，关闭其他参数的梯度。
@@ -415,29 +420,28 @@ def main():
         # 将模型中指定的线性层转换为LoRA层
         # lora_module_name指定了要转换的模块的名称 , lora_dim指定了LoRA的维度
         if dist.get_rank() == 0:
-            gd.enable(info=f"convert_linear_layer_to_lora()")
+            logf = f'ph1_z{args.zero_stage}_convert_linear_layer_to_lora'
+            gd.enable(info=logf)
             pass
 
         model = convert_linear_layer_to_lora(model,
                                              args.lora_module_name,
                                              args.lora_dim)
-        gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora: {model}")
-
-        estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+        gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora={model}")
+        if args.zero_stage == 2 or args.zero_stage == 3:
+            mem_estimate_log(args=args, exstr='-ph1-1', model = model, num_gpus_per_node=2, num_nodes=1)
 
         if dist.get_rank() == 0:
-            gd.disable(info=f"convert_linear_layer_to_lora()")
+            gd.disable(info=logf)
             pass
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，训练过程中只有LoRA层的参数会被更新/优化
             model = only_optimize_lora_parameters(model)
-            gd.debuginfo(prj="ds_chat", info=f"s1 only_optimize_lora_parameters: {model}")
-            estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-            estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+            gd.debuginfo(prj="ds_chat", info=f"s1 only_optimize_lora_parameters={model}")
+
+            if args.zero_stage == 2 or args.zero_stage == 3:
+                mem_estimate_log(args=args, exstr='-ph1-2', model = model, num_gpus_per_node=2, num_nodes=1)
 
     # 第3步：准备数据集（训练集和验证集）Prepare the data
     # 创建数据集和数据加载器：包括训练集和验证集，以及对应的采样器和数据加载器。
@@ -454,8 +458,8 @@ def main():
         args.max_seq_len,
         sft_only_data_path=args.sft_only_data_path)
 
-    gd.debuginfo(prj="ds_chat", info=f"train_dataset: {train_dataset}")
-    gd.debuginfo(prj="ds_chat", info=f"eval_dataset: {eval_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"train_dataset={train_dataset}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_dataset={eval_dataset}")
 
     # DataLoaders creation
     if args.local_rank == -1:
@@ -475,8 +479,8 @@ def main():
         # 创建一个用于评估集的分布式采样器
         eval_sampler = DistributedSampler(eval_dataset)
 
-    gd.debuginfo(prj="ds_chat", info=f"train_sampler: {train_sampler}")
-    gd.debuginfo(prj="ds_chat", info=f"eval_sampler: {eval_sampler}")
+    gd.debuginfo(prj="ds_chat", info=f"train_sampler={train_sampler}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_sampler={eval_sampler}")
 
     #default_data_collator 作用是将一批数据进行整合，使得它们可以整齐地堆叠在一起。
 
@@ -492,8 +496,8 @@ def main():
                                  sampler=eval_sampler,
                                  batch_size=args.per_device_eval_batch_size)
 
-    gd.debuginfo(prj="ds_chat", info=f"train_dataloader: {train_dataloader}")
-    gd.debuginfo(prj="ds_chat", info=f"eval_dataloader: {eval_dataloader}")
+    gd.debuginfo(prj="ds_chat", info=f"train_dataloader={train_dataloader}")
+    gd.debuginfo(prj="ds_chat", info=f"eval_dataloader={eval_dataloader}")
 
     # Split weights in two groups, one with weight decay and the other not.
 	# 第4步：将模型参数分组、创建优化器 和 学习率调度器
@@ -501,14 +505,14 @@ def main():
     # 权重衰减是防止模型过拟合的一种策略，通常只对模型的权重参数应用。
     optimizer_grouped_parameters = get_optimizer_grouped_parameters(model, args.weight_decay)
 	
-    # gd.debuginfo(prj="ds_chat", info=f"optimizer_grouped_parameters: {optimizer_grouped_parameters}")
+    # gd.debuginfo(prj="ds_chat", info=f"optimizer_grouped_parameters={optimizer_grouped_parameters}")
     # 这里结构比较复杂，各种场景都有
     # for p in optimizer_grouped_parameters:
     #     for k, v in p.items():
-    #         gd.debuginfo(prj="ds_chat", info=f"{k} is: {infoTensor(v)}")
+    #         gd.debuginfo(prj="ds_chat", info=f"{k} is={infoTensor(v)}")
     # assert 0
     # debugOGP(optimizer_grouped_parameters) #因为在cpu上，即使使用print_rank0也打印了两次！
-    gd.debuginfo(prj="ds_chat", info=f"len of optimizer_grouped_parameters: {len(optimizer_grouped_parameters)}")
+    gd.debuginfo(prj="ds_chat", info=f"len of optimizer_grouped_parameters={len(optimizer_grouped_parameters)}")
 
     # 根据是否使用DeepSpeed的CPU offload功能来选择优化器，优化器定义了如何更新模型的参数以最小化损失函数。
 
@@ -521,28 +525,27 @@ def main():
     # 选择优化器类型，如果启用了梯度Offload，使用DeepSpeedCPUAdam，否则使用FusedAdam。
     AdamOptimizer = DeepSpeedCPUAdam if args.offload else FusedAdam
 	
-    gd.debuginfo(prj="ds_chat", info=f"AdamOptimizer: {AdamOptimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"AdamOptimizer={AdamOptimizer}")
     # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
 
     # 创建优化器
     if dist.get_rank() == 0:
-        gd.enable(info=f"optimizer = AdamOptimizer")
-        pass
+        logf = f'ph1_z{args.zero_stage}_AdamOptimizer_init'
+        gd.enable(info=logf)
 
     # 这里会触发c++的编译op过程！！
     # 是否重新编译是nvcc编译器决定的，和ds无关！
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
-    gd.debuginfo(prj="ds_chat", info=f"optimizer: {optimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"optimizer={optimizer}")
     if dist.get_rank() == 0:
-        gd.disable(info=f"optimizer = AdamOptimizer")
-        pass
+        gd.disable(info=logf)
 
     # 计算每个epoch需要进行的更新步数，等于训练数据集大小除以梯度累积步数（对结果向上取整）
     num_update_steps_per_epoch = math.ceil(
         len(train_dataloader) / args.gradient_accumulation_steps)
-    gd.debuginfo(prj="ds_chat", info=f"num_update_steps_per_epoch: {num_update_steps_per_epoch}")
+    gd.debuginfo(prj="ds_chat", info=f"num_update_steps_per_epoch={num_update_steps_per_epoch}")
 
     # 创建学习率调度器。
     lr_scheduler = get_scheduler(
@@ -553,13 +556,13 @@ def main():
         num_training_steps=args.num_train_epochs * num_update_steps_per_epoch, # 总的训练步骤数
     )
 
-    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler: {lr_scheduler}")
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler={lr_scheduler}")
     # lr_scheduler : <torch.optim.lr_scheduler.LambdaLR object at 0x7f469aea9fd0>
 
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
     if args.local_rank == 0:
-        gd.enable(info=f"#######ph1 deepspeed.initialize ################################################")
-        pass
+        logf = f'ph1_z{args.zero_stage}_deepspeed.initialize'
+        gd.enable(info=logf)
 
     model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=model,
@@ -568,14 +571,12 @@ def main():
         config=ds_config, # DeepSpeed的配置信息
         lr_scheduler=lr_scheduler, # 学习率调度器
         dist_init_required=True)  # 需要进行分布式训练的初始化
-    gd.debuginfo(prj="ds_chat", info=f"model---3: {model}")
-    gd.debuginfo(prj="ds_chat", info=f"optimizer---3: {optimizer}")
-    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---3: {lr_scheduler}")
+    gd.debuginfo(prj="ds_chat", info=f"model---3={model}")
+    gd.debuginfo(prj="ds_chat", info=f"optimizer---3={optimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---3={lr_scheduler}")
 
     if args.local_rank == 0:
-        gd.disable(info=f"#######ph1 deepspeed.initialize ################################################")
-        pass
-
+        gd.disable(info=logf)
 
     # 如果启用了梯度检查点，那么在模型中也启用梯度检查点。
     if args.gradient_checkpointing:
@@ -700,9 +701,12 @@ def main():
 
         # 将模型设置为训练模式。
         model.train()
-		
+
         # 对于训练数据集中的每一个batch。
-        for step, batch in enumerate(train_dataloader):  
+        for step, batch in enumerate(train_dataloader):
+            logf = f'ph1_z{args.zero_stage}_train one batch'
+            if args.local_rank == 0:
+                gd.enable_times(info=logf)
             # 将batch数据移到对应的设备上。
             batch = to_device(batch, device)  
 
@@ -719,13 +723,16 @@ def main():
             model.backward(loss)  
 
             # 更新模型的参数。
-            model.step()  
+            model.step()
+
+            if args.local_rank == 0:
+                gd.disable_times(info=logf)
 
         # Evaluate perplexity on the validation set.
         # 在每个epoch结束后，在主节点打印开始评估的信息。
         print_rank_0(f"***** Evaluating perplexity, Epoch {epoch + 1}/{args.num_train_epochs} *****",
                      args.global_rank)
-			
+
         # 对模型进行评估，计算在验证集上的困惑度
         perplexity = evaluation(model, eval_dataloader)
 		
@@ -743,9 +750,9 @@ def main():
         # 将模型中的LoRA层转换为标准的线性层，这样使得模型在保存后可以在没有LoRA层代码的环境中加载和使用
         model = convert_lora_to_linear_layer(model)
         gd.debuginfo(prj="ds_chat", info=f"ph1 convert_lora_to_linear_layer model {model}")
-        estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=1, num_nodes=1)
+
+        if args.zero_stage == 2 or args.zero_stage == 3:
+            mem_estimate_log(args=args, exstr='-ph1-3', model=model, num_gpus_per_node=2, num_nodes=1)
 
         # 如果是主节点，进行以下操作。 # 是否在主进程中
         if args.global_rank == 0:
@@ -755,13 +762,17 @@ def main():
 
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
-            gd.debuginfo(prj="ds_chat")
+            logf = f'ph1_z{args.zero_stage}_save_zero_three_model'
+            if args.local_rank == 0:
+                gd.enable(info=logf)
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(model,
                                   args.global_rank,
                                   args.output_dir,
                                   zero_stage=args.zero_stage)
+            if args.local_rank == 0:
+                gd.disable(info=logf)
 
 if __name__ == "__main__":
     main()

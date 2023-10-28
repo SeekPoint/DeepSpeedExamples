@@ -15,7 +15,7 @@ sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from utils.model.model_utils import create_hf_model
 from utils.utils import load_hf_tokenizer
-
+from pydebug import gd, infoTensor
 logger = logging.getLogger(__name__)
 
 # 解析命令行参数

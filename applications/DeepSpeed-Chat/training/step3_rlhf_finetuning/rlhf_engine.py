@@ -13,7 +13,8 @@ from utils.ds_utils import get_train_ds_config, get_eval_ds_config
 from utils.module.lora import convert_linear_layer_to_lora, only_optimize_lora_parameters
 from utils.model.model_utils import create_hf_model, create_critic_model
 from utils.utils import get_optimizer_grouped_parameters
-from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_all_live, estimate_zero2_model_states_mem_needs_all_live
+
+from utils.utils import mem_estimate_log_v2
 
 from pydebug import gd, infoTensor
 
@@ -90,13 +91,13 @@ class DeepSpeedRLHFEngine():
         # 用训练好的SFT模型初始化Actor模型
         # 此处的actor是模型经过DeepSpeed封装后得到的DeepSpeedHybridEngine对象
         
-        logflag = f"self.actor = self._init_actor"
+        logf = f"self._init_actor"
         if args.local_rank == 0:
-            gd.enable_times(info=logflag)
+            gd.enable_times(info=logf)
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
         if args.local_rank == 0:
-            gd.disable_times(info=logflag)
+            gd.disable_times(info=logf)
 
         gd.debuginfo(prj="ds_chat", info=f"self.actor is:,  {self.actor}")
 
@@ -104,17 +105,17 @@ class DeepSpeedRLHFEngine():
         # 用训练好的SFT模型初始化SFT模型
         #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对
 
-        logflag = f"self.ref = self._init_ref"
+        logf = f"self._init_ref"
 
         if args.local_rank == 0:
-            gd.enable_times(info=logflag)
+            gd.enable_times(info=logf)
 
         self.ref = self._init_ref(
             actor_model_name_or_path=actor_model_name_or_path)
         gd.debuginfo(prj="ds_chat", info=f"self.ref is:,  {self.ref}")
 
         if args.local_rank == 0:
-            gd.disable_times(info=logflag)
+            gd.disable_times(info=logf)
 
         self.actor_ema = None
 
@@ -198,9 +199,11 @@ class DeepSpeedRLHFEngine():
 
         gd.debuginfo(prj="ds_chat", info=f"s3 create_hf_model actor_model:,  {actor_model}")
 
-        estimate_zero2_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
+        mem_estimate_log_v2(args=None,
+                         exstr='-ph3-actor_model-0',
+                         model=actor_model,
+                         num_gpus_per_node=2,
+                         num_nodes=1)
 
         # LoRA
         # 如果开启LoRA训练则添加LoRA旁路
@@ -212,19 +215,22 @@ class DeepSpeedRLHFEngine():
 
             gd.debuginfo(prj="ds_chat", info=f"s3 convert_linear_layer_to_lora actor_model:,  {actor_model}")
 
-            estimate_zero2_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
-            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-            estimate_zero3_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
-
+            mem_estimate_log_v2(args=self.args,
+                             exstr='-ph3-actor_model-1',
+                             model=actor_model,
+                             num_gpus_per_node=2,
+                             num_nodes=1)
 
             if self.args.only_optimize_lora:
                 # 只有LoRA层的参数会被更新，而其他层的参数将保持不变
                 actor_model = only_optimize_lora_parameters(actor_model)
                 gd.debuginfo(prj="ds_chat", info=f"s3 only_optimize_lora_parameters actor_model:,  {actor_model}")
 
-                estimate_zero2_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
-                print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-                estimate_zero3_model_states_mem_needs_all_live(actor_model, num_gpus_per_node=1, num_nodes=1)
+                mem_estimate_log_v2(args=self.args,
+                                 exstr='-ph3-actor_model-2',
+                                 model=actor_model,
+                                 num_gpus_per_node=2,
+                                 num_nodes=1)
 
 
         # Optimizer
@@ -256,8 +262,8 @@ class DeepSpeedRLHFEngine():
         # 确切地说还是个DeepSpeedHybridEngine实例，集成有HybridEngine的优化
 
         #TODO: move enable_hybrid_engine and pin_parameters to ds_config
-        logflag = f'ph3 actor_model deepspeed.initialize'
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_actor_engine-deepspeed.initialize'
+        gd.enable_times(info=logf)
         actor_engine, *_ = deepspeed.initialize(model=actor_model, # 需要训练的模型
                                                 optimizer=optim, # 优化器
                                                 lr_scheduler=lr_scheduler, # 学习率调度器
@@ -267,7 +273,7 @@ class DeepSpeedRLHFEngine():
         gd.debuginfo(prj="ds_chat", info=f"optim is:,  {optim}")
         gd.debuginfo(prj="ds_chat", info=f"lr_scheduler is:,  {lr_scheduler}")
         gd.debuginfo(prj="ds_chat", info=f"actor_engine is:,  {actor_engine}")
-        gd.disable_times(info=logflag)
+        gd.disable_times(info=logf)
 
         log_init("Actor", stime=stime)
 
@@ -318,18 +324,20 @@ class DeepSpeedRLHFEngine():
 
         gd.debuginfo(prj="ds_chat", info=f"s3 create_hf_model ref_model is:,  {ref_model}")
 
-        estimate_zero2_model_states_mem_needs_all_live(ref_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(ref_model, num_gpus_per_node=1, num_nodes=1)
+        mem_estimate_log_v2(args=self.args,
+                         exstr='-ph3-ref_model-0',
+                         model=ref_model,
+                         num_gpus_per_node=2,
+                         num_nodes=1)
 									
         # DeepSpeed初始化
         # 参考模型不需要优化器和学习率调度器，所以在初始化DeepSpeed时只需要传入模型和配置即可。
-        logflag = f'ph3 ref_model deepspeed.initialize'
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_ref_model-deepspeed.initialize'
+        gd.enable_times(info=logf)
         ref_engine, *_ = deepspeed.initialize(model=ref_model,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ref_engine is:,  {ref_engine}")
-        gd.disable_times(info=logflag)
+        gd.disable_times(info=logf)
 
         log_init("Ref", stime=stime)
         return ref_engine
@@ -381,12 +389,12 @@ class DeepSpeedRLHFEngine():
                 self.args.actor_lora_dim)
             gd.debuginfo(prj="ds_chat", info=f"s3 convert_linear_layer_to_lora actor_model_ema:,  {actor_model_ema}")
 
-        logflag = f'ph3 actor_model_ema deepspeed.initialize'
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_actor_model_ema-deepspeed.initialize'
+        gd.enable_times(info=logf)
         ema_engine, *_ = deepspeed.initialize(model=actor_model_ema,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ema_engine is:,  {ema_engine}")
-        gd.disable_times(info=logflag)
+        gd.disable_times(info=logf)
 
         log_init("EMA", stime=stime)
 
@@ -431,9 +439,11 @@ class DeepSpeedRLHFEngine():
             disable_dropout=self.args.disable_critic_dropout)
         gd.debuginfo(prj="ds_chat", info=f"s3 critic_model = create_critic_model:,  {critic_model}")
 
-        estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+        mem_estimate_log_v2(args=self.args,
+                         exstr='-ph3-critic_model-0',
+                         model=critic_model,
+                         num_gpus_per_node=2,
+                         num_nodes=1)
 
         # LoRA
         if self.args.critic_lora_dim > 0:
@@ -444,17 +454,21 @@ class DeepSpeedRLHFEngine():
 
             gd.debuginfo(prj="ds_chat", info=f"s3 convert_linear_layer_to_lora critic_model:,  {critic_model}")
 
-            estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
-            print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-            estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+            mem_estimate_log_v2(args=self.args,
+                             exstr='-ph3-critic_model-1',
+                             model=critic_model,
+                             num_gpus_per_node=2,
+                             num_nodes=1)
 
             if self.args.only_optimize_lora:
                 critic_model = only_optimize_lora_parameters(critic_model)
                 gd.debuginfo(prj="ds_chat", info=f"s3 only_optimize_lora_parameters critic_model:,  {critic_model}")
 
-                estimate_zero2_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
-                print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-                estimate_zero3_model_states_mem_needs_all_live(critic_model, num_gpus_per_node=1, num_nodes=1)
+                mem_estimate_log_v2(args=self.args,
+                                 exstr='-ph3-critic_model-2',
+                                 model=critic_model,
+                                 num_gpus_per_node=2,
+                                 num_nodes=1)
 
         # Optimizer
         AdamOptimizer = DeepSpeedCPUAdam if self.args.offload else FusedAdam
@@ -473,14 +487,14 @@ class DeepSpeedRLHFEngine():
         )
 
         # DeepSpeed Engine
-        logflag = f'ph3 critic_model deepspeed.initialize'
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_critic_engine_deepspeed.initialize'
+        gd.enable_times(info=logf)
         critic_engine, *_ = deepspeed.initialize(model=critic_model,
                                                  optimizer=optim,
                                                  lr_scheduler=lr_scheduler,
                                                  config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"s3 critic_engine:,  {critic_engine}")
-        gd.disable_times(info=logflag)
+        gd.disable_times(info=logf)
 
         log_init("Critic", stime=stime)
         return critic_engine
@@ -524,16 +538,18 @@ class DeepSpeedRLHFEngine():
             num_padding_at_beginning=self.args.num_padding_at_beginning,
             rlhf_training=True)
 
-        estimate_zero2_model_states_mem_needs_all_live(reward_model, num_gpus_per_node=1, num_nodes=1)
-        print('^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^')
-        estimate_zero3_model_states_mem_needs_all_live(reward_model, num_gpus_per_node=1, num_nodes=1)
+        mem_estimate_log_v2(args=self.args,
+                         exstr='-ph3-reward_model-2',
+                         model=reward_model,
+                         num_gpus_per_node=2,
+                         num_nodes=1)
 
-        logflag = f'ph3 reward_engine deepspeed.initialize'
-        gd.enable_times(info=logflag)
+        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_reward_engine_deepspeed.initialize'
+        gd.enable_times(info=logf)
         reward_engine, *_ = deepspeed.initialize(model=reward_model,
                                                  config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"s3 reward_engine:  {reward_engine}")
-        gd.disable_times(info=logflag)
+        gd.disable_times(info=logf)
 
         log_init("Reward", stime=stime)
         return reward_engine
