@@ -125,7 +125,7 @@ class RewardModel(nn.Module):
 
     # 启用梯度检查点，减少内存使用
     def gradient_checkpointing_enable(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         # 启用后，在反向传播过程中，rwtranrsformer会重新计算一些中间层的输出，
         # 而不是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -133,7 +133,7 @@ class RewardModel(nn.Module):
 
     # 禁用梯度检查点
     def gradient_checkpointing_disable(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         # 禁用后，rwtranrsformer在反向传播过程中不再重新计算一些中间层的输出，
         # 而是把这些输出在整个前向传播和反向传播过程中存储在内存中。
@@ -156,7 +156,7 @@ class RewardModel(nn.Module):
         """
         loss = None
 
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         """获得主干网络的输出的特征"""
         transformer_outputs = self.rwtranrsformer(
@@ -491,7 +491,7 @@ class RewardModel(nn.Module):
         :param return_value_only: 如果设置为True，则在计算出values（在序列上每个位置的分值预测）后直接返回
         """
 
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__) #后面有细分
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}") #后面有细分
 
         # 模型的隐藏状态，它是一个列表，包含了每一层的输出，
         # 每一层的输出都是一个形状为[batch_size, sequence_length, hidden_size]的tensor。
@@ -517,7 +517,7 @@ class RewardModel(nn.Module):
 
         ## value 为 bs * seq 的sequence 分数
         if return_value_only:
-            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
             """
             如果传参中预设了“return_value_only=True”，
@@ -525,7 +525,7 @@ class RewardModel(nn.Module):
             """
             return values
         else:
-            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
             # 否则还将进一步取得reward_score
             # [0 0 0 0 prompt, answer, 0 0 0 0 ] for step 3, we have padding at the beginning

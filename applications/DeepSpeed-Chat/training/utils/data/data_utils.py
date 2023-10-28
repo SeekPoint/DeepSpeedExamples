@@ -233,7 +233,7 @@ class PromptDataset(Dataset):
     # prompt_dataset、chosen_dataset、reject_dataset、pad_token_id和train_phase。
     def __init__(self, prompt_dataset, chosen_dataset, reject_dataset,
                  pad_token_id, train_phase) -> None:
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         # 调用父类torch.utils.data.Dataset的构造函数。
         super().__init__()  
@@ -839,7 +839,7 @@ class DataCollatorRLHF:
     '''将一批数据整理成模型可以接收的形式'''
 
     def __init__(self, max_token_len, inference_tp_size):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         # 单个样本中最大的token数量
         self.max_token_len = max_token_len
 
@@ -847,7 +847,7 @@ class DataCollatorRLHF:
         self.inference_tp_size = inference_tp_size
 
     def __call__(self, data):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         batch = {}
 
         # 从数据中获取padding token的id
@@ -1015,14 +1015,14 @@ class MiniDataset:
 
         :param small_batch_size: batch size。通常此处指“PPO训练的batch_size”。
         '''
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         self.dataset = []
         self.max_size = max_size
         self.small_batch_size = small_batch_size
 
     def seperate(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         # 维护1个small_dataset
         small_dataset = []
@@ -1074,7 +1074,7 @@ class MiniDataset:
         如果少于max_size则将batch数据加入至MiniDataset中，
         直至达到max_size个batch
         """
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         if len(self.dataset) < self.max_size:
             self.dataset.append(data)

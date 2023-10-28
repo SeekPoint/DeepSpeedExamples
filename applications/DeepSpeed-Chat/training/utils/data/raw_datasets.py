@@ -50,7 +50,7 @@ class PromptRawDataset(object):
         self.output_path = output_path # 数据集存储的路径
         self.seed = seed # 随机种子
         self.local_rank = local_rank # 用于分布式训练中确定当前进程使用哪部分数据
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         gd.debuginfo(prj="ds_chat", info=f'dataset_name={dataset_name}')
 
         if not dataset_name == 'local/jsonfile':

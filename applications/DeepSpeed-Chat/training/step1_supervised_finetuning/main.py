@@ -28,20 +28,20 @@ from transformers import (
     default_data_collator,
     get_scheduler)
 
-logf = f'ph1-import_deepspeed'
-gd.enable(info=logf)
+# logf = f'ph1-import_deepspeed'
+# gd.enable(info=logf) --没有记录
 import deepspeed
-gd.disable(info=logf)
+# gd.disable(info=logf)
 
-logf = f"ph1-import_deepspeed.ops.adam"
-gd.enable(info=logf)
+# logf = f"ph1-import_deepspeed.ops.adam"
+# gd.enable(info=logf) --没有记录
 from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
-gd.disable(info=logf)
+# gd.disable(info=logf)
 
-logf = f"ph1-import_deepspeed.comm"
-gd.enable(info=logf)
+# logf = f"ph1-import_deepspeed.comm"
+# gd.enable(info=logf)   --没有记录
 import deepspeed.comm as dist
-gd.disable(info=logf)
+# gd.disable(info=logf)
 
 # 将当前脚本的父目录添加到系统路径中，以便可以从该目录下的utils目录导入一些自定义函数和模块。
 sys.path.append(
@@ -285,10 +285,10 @@ def parse_args():
     # 这一行将DeepSpeed的配置参数添加到解析器中。
 
     # if dist.get_rank() == 0:  ==dist没有初始化，不能使用
-    logf = f'ph1-deepspeed.add_config_arguments'
-    gd.enable(info=logf)
+    # logf = f'ph1-deepspeed.add_config_arguments'
+    # gd.enable(info=logf)  --没有记录
     parser = deepspeed.add_config_arguments(parser)
-    gd.disable(info=logf)
+    # gd.disable(info=logf)
 
     print('parser--2:', parser)  #yknote-TBD,比较变化
 
@@ -336,13 +336,12 @@ def main():
         if args.local_rank == 0:
             logf = f'ph1_z{args.zero_stage}_deepspeed.init_distributed'
             gd.enable(info=logf)
-            pass
+        #日志分析，主要就是初始化后端，目前用的是torch的
+
         deepspeed.init_distributed()
         if dist.get_rank() == 0: # dist初始化好了
             gd.disable(info=logf)
-            pass
 
-		
     # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
     gd.debuginfo(prj="ds_chat", info=f"args.global_rank is={args.global_rank}")
@@ -427,13 +426,15 @@ def main():
         model = convert_linear_layer_to_lora(model,
                                              args.lora_module_name,
                                              args.lora_dim)
+
         gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora={model}")
-        if args.zero_stage == 2 or args.zero_stage == 3:
-            mem_estimate_log(args=args, exstr='-ph1-1', model = model, num_gpus_per_node=2, num_nodes=1)
 
         if dist.get_rank() == 0:
             gd.disable(info=logf)
             pass
+
+        if args.zero_stage == 2 or args.zero_stage == 3:
+            mem_estimate_log(args=args, exstr='-ph1-1', model = model, num_gpus_per_node=2, num_nodes=1)
 
         if args.only_optimize_lora:
             # 将模型中非LoRA层的参数的requires_grad属性设为False，训练过程中只有LoRA层的参数会被更新/优化
@@ -532,9 +533,8 @@ def main():
     if dist.get_rank() == 0:
         logf = f'ph1_z{args.zero_stage}_AdamOptimizer_init'
         gd.enable(info=logf)
-
-    # 这里会触发c++的编译op过程！！
-    # 是否重新编译是nvcc编译器决定的，和ds无关！
+    # 日志分析，这里会触发c++的编译op过程！！是否重新编译是nvcc编译器决定的，和ds无关！
+    # 触发 FusedAdamBuilder 构建 ->jit_load
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
@@ -564,16 +564,20 @@ def main():
         logf = f'ph1_z{args.zero_stage}_deepspeed.initialize'
         gd.enable(info=logf)
 
-    model, optimizer, _, lr_scheduler = deepspeed.initialize(
+    gd.debuginfo(prj="ds_chat", info=f"model in={model}")
+    gd.debuginfo(prj="ds_chat", info=f"optimizer in={optimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler in={lr_scheduler}")
+    model, optimizer, tmpdumb, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
         args=args,
         config=ds_config, # DeepSpeed的配置信息
         lr_scheduler=lr_scheduler, # 学习率调度器
         dist_init_required=True)  # 需要进行分布式训练的初始化
-    gd.debuginfo(prj="ds_chat", info=f"model---3={model}")
-    gd.debuginfo(prj="ds_chat", info=f"optimizer---3={optimizer}")
-    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---3={lr_scheduler}")
+    gd.debuginfo(prj="ds_chat", info=f"tmpdumb out deepspeed.initialize ={tmpdumb}")
+    gd.debuginfo(prj="ds_chat", info=f"model out={model}")
+    gd.debuginfo(prj="ds_chat", info=f"optimizer out={optimizer}")
+    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler out={lr_scheduler}")
 
     if args.local_rank == 0:
         gd.disable(info=logf)

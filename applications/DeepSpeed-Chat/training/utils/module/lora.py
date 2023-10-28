@@ -70,7 +70,7 @@ class LinearLayer_LoRA(nn.Module):
                  lora_scaling=1,
                  lora_droppout=0,
                  bias=None):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         super(LinearLayer_LoRA, self).__init__()
 
         """此处的weight和bias即为原始结构中的参数"""
@@ -138,7 +138,7 @@ class LinearLayer_LoRA(nn.Module):
         self.fuse_lora = False
 
     def eval(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         # 将dropout层设置为评估模式
         # 这意味着在评估或测试过程中，dropout层不会进行任何操作，而是简单地将输入传递给下一个层。
@@ -148,7 +148,7 @@ class LinearLayer_LoRA(nn.Module):
         # self.fuse_lora_weight()
 
     def train(self, mode=True):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         # 在模型进行训练时调用
         # 它将dropout层设置为训练模式，这意味着在训练过程中，
         # dropout层会按照预设的概率随机地关闭输入中的部分元素，以防止过拟合。
@@ -158,7 +158,7 @@ class LinearLayer_LoRA(nn.Module):
 
     # 初始化 LoRA 权重的方法。右权重使用 kaiming 均匀分布进行初始化，左权重初始化为全0。
     def reset_parameters(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         """初始化LoRA线性层的参数"""
         # 降维矩阵使用kaiming均匀分布初始化，
         # 服从均匀分布U(-\sqrt{1/in_feature}, +\sqrt{1/in_feature})
@@ -174,7 +174,7 @@ class LinearLayer_LoRA(nn.Module):
     # 这两个方法用于将 LoRA 权重融合到原始权重中，或者从原始权重中解融合。
     # 融合操作实质上是将原始权重与 LoRA 权重的乘积（缩放后）相加。
     def fuse_lora_weight(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         '''用于将原始的权重和LoRA的权重进行融合'''
         # 如果没有融合，那么它会将LoRA的权重和原始的权重加在一起。
         # 这个过程实际上是一个矩阵乘法操作，然后乘以一个比例因子lora_scaling。
@@ -186,7 +186,7 @@ class LinearLayer_LoRA(nn.Module):
         self.fuse_lora = True
 
     def unfuse_lora_weight(self):
-        gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
         '''用于将融合后的权重分离开来'''
         # 如果已经进行了融合，那么它会将LoRA的权重从融合后的权重中减去，这样就得到了原始的权重。
         # 这个过程实际上是一个矩阵乘法操作，然后乘以一个比例因子lora_scaling。
@@ -211,11 +211,11 @@ class LinearLayer_LoRA(nn.Module):
     # 否则，会额外计算一个 LoRA 项，该项是输入通过 Dropout 层，然后与 LoRA 权重相乘得到的。
     def forward(self, input):
         if self.fuse_lora:
-            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
             # 如果fuse_lora为真，就使用融合后的权重进行线性变换，然后返回结果
             return F.linear(input, self.weight, self.bias)
         else:
-            gd.debuginfo(prj="ds_chat", info=self.__class__.__name__)
+            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
             """LoRA的正向传播"""
             # 否则，就分别用原始权重和LoRA权重进行线性变换，将两个结果加在一起，然后返回
             return F.linear(
