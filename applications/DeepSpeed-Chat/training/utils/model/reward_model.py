@@ -167,7 +167,15 @@ class RewardModel(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache)
 
-        gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-1, {transformer_outputs}")
+        # gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-1, {transformer_outputs}")
+        '''
+         transformer_outputs is-1, BaseModelOutputWithPast(last_hidden_state=tensor([[[-0.8462, -5.7422,  0.7568,  ..., -2.2910, -1.5664,  0.4041],
+         [-0.2201, -5.3008, -0.0649,  ...,  0.3284,  0.3181, -0.0772],
+         ...
+         [-0.7637,  1.0498, -0.3157,  ..., -0.3713, -1.9424,  1.1777]]],
+            device='cuda:0', dtype=torch.float16), past_key_values=None, hidden_states=None, attentions=None)
+
+        '''
 
         '''
         https://zhuanlan.zhihu.com/p/624589622
@@ -193,7 +201,7 @@ class RewardModel(nn.Module):
         # hidden_states.shape: (bs * 2, max_seq_len, hidden_size)
         # 是transformer模型的主要输出，表示模型对输入的隐藏表示。
         hidden_states = transformer_outputs[0]
-        gd.debuginfo(prj="ds_chat", info=f"hidden_states={hidden_states}")
+        # gd.debuginfo(prj="ds_chat", info=f"hidden_states={hidden_states}")
 
         # 将hidden_states传递到self.v_head（一个全连接层）并删除最后一个维度（通过squeeze(-1)）来计算reward。
         # 这个值可以被视为模型对每个输入token的奖励
@@ -222,9 +230,9 @@ class RewardModel(nn.Module):
         # gd.debuginfo(prj="ds_chat", info=f"rewards={rewards}")
 
 
-        gd.debuginfo(prj="ds_chat", info=f"T hidden_states={infoTensor(hidden_states)}") #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T: hidden_states={infoTensor(hidden_states)}") #only ph2
         # T hidden_states: _Size([16, 128, 768])_float16_cuda:1_
-        gd.debuginfo(prj="ds_chat", info=f"T rewards={infoTensor(rewards)}") #only ph2
+        gd.debuginfo(prj="ds_chat", info=f"T: rewards={infoTensor(rewards)}") #only ph2
 
         # 模型选择或拒绝某些特定输入的平均分数
         chosen_mean_scores = []
@@ -288,19 +296,19 @@ class RewardModel(nn.Module):
             # chosen_id.shape: (max_seq_len,)
             # 获得一个chosen样本（正样本）
             chosen_id = chosen_ids[i]
-            gd.debuginfo(prj="ds_chat", info=f"chosen_id={chosen_id}")
+            # gd.debuginfo(prj="ds_chat", info=f"chosen_id={chosen_id}")
 
             # 获得一个rejected样本（负样本）
             rejected_id = rejected_ids[i]
-            gd.debuginfo(prj="ds_chat", info=f"rejected_id={rejected_id}")
+            # gd.debuginfo(prj="ds_chat", info=f"rejected_id={rejected_id}")
 
             # 当前正样本的得分
             chosen_reward = chosen_rewards[i]
-            gd.debuginfo(prj="ds_chat", info=f"chosen_reward={chosen_reward}")
+            # gd.debuginfo(prj="ds_chat", info=f"chosen_reward={chosen_reward}")
 
             # 当前负样本的得分
             rejected_reward = rejected_rewards[i]
-            gd.debuginfo(prj="ds_chat", info=f"rejected_reward={rejected_reward}")
+            # gd.debuginfo(prj="ds_chat", info=f"rejected_reward={rejected_reward}")
 
 
             gd.debuginfo(prj="ds_chat", info=f"T chosen_id--5: {infoTensor(chosen_id)}")
@@ -346,7 +354,7 @@ class RewardModel(nn.Module):
             # PyTorch 中的nonzero()方法，这个方法会返回输入张量中所有非零元素的索引
             # 获得所有padding token的索引
             c_inds = (chosen_id == self.PAD_ID).nonzero()
-            gd.debuginfo(prj="ds_chat", info=f"c_inds={c_inds}")
+            gd.debuginfo(prj="ds_chat", info=f"T: c_inds={infoTensor(c_inds)}")
 
             # 如果是OPT，那么第0个一定是OPT模型默认在input最前面的padding token，不予考虑
             c_ind = c_inds[self.num_padding_at_beginning].item() if len(
@@ -359,7 +367,7 @@ class RewardModel(nn.Module):
             # 获取不同id的索引
             # 查找被选定序列和被拒绝序列之间的差异位置，这里的差异位置是指这两个序列第一个不同的标记的位置。
             check_divergence = (chosen_id != rejected_id).nonzero()  # [[0, 0], [1, 0], ..., [seq_len, 0]]
-            gd.debuginfo(prj="ds_chat", info=f"check_divergence={check_divergence}")
+            gd.debuginfo(prj="ds_chat", info=f"T: check_divergence={infoTensor(check_divergence)}")
 
             # 如果两个序列完全相同，则结束位置设置为序列的最后一位，差异位置设置为结束位置的前一位。
             # 说明不存在相等的padding token
@@ -408,8 +416,8 @@ class RewardModel(nn.Module):
             # 基于差异位置和结束位置，截取被选定序列和被拒绝序列的奖励部分
             c_truncated_reward = chosen_reward[divergence_ind:end_ind]
             r_truncated_reward = rejected_reward[divergence_ind:end_ind]
-            gd.debuginfo(prj="ds_chat", info=f"c_truncated_reward={c_truncated_reward}")
-            gd.debuginfo(prj="ds_chat", info=f"r_truncated_reward={r_truncated_reward}")
+            # gd.debuginfo(prj="ds_chat", info=f"c_truncated_reward={c_truncated_reward}")
+            # gd.debuginfo(prj="ds_chat", info=f"r_truncated_reward={r_truncated_reward}")
 
             # 从截取的奖励中计算平均值并添加到被选定和被拒绝的平均分列表中
             # 选择最后一个非填充token的奖励值添加到得分列表，可能是因为最后一个token往往包含了模型对整个输入序列的最终评价
@@ -428,16 +436,16 @@ class RewardModel(nn.Module):
             loss += -torch.nn.functional.logsigmoid(c_truncated_reward -
                                                     r_truncated_reward).mean()
 
-            gd.debuginfo(prj="ds_chat", info=f"T c_inds--5: {infoTensor(c_inds)}")
+            gd.debuginfo(prj="ds_chat", info=f"T: c_inds--5: {infoTensor(c_inds)}")
             # #only ph2, 很多次数，大小经常变化 T c_inds--5: _Size([72, 1])_int64_cuda:0_
 
-            gd.debuginfo(prj="ds_chat", info=f"T c_truncated_reward--5: {infoTensor(c_truncated_reward)}")
+            gd.debuginfo(prj="ds_chat", info=f"T: c_truncated_reward--5: {infoTensor(c_truncated_reward)}")
             # #only ph2, 很多次数，大小不定 T c_truncated_reward--5: _Size([48])_float16_cuda:0_
 
-            gd.debuginfo(prj="ds_chat", info=f"T check_divergence--5: {infoTensor(check_divergence)}")
+            gd.debuginfo(prj="ds_chat", info=f"T: check_divergence--5: {infoTensor(check_divergence)}")
             # #only ph2, 很多次数，大小不定 T check_divergence--5: _Size([0, 1])_int64_cuda:0_
 
-            gd.debuginfo(prj="ds_chat", info=f"T r_truncated_reward--5: {infoTensor(r_truncated_reward)}")
+            gd.debuginfo(prj="ds_chat", info=f"T: r_truncated_reward--5: {infoTensor(r_truncated_reward)}")
             # #only ph2, 很多次数，大小不定 T r_truncated_reward--5: _Size([111])_float16_cuda:0_
 
         gd.debuginfo(prj="ds_chat", info=f"len of rejected_mean_scores {len(rejected_mean_scores)}")
@@ -449,11 +457,11 @@ class RewardModel(nn.Module):
         chosen_mean_scores = torch.stack(chosen_mean_scores)
         rejected_mean_scores = torch.stack(rejected_mean_scores)
 
-        gd.debuginfo(prj="ds_chat", info=f"chosen_mean_scores {chosen_mean_scores}")
-        gd.debuginfo(prj="ds_chat", info=f"rejected_mean_scores {rejected_mean_scores}")
+        # gd.debuginfo(prj="ds_chat", info=f"chosen_mean_scores {chosen_mean_scores}")
+        # gd.debuginfo(prj="ds_chat", info=f"rejected_mean_scores {rejected_mean_scores}")
 
-        gd.debuginfo(prj="ds_chat", info=f"T chosen_mean_scores--5 {infoTensor(chosen_mean_scores)}")
-        gd.debuginfo(prj="ds_chat", info=f"T rejected_mean_scores--5 {infoTensor(rejected_mean_scores)}")
+        gd.debuginfo(prj="ds_chat", info=f"T: chosen_mean_scores--5 {infoTensor(chosen_mean_scores)}")
+        gd.debuginfo(prj="ds_chat", info=f"T: rejected_mean_scores--5 {infoTensor(rejected_mean_scores)}")
         # only ph2
         # T chosen_mean_scores--5: _Size([8])_float16_cuda:1_
         # T rejected_mean_scores--5: _Size([8])_float16_cuda:1_
@@ -504,7 +512,15 @@ class RewardModel(nn.Module):
             inputs_embeds=inputs_embeds,
             use_cache=use_cache)
 
-        gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-2 {transformer_outputs}")
+        # gd.debuginfo(prj="ds_chat", info=f"transformer_outputs is-2 {transformer_outputs}")
+        '''
+        transformer_outputs is-2 BaseModelOutputWithPast(last_hidden_state=tensor([[[-9.0271e-02,  5.6934e-01, -1.3701e+00,  ..., -2.5254e+00,
+          -9.0479e-01,  1.6089e-01],
+        ....
+         [-5.4016e-02,  6.6250e+00, -1.5137e+00,  ..., -1.8457e-01,
+          -1.3342e-01,  1.3105e+00]]], device='cuda:0', dtype=torch.float16,
+       grad_fn=<PreBackwardFunctionBackward>), past_key_values=None, hidden_states=None, attentions=None)
+       '''
 
         # hidden_states.shape: (bs, max_seq_len, hidden_size)
 		# 取出第一层的隐藏状态

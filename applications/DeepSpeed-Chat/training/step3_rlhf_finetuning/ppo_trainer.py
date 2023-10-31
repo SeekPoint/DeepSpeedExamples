@@ -662,8 +662,8 @@ class DeepSpeedPPOTrainer():
             rewards[j, start:ends[j]][-1] += reward_clip[j]
 
         """返回KL rewards"""
-        gd.debuginfo(prj="ds_chat", info=f"return rewards={rewards}")
-        gd.debuginfo(prj="ds_chat", info=f"T:reward_clip--B: {infoTensor(rewards)}")
+        # gd.debuginfo(prj="ds_chat", info=f"return rewards={rewards}")
+        gd.debuginfo(prj="ds_chat", info=f"T:rewards--B: {infoTensor(rewards)}")
         '''
         
         T reward_clip--B: _Size([4, 511])_float16_cuda:1_
@@ -1031,7 +1031,7 @@ class DeepSpeedPPOTrainer():
         self.critic_model.backward(critic_loss)
 
         if self.args.align_overflow:
-            logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_actor_model.optimizer.check_overflow'
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_actor_model.optimizer.check_overflow'
             gd.enable(info=logf)
             actor_overflow = self.actor_model.optimizer.check_overflow(
                 external=True)
@@ -1231,7 +1231,11 @@ class DeepSpeedPPOTrainer():
 		
         #太大
         # gd.debuginfo(prj="ds_chat", info=f"advantages_reversed--1={advantages_reversed}")
-        gd.debuginfo(prj="ds_chat", info=f"advantages--1={advantages}")
+        # gd.debuginfo(prj="ds_chat", info=f"advantages--1={advantages}") 是一个tensor的列表
+        for idx, ele in enumerate(advantages_reversed):
+            gd.debuginfo(prj="ds_chat", info=f"T: advantages_reversed[{idx}]={infoTensor(ele)}")
+        for idx, ele in enumerate(advantages):
+            gd.debuginfo(prj="ds_chat", info=f"T: advantages[{idx}]={infoTensor(ele)}")
 
         # 后续用来更新critic model用
         """

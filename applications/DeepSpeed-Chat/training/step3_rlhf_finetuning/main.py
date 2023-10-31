@@ -589,7 +589,7 @@ def main():
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # 初始化分布式环境
         if args.local_rank == 0:
-            logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_deepspeed.init_distributed'
+            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_deepspeed.init_distributed'
             gd.enable(info=logf)
         deepspeed.init_distributed()
         if args.local_rank == 0:
@@ -655,10 +655,10 @@ def main():
     当然其内部仍旧调用了“create_hf_model”方法来读取模型，
     但其中实现了更为精细的DeepSpeed控制
     """
-    if args.local_rank == 0:
-        logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_DeepSpeedRLHFEngine_init'
-        gd.enable(info=logf)
-
+    # 不能嵌套！！！！
+    # if args.local_rank == 0:
+    #     logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_DeepSpeedRLHFEngine_init'
+    #     gd.enable(info=logf)
     # 4.3.1初始化DeepSpeedRLHFEngine：
     # 获得一个DeepSpeedRLHFEngine对象，用于初始化一系列模型，包括Actor、Critic、Reference和Reward。
     rlhf_engine = DeepSpeedRLHFEngine(
@@ -667,8 +667,8 @@ def main():
         tokenizer=tokenizer, # 分词器
         num_total_iters=num_total_iters, # 总的训练迭代次数
         args=args)
-    if args.local_rank == 0:
-        gd.disable(info=logf)
+    # if args.local_rank == 0:
+    #     gd.disable(info=logf)
 
     gd.debuginfo(prj="ds_chat", info=f"rlhf_engine={rlhf_engine}")
     # rlhf_engine is: <rlhf_engine.DeepSpeedRLHFEngine object at 0x7ffaf9d97bb0>
@@ -679,18 +679,19 @@ def main():
     # 根据是否启用了无监督训练，选择了不同的PPO训练器类进行实例化。
     # ① 启用无监督 : 针对无监督训练环境（即模型只根据自身生成的数据进行训练，而不依赖人工标注的数据）设计的PPO训练器
     # ② 没有启用无监督 : 一个更通用的PPO训练器
-    logf= f'trainer-ppo_trainer_init'
+    logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer_ppo_init'
     if args.local_rank == 0:
-        gd.enable_times(info=logf)
+        gd.enable(info=logf)
+
     ppo_trainer = DeepSpeedPPOTrainerUnsupervised if unsupervised_training_enabled else DeepSpeedPPOTrainer
 
     trainer = ppo_trainer(rlhf_engine, args)
+
     if args.local_rank == 0:
         gd.disable(info=logf)
 
-
-    gd.debuginfo(prj="ds_chat", info=f"ppo_trainer={ppo_trainer}")
-    gd.debuginfo(prj="ds_chat", info=f"trainer={trainer}")
+    # gd.debuginfo(prj="ds_chat", info=f"ppo_trainer={ppo_trainer}")
+    # gd.debuginfo(prj="ds_chat", info=f"trainer={trainer}")
     # ppo_trainer is: <class 'ppo_trainer.DeepSpeedPPOTrainer'>
     # trainer is: <ppo_trainer.DeepSpeedPPOTrainer object at 0x7f939c0b7160>
 
@@ -744,9 +745,15 @@ def main():
             #     raise ValueError("Prompt length is too long")
             # out为经验数据
             # 进行采样，并加入到经验池，详见（3.1）
+
+            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.generate_experience'
+            if args.local_rank == 0:
+                gd.enable_times(info=logf)
             out = trainer.generate_experience(batch_prompt['prompt'],
                                               batch_prompt['prompt_att_mask'],
                                               step)
+            if args.local_rank == 0:
+                gd.disable_times(info=logf)
             
             gd.debuginfo(prj="ds_chat", info=f"out of generate_experience :, {out}")
 
@@ -794,7 +801,12 @@ def main():
 
                 if args.actor_gradient_checkpointing:
                     gd.debuginfo(prj="ds_chat")
+                    logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_gradient_checkpointing_enable'
+                    if args.local_rank == 0:
+                        gd.enable_times(info=logf)
                     rlhf_engine.actor.gradient_checkpointing_enable()
+                    if args.local_rank == 0:
+                        gd.disable_times(info=logf)
 
                 '''
                 3.3.5 PPO训练过程
@@ -847,12 +859,13 @@ def main():
 
                         #经验数据训练，返回actor_loss和critic_loss
                         # 得到actor和critic loss，详见（3.2）
-                        logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_trainer.train_rlhf'
+                        logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.train_rlhf'
                         if args.local_rank == 0:
                             gd.enable_times(info=logf)
                         actor_loss, critic_loss = trainer.train_rlhf(exp_data)
+                        gd.debuginfo(prj="ds_chat", info=f"actor_loss={actor_loss}+++critic_loss={critic_loss}")
                         if args.local_rank == 0:
-                            gd.disable(info=logf)
+                            gd.disable_times(info=logf)
 
                         #累加本ppo_step的指标，后续将除以内层迭代次数计算均值
                         actor_loss_sum += actor_loss.item()
@@ -862,16 +875,17 @@ def main():
                         #无监督数据训练
                         if unsupervised_training_enabled:
                             # 返回无监督损失
-                            logf = f'ph3_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}_trainer.train_unsupervised'
+                            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.train_unsupervised'
                             if args.local_rank == 0:
                                 gd.enable_times(info=logf)
-                            unsup_loss = trainer.train_unsupervised(
-                                unsup_data, args.unsup_coef)
-                            if args.local_rank == 0:
-                                gd.disable(info=logf)
 
+                            unsup_loss = trainer.train_unsupervised(unsup_data, args.unsup_coef)
 
                             gd.debuginfo(prj="ds_chat", info=f"unsup_loss={unsup_loss}")
+
+                            if args.local_rank == 0:
+                                gd.disable_times(info=logf)
+
 
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
                             unsup_loss_sum += unsup_loss.item()
@@ -879,12 +893,22 @@ def main():
                         # PPO训练迭代次数（ppo_step）+1
                         inner_iter += 1
 
+
                         """是否启用指数移动平均技术"""
                         if args.enable_ema:
-                            gd.debuginfo(prj="ds_chat", info=f"enable_ema")
+                            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_moving_average'
+
+                            if args.local_rank == 0:
+                                gd.enable_times(info=logf)
+
+                            gd.debuginfo(prj="ds_chat", info=f"moving_average")
+
                             moving_average(rlhf_engine.actor,
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
+
+                            if args.local_rank == 0:
+                                gd.disable_times(info=logf)
 
                     # 打乱数据供off - policy复用
                     # 每一轮结束后打乱经验池
@@ -921,7 +945,15 @@ def main():
 
             if args.actor_gradient_checkpointing:
                 gd.debuginfo(prj="ds_chat")
+                logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_gradient_checkpointing_disable'
+
+                if args.local_rank == 0:
+                    gd.enable_times(info=logf)
+
                 rlhf_engine.actor.gradient_checkpointing_disable()
+
+                if args.local_rank == 0:
+                    gd.disable_times(info=logf)
 
     if args.output_dir is not None:
         print_rank_0('saving model ...')
@@ -940,19 +972,20 @@ def main():
                 rlhf_engine.actor_ema)
 
         if torch.distributed.get_rank() == 0:
-            gd.debuginfo(prj="ds_chat")
+            gd.debuginfo(prj="ds_chat", info=f'save_hf_format rlhf_engine.actor')
             save_hf_format(rlhf_engine.actor,
                            tokenizer,
                            args,
                            sub_folder='actor')
 
+            gd.debuginfo(prj="ds_chat", info=f'save_hf_format rlhf_engine.critic')
             save_hf_format(rlhf_engine.critic,
                            tokenizer,
                            args,
                            sub_folder='critic')
 
             if args.enable_ema:
-                gd.debuginfo(prj="ds_chat")
+                gd.debuginfo(prj="ds_chat", info=f'save_hf_format rlhf_engine.actor_ema')
                 save_hf_format(rlhf_engine.actor_ema,
                                tokenizer,
                                args,
@@ -960,115 +993,53 @@ def main():
 
         if args.actor_zero_stage == 3:
             gd.debuginfo(prj="ds_chat")
+
+            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_actor_save_zero_three_model'
+
+            if args.local_rank == 0:
+                gd.enable(info=logf)
+
             save_zero_three_model(rlhf_engine.actor,
                                   global_rank=args.global_rank,
-                                  save_dir=os.path.join(
-                                      args.output_dir, 'actor'),
+                                  save_dir=os.path.join(args.output_dir, 'actor'),
                                   zero_stage=args.actor_zero_stage)
+
+            if args.local_rank == 0:
+                gd.disable(info=logf)
+
             if args.enable_ema:
                 gd.debuginfo(prj="ds_chat")
+
+                logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_actor_ema_save_zero_three_model'
+
+                if args.local_rank == 0:
+                    gd.enable(info=logf)
+
                 save_zero_three_model(rlhf_engine.actor_ema,
                                       global_rank=args.global_rank,
-                                      save_dir=os.path.join(
-                                          args.output_dir, 'actor_ema'),
+                                      save_dir=os.path.join(args.output_dir, 'actor_ema'),
                                       zero_stage=args.actor_zero_stage)
+                if args.local_rank == 0:
+                    gd.disable(info=logf)
 
         if args.critic_zero_stage == 3:
             gd.debuginfo(prj="ds_chat")
+
+            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_critic_save_zero_three_model'
+
+            if args.local_rank == 0:
+                gd.enable(info=logf)
+
             save_zero_three_model(rlhf_engine.critic,
                                   global_rank=args.global_rank,
-                                  save_dir=os.path.join(
-                                      args.output_dir, 'critic'),
+                                  save_dir=os.path.join(args.output_dir, 'critic'),
                                   zero_stage=args.critic_zero_stage)
+
+            if args.local_rank == 0:
+                gd.disable(info=logf)
 
     gd.dumpCounter()
 
 
 if __name__ == "__main__":
     main()
-	
-	
-'''
-exp_dataset is: [
-{'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
-        ...
-        [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:0'), 
-'logprobs': tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
-         -1.4099e-02, -3.5980e-02],
-        ...
-        [-4.4873e-01, -4.4873e-01, -4.4873e-01,  ..., -1.6678e-02,
-         -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16),
-'ref_logprobs': tensor([[-5.9297e+00, -5.9297e+00, -5.9297e+00,  ..., -5.8479e-03,
-        ...
-        [-4.4873e-01, -4.4873e-01, -4.4873e-01,  ..., -1.6678e-02,
-         -2.6123e-02, -1.9791e-02]], device='cuda:0', dtype=torch.float16), 
-'value': tensor([[-0.1948, -0.1948, -0.1948,  ...,  0.8779,  0.9243,  0.9229],
-        ...
-        [ 0.4233,  0.4233,  0.4233,  ...,  0.5342,  0.6001,  0.5879]],
-       device='cuda:0', dtype=torch.float16),
-'rewards': tensor([0.7358, 0.8081, 0.0402, 0.4734], device='cuda:0', dtype=torch.float16), 'input_ids': tensor([[    2,     2,     2,  ...,    64,    67, 10397],
-        ...
-        [    2,     2,     2,  ...,    10,   357,  4885]], device='cuda:0'),
-'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
-        ...
-        [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')}]
-'''
-
-'''
-exp_data is: {
-'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
-        ...
-        [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:0'), 
-'logprobs': tensor([[-5.1875e+00, -5.1875e+00, -5.1875e+00,  ..., -7.6709e-01,
-         -7.7271e-02, -1.6201e+00],
-        ...
-        [-1.1699e+00, -1.1699e+00, -1.1699e+00,  ..., -7.5006e-04,
-         -7.5684e-02, -3.6438e-02]], device='cuda:0', dtype=torch.float16), 
-'ref_logprobs': tensor([[-5.1641e+00, -5.1641e+00, -5.1641e+00,  ..., -8.6523e-01,
-         -1.0699e-01, -1.7266e+00],
-        ...
-        [-1.1084e+00, -1.1084e+00, -1.1084e+00,  ..., -7.0190e-04,
-         -1.5137e-01, -6.1401e-02]], device='cuda:0', dtype=torch.float16), 
-'value': tensor([[-0.2289, -0.2289, -0.2289,  ...,  0.2812,  0.3298,  0.4016],
-        ...
-        [ 1.1162,  1.1162,  1.1162,  ...,  0.7139,  0.6431,  0.6313]],
-       device='cuda:0', dtype=torch.float16), 
-'rewards': tensor([0.3215, 0.9287, 1.0088, 0.5864], device='cuda:0', dtype=torch.float16), 
-'input_ids': tensor([[    2,     2,     2,  ...,     9,     5,   144],
-        ...
-        [    2,     2,     2,  ...,    35,   318,    47]], device='cuda:0'), 
-'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
-        ...
-        [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')}
-        
-unsup_dataset is: [[[None, None, None, None]]]
-'''
-	
-	
-	
-'''
-out of generate_experience : {
-'prompts': tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
-        ...
-        [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:1'), 
-'logprobs': tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.2253e-02,
-         -1.6815e-02, -3.3474e-03],
-        ...
-        [-2.0078e+00, -2.0078e+00, -2.0078e+00,  ..., -1.9516e-02,
-         -2.6443e-02, -6.1607e-03]], device='cuda:1', dtype=torch.float16), 
-'ref_logprobs': tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.3519e-02,
-         -1.8341e-02, -3.7823e-03],
-        ...
-        [-2.0391e+00, -2.0391e+00, -2.0391e+00,  ..., -2.1149e-02,
-         -2.8412e-02, -6.6376e-03]], device='cuda:1', dtype=torch.float16), 
-'value': tensor([[-0.4321, -0.4321, -0.4321,  ..., -0.4736, -0.4829, -0.3918],
-        ...
-        [ 1.5361,  1.5361,  1.5361,  ...,  1.2910,  1.3447,  1.2559]],device='cuda:1', dtype=torch.float16), 
-'rewards': tensor([-0.4282,  1.4141, -0.3965,  1.2178], device='cuda:1',dtype=torch.float16), 
-'input_ids': tensor([[   2,    2,    2,  ...,   47,   64,   67],
-        ...
-        [   2,    2,    2,  ...,    7, 7142,   24]], device='cuda:1'), 
-'attention_mask': tensor([[0, 0, 0,  ..., 1, 1, 1],
-        ...
-        [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')}
-'''

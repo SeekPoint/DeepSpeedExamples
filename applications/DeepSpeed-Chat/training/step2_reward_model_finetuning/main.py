@@ -505,7 +505,7 @@ def main():
         scores = 0
         gd.debuginfo(prj="ds_chat", info="len(eval_dataloader): {len(eval_dataloader)}")
         for step, batch in enumerate(eval_dataloader):
-            gd.debuginfo(prj="ds_chat", info=f"batch---C is, {batch}")
+            # gd.debuginfo(prj="ds_chat", info=f"batch---C is, {batch}")
             gd.debuginfo(prj="ds_chat", info=f"T batch['input_ids']--C, {infoTensor(batch['input_ids'])}")
             # #only ph2 T batch['input_ids']--C: _Size([16, 128])_int64_cpu_
             gd.debuginfo(prj="ds_chat", info=f"T batch['attention_mask']--C, {infoTensor(batch['attention_mask'])}")
@@ -522,7 +522,7 @@ def main():
                 """
                 # 前向传播
                 outputs = model(**batch)
-                gd.debuginfo(prj="ds_chat", info=f"outputs--C, {outputs}")
+                #gd.debuginfo(prj="ds_chat", info=f"outputs--C, {outputs}")
                 gd.debuginfo(prj="ds_chat", info=f"T outputs['loss']--A, {infoTensor(outputs['loss'])}")
                 gd.debuginfo(prj="ds_chat", info=f"T outputs['chosen_mean_scores']--A, {infoTensor(outputs['chosen_mean_scores'])}")
                 gd.debuginfo(prj="ds_chat", info=f"T outputs['rejected_mean_scores']--A, {infoTensor(outputs['rejected_mean_scores'])}")
@@ -534,8 +534,8 @@ def main():
             # rejected.shape: (bs,)
             rejected = outputs["rejected_mean_scores"]
 
-            gd.debuginfo(prj="ds_chat", info=f"chosen--C: {chosen}")
-            gd.debuginfo(prj="ds_chat", info=f"rejected--C: {rejected}")
+            # gd.debuginfo(prj="ds_chat", info=f"chosen--C: {chosen}")
+            # gd.debuginfo(prj="ds_chat", info=f"rejected--C: {rejected}")
             gd.debuginfo(prj="ds_chat", info=f"T chosen---C, {infoTensor(chosen)}")
             gd.debuginfo(prj="ds_chat", info=f"T rejected---C, {infoTensor(rejected)}")
             ''' only ph2
@@ -606,14 +606,14 @@ def main():
             f"Beginning of Epoch {epoch+1}/{args.num_train_epochs}, Total Micro Batches {len(train_dataloader)}",
             args.global_rank)
 
-        logf = f'ph2_z{args.zero_stage}_rm_model.train model'
-        if args.local_rank == 0:
-            gd.enable(info=logf)
+        # logf = f'ph2_z{args.zero_stage}_rm_model.train model'
+        # if args.local_rank == 0:
+        #     gd.enable(info=logf)
         # 训练模式
         rm_model.train()
         mean_loss = 0
-        if args.local_rank == 0:
-            gd.disable(info=logf)
+        # if args.local_rank == 0:  # ph2-z01234 log录得为空！
+        #     gd.disable(info=logf)
 
         for step, batch in enumerate(train_dataloader):
             logf = f'ph2_z{args.zero_stage}_rm_model.train one batch'

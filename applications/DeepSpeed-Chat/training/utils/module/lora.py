@@ -213,13 +213,13 @@ class LinearLayer_LoRA(nn.Module):
         if self.fuse_lora:
             gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
             # 如果fuse_lora为真，就使用融合后的权重进行线性变换，然后返回结果
-            return F.linear(input, self.weight, self.bias)
+            return F.linear(input, self.weight, self.bias)  #import torch.nn.functional as F
         else:
             gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
             """LoRA的正向传播"""
             # 否则，就分别用原始权重和LoRA权重进行线性变换，将两个结果加在一起，然后返回
-            return F.linear(
-                input, self.weight,
+            return F.linear(                                #import torch.nn.functional as F
+                input, self.weight,                         # @是矩阵乘法
                 self.bias) + (self.lora_dropout(input) @ self.lora_right_weight
                               @ self.lora_left_weight) * self.lora_scaling
 

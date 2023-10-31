@@ -115,7 +115,9 @@ def save_hf_format(model, tokenizer, args, sub_folder=""):
     # 遍历状态字典中的所有键。这里使用list(save_dict.keys())而不是直接使用
     # save_dict.keys()是因为我们在遍历过程中会修改字典，直接遍历字典的键在Python中会导致错误。
 	# 遍历字典的所有键，并删除其中包含lora的键
-    for key in list(save_dict.keys()):
+    for key, val in dict(save_dict).items():
+        gd.debuginfo(prj="ds_chat", info=f'save_dict: {key}={val}')
+
         # if "lora" in key:：如果键中包含"lora"，那么删除这个键值对。
         # "lora"可能是某种特定的模型组件或参数，这里将其排除在保存的模型权重之外。
         if "lora" in key:
@@ -372,13 +374,15 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
                 gd.debuginfo(prj="ds_chat", info=f"T: v={infoTensor(v)}")
 
                 tmpz3 = _z3_params_to_fetch([v])
-                gd.debuginfo(prj="ds_chat", info=f"tmpz3={tmpz3}")
-                # tmpz3=[Parameter containing:
+                # gd.debuginfo(prj="ds_chat", info=f"tmpz3={tmpz3}")
+                # 大多数是：tmpz3=[Parameter containing:
                 # tensor([], device='cuda:0', dtype=torch.float16, requires_grad=True)]
 
+                for index, ele in enumerate(tmpz3):
+                    gd.debuginfo(prj="ds_chat", info=f"tmpz3[{index}]={infoTensor(ele)}")
 
                 with deepspeed.zero.GatheredParameters(tmpz3,
-                                                       enabled=zero_stage_3):
+                                                       enabled=zero_stage_3):  # 进入 partition_parameters.py __init__
                     v_p = v.data.cpu()
                     # gd.debuginfo(prj="ds_chat", info=f"v_p---1={v_p}")
                     gd.debuginfo(prj="ds_chat", info=f"T: v_p---1 is + {infoTensor(v_p)}")
@@ -389,7 +393,7 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
 
             # 在主节点上，如果参数名称中不包含lora，将参数值添加到output_state_dict中。
             # 然后，将收集好的参数（并且不包含“lora”关键字的参数）添加到输出状态字典中。
-            if global_rank == 0 and "lora" not in k:
+            if global_rank == 0 and "lora" not in k:  #？？？为什么不在一开始就排出含有Lora的参数！！！
                 output_state_dict[k] = v_p
                 
         # 最后，再使用torch.save函数保存模型状态。

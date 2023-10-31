@@ -820,7 +820,7 @@ class DataCollatorReward:
                                             dim=0)
 
         """batch的具体样式可见下个代码块"""
-        gd.debuginfo(prj="ds_chat", info=f"batch--D: {batch}")
+        # gd.debuginfo(prj="ds_chat", info=f"batch--D: {batch}")
 
 
         gd.debuginfo(prj="ds_chat", info=f"T batch['input_ids']--F: {infoTensor(batch['input_ids'])}")
