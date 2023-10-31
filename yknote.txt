@@ -36,3 +36,69 @@ python3 training/step2_reward_model_finetuning/rw_eval.py \
     --model_name_or_path_baseline ~/hf_model/opt-125m \
     --model_name_or_path_finetune output/reward-models/125m  \
     2>&1 | tee output/reward-models/125m/eval-ph2-1node2gpus-opt125.log
+
+
+
+
+
+++++++++++++++++++++++++
+__ph1_zX_deepspeed.initialize日志分析
+z0就是禁止deepspeed
+debug_extract_module_and_param_names(model)  ===输出内容很多，z3和z0,1,2明显不同， z0,1,2几乎一样
+不同点主要从gd.debuginfo(prj='ds', info=f'optimizer_wrapper={optimizer_wrapper}') 开始
+
+
+C:\yk_repo\ds\_log_tmps_\__ph1_z1_train one batch__.log
+and
+C:\yk_repo\ds\_log_tmps_\__ph1_z0_train one batch__.log
+
+的区别仅仅是
+ds F# deepspeed/runtime/engine.py f# backward L#: 2097 I# C:self.__class__.__name__
+ds F# deepspeed/runtime/engine.py f# is_gradient_accumulation_boundary L#: 2156 I# C:self.__class__.__name__
+ds F# deepspeed/runtime/zero/stage_1_and_2.py f# backward L#: 2137
+ds F# deepspeed/runtime/zero/stage_1_and_2.py f# backward L#: 2167
+ds F# deepspeed/runtime/fp16/loss_scaler.py f# backward L#: 66
+ds F# deepspeed/runtime/fp16/loss_scaler.py f# loss_scale L#: 55
+ds_chat F# training/utils/module/lora.py f# forward L#: 218 I# C:LinearLayer_LoRA
+
+vs
+ds F# deepspeed/runtime/engine.py f# backward L#: 2112 I# C:self.__class__.__name__
+ds F# deepspeed/runtime/fp16/fused_optimizer.py f# backward L#: 395
+ds_chat F# training/utils/module/lora.py f# forward L#: 218 I# C:LinearLayer_LoRA
+
+也就是不同优化器的forward函数不同
+
+__ph1_zX_deepspeed.initialize__.log  x=0123都有差异
+
+__ph1_zX_deepspeed.init_distributed__.log  x=0123完全一样
+
+__ph1_zX_convert_linear_layer_to_lora__.log  x=012 一样， 3有细微差别
+
+__ph1_zX_AdamOptimizer_init__.log    x=0123完全一样
+
+__ph1_zX_train one batch__.log  0,1差别很小，2有规律的增加两段log， 3的变化很大
+
+__ph2_zX_deepspeed.initialize__.log  x=012一样，3不同
+
+__ph2_zX_evaluation_reward-A__.log   x=012一样，3不同
+
+__ph2_zX_rm_model.train model__  0123全空
+
+__ph2_zX_rm_model.train one batch__.log 0，1差别很小，2有规律的增加两段log， 3的变化很大
+
+__ph3_actor_z0_critic_z0_deepspeed.init_distributed__.log
+0123都一样
+
+__ph3_actor_z0_critic_z0_actor_engine-deepspeed.initialize__.log
+0,1有规律差别，1,2有规律差别
+
+__ph3_actor_z3_critic_z3_ref_model-deepspeed.initialize__.log
+012差别小，3差别大
+
+__ph3_actor_z1_critic_z1_trainer.train_rlhf__.log
+01差别小，2,3差别大
+
+__ph3_actor_z0_critic_z0_reward_engine_deepspeed.initialize__.log
+012差别不大，3差别大
+
+

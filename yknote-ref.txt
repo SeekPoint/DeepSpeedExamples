@@ -89,6 +89,9 @@ https://zhuanlan.zhihu.com/p/636640427
 DeepSpeed Chat: 一键式RLHF训练，让你的类ChatGPT千亿大模型提速省钱15倍
 
 
+https://myblog.blog.csdn.net/article/details/131311777
+自定义模型与数据进行DeepSpeed-Chat训练
+
 https://github.com/bobo0810/LearnDeepSpeed
 DeepSpeed训练配置 https://zhuanlan.zhihu.com/p/654925843
 DeepSpeed训练Tricks https://zhuanlan.zhihu.com/p/654923210
@@ -139,3 +142,9 @@ Deepspeed多卡多机ZeRo-3训练踩的坑  ==done,信息少
 https://blog.csdn.net/v_JULY_v/article/details/129880836
 ChatGLM两代的部署/微调/实现：从基座GLM、ChatGLM的LoRA/P-Tuning微调、6B源码解读到ChatGLM2的微调与实现
 
+https://blog.csdn.net/HuggingFace/article/details/128628997?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522169657662416800188567261%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=169657662416800188567261&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~top_click~default-2-128628997-null-null.142^v94^insert_down1&utm_term=RLHF&spm=1018.2226.3001.4449
+ChatGPT 背后的“功臣”——RLHF 技术详解
+
+
+https://myblog.blog.csdn.net/article/details/131615263
+DeepSpeed使用体会
