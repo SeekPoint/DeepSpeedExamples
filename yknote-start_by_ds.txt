@@ -12,12 +12,13 @@
 ~/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning$
 
 ===ph1===z0
+CUDA_VISIBLE_DEVICES=0,1
 
 deepspeed main.py \
    --data_path Dahoas/rm-static  \
    --data_split 2,4,4 \
    --data_output_path ~/ds_exp \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --per_device_train_batch_size 4 \
    --per_device_eval_batch_size 4 \
    --max_seq_len 128 \
@@ -42,7 +43,7 @@ deepspeed main.py \
    --data_path Dahoas/rm-static  \
    --data_split 2,4,4 \
    --data_output_path ~/ds_exp \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --per_device_train_batch_size 4 \
    --per_device_eval_batch_size 4 \
    --max_seq_len 128 \
@@ -61,13 +62,66 @@ deepspeed main.py \
    --output_dir ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z1 \
     2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph1_training-1node2gpus-Z1.log
 
+
 ===ph1===z2
+
+CUDA_VISIBLE_DEVICES=0,1
 
 deepspeed main.py \
    --data_path Dahoas/rm-static  \
    --data_split 2,4,4 \
    --data_output_path ~/ds_exp \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 2 \
+   --lora_dim 0 \
+   --output_dir ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z2+lora0 \
+    2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph1_training-1node2gpus-Z2+lora0.log
+
+===打开offload
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path ~/ds_exp \
+   --model_name_or_path /data/hf_model/opt-125m \
+   --per_device_train_batch_size 4 \
+   --per_device_eval_batch_size 4 \
+   --max_seq_len 128 \
+   --learning_rate 9.65e-6 \
+   --weight_decay 0. \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --offload \
+   --deepspeed \
+   --gradient_checkpointing \
+   --zero_stage 2 \
+   --lora_dim 0 \
+   --output_dir ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z2+lora0+offload \
+    2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph1_training-1node2gpus-Z2+lora0+offload.log
+
+===打开lora
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static  \
+   --data_split 2,4,4 \
+   --data_output_path ~/ds_exp \
+   --model_name_or_path /data/hf_model/opt-125m \
    --per_device_train_batch_size 4 \
    --per_device_eval_batch_size 4 \
    --max_seq_len 128 \
@@ -83,8 +137,9 @@ deepspeed main.py \
    --gradient_checkpointing \
    --zero_stage 2 \
    --lora_dim 16 \
-   --output_dir ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z2 \
-    2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph1_training-1node2gpus-Z2.log
+   --output_dir ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z2+lora16 \
+    2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph1_training-1node2gpus-Z2+lora16.log
+
 
 ===ph1===z3
 
@@ -92,7 +147,7 @@ deepspeed main.py \
    --data_path Dahoas/rm-static  \
    --data_split 2,4,4 \
    --data_output_path ~/yk_repo/ds/_log_tmps_/actor+opt125m+Z3 \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --per_device_train_batch_size 4 \
    --per_device_eval_batch_size 4 \
    --max_seq_len 128 \
@@ -119,7 +174,7 @@ deepspeed main.py \
 deepspeed main.py \
    --data_path Dahoas/rm-static \
    --data_split 2,4,4 \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --num_padding_at_beginning 1 \
    --per_device_train_batch_size 8 \
    --per_device_eval_batch_size 8 \
@@ -143,7 +198,7 @@ deepspeed main.py \
 deepspeed main.py \
    --data_path Dahoas/rm-static \
    --data_split 2,4,4 \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --num_padding_at_beginning 1 \
    --per_device_train_batch_size 8 \
    --per_device_eval_batch_size 8 \
@@ -167,7 +222,7 @@ deepspeed main.py \
 deepspeed main.py \
    --data_path Dahoas/rm-static \
    --data_split 2,4,4 \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --num_padding_at_beginning 1 \
    --per_device_train_batch_size 8 \
    --per_device_eval_batch_size 8 \
@@ -181,17 +236,41 @@ deepspeed main.py \
    --num_warmup_steps 2 \
    --seed 1234 \
    --zero_stage 2 \
+   --lora_dim 0 \
    --deepspeed \
    --gradient_checkpointing \
    --output_dir ~/yk_repo/ds/_log_tmps_/reward+opt125m+Z2 \
-   2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph2_training-1node2gpus-Z2.log
+   2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph2_training-1node2gpus-Z2-lora0.log
+
+deepspeed main.py \
+   --data_path Dahoas/rm-static \
+   --data_split 2,4,4 \
+   --model_name_or_path /data/hf_model/opt-125m \
+   --num_padding_at_beginning 1 \
+   --per_device_train_batch_size 8 \
+   --per_device_eval_batch_size 8 \
+   --max_seq_len 128 \
+   --learning_rate 5e-5 \
+   --weight_decay 0.1 \
+   --num_train_epochs 2 \
+   --disable_dropout \
+   --gradient_accumulation_steps 2 \
+   --lr_scheduler_type cosine \
+   --num_warmup_steps 2 \
+   --seed 1234 \
+   --zero_stage 2 \
+   --lora_dim 16 \
+   --deepspeed \
+   --gradient_checkpointing \
+   --output_dir ~/yk_repo/ds/_log_tmps_/reward+opt125m+Z2 \
+   2>&1 | tee ~/yk_repo/ds/_log_tmps_/ph2_training-1node2gpus-Z2-lora16.log
 
 ===ph2===z3
 
 deepspeed main.py \
    --data_path Dahoas/rm-static \
    --data_split 2,4,4 \
-   --model_name_or_path /home/amd00/hf_model/opt-125m \
+   --model_name_or_path /data/hf_model/opt-125m \
    --num_padding_at_beginning 1 \
    --per_device_train_batch_size 8 \
    --per_device_eval_batch_size 8 \
@@ -255,7 +334,7 @@ deepspeed main.py \
    --unpin_actor_parameters \
    --release_inference_cache \
    --inference_tp_size 1 \
-   --tp_gather_partition_size 2 \
+   --tp_gather_partition_size 4 \
    --actor_gradient_checkpointing \
    --critic_gradient_checkpointing \
    --actor_lora_dim 64 \

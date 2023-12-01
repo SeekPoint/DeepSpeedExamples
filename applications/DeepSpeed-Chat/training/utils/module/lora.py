@@ -71,6 +71,11 @@ class LinearLayer_LoRA(nn.Module):
                  lora_droppout=0,
                  bias=None):
         gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
+        # https://blog.csdn.net/dongjinkun/article/details/114575998
+        # Python中的super(Net, self).__init__()是指首先找到Net的父类（比如是类NNet），
+        # 然后把类Net的对象self转换为类NNet的对象，然后“被转换”的类NNet对象调用自己的init函数，
+        # 其实简单理解就是子类把父类的__init__()放到自己的__init__()当中，
+        # 这样子类就有了父类的__init__()的那些东西
         super(LinearLayer_LoRA, self).__init__()
 
         """此处的weight和bias即为原始结构中的参数"""
@@ -215,7 +220,7 @@ class LinearLayer_LoRA(nn.Module):
             # 如果fuse_lora为真，就使用融合后的权重进行线性变换，然后返回结果
             return F.linear(input, self.weight, self.bias)  #import torch.nn.functional as F
         else:
-            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
+            gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")  # ph1 z2 train1batch
             """LoRA的正向传播"""
             # 否则，就分别用原始权重和LoRA权重进行线性变换，将两个结果加在一起，然后返回
             return F.linear(                                #import torch.nn.functional as F

@@ -1,0 +1,11 @@
+s_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/inference/huggingface/text2text-generation$
+deepspeed --num_gpus 2 test-t5.py
+--num_gpus 1 3都出错
+
+
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/inference/huggingface/translation$
+deepspeed --num_gpus 2 test-t5-base.py
+--num_gpus 3 也可以
+--num_gpus 1 出错
+
+

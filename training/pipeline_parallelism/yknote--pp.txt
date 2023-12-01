@@ -1,0 +1,13 @@
+
+(ds_chat_py39) amd00@MZ32-00:~/yk_repo/ds/DeepSpeedExamples/training/pipeline_parallelism$
+cd
+
+启动 deepspeed 时配置超参数 -p 设置流水并行数，如果 micro batch num == pp num ，则此时是最佳实践配置
+
+deepspeed train.py --deepspeed_config=ds_config.json -p 3 --steps=1
+
+CUDA_VISIBLE_DEVICES=0,1 deepspeed train.py --deepspeed_config=ds_config.json -p 2 --steps=1
+
+也就是config中:  train_batch_size = train_micro_batch_size_per_gpu * (=p)
+
+ds_chat === 实际上是 app的角色

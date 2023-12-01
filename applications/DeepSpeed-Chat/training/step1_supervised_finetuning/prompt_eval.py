@@ -139,8 +139,8 @@ def generate(model,
     result = tokenizer.batch_decode(generate_ids,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
-    gd.debuginfo(prj="ds_chat", info=f"generate_ids---1:", generate_ids)
-    gd.debuginfo(prj="ds_chat", info=f"result---1:", result)
+    gd.debuginfo(prj="ds_chat", info=f"generate_ids---1={generate_ids}")
+    gd.debuginfo(prj="ds_chat", info=f"result---1:={result}")
     return result
 
 # 使用的是一种不同的文本生成策略，称为对比搜索（Contrastive Search）。
@@ -180,8 +180,8 @@ def generate_constrastive_search(model,
                                     skip_special_tokens=True,
                                     clean_up_tokenization_spaces=False)
 
-    gd.debuginfo(prj="ds_chat", info=f"generate_ids---2:", generate_ids)
-    gd.debuginfo(prj="ds_chat", info=f"result---2:", result)
+    gd.debuginfo(prj="ds_chat", info=f"generate_ids---1={generate_ids}")
+    gd.debuginfo(prj="ds_chat", info=f"result---1:={result}")
 
     return result
 
@@ -296,10 +296,10 @@ def main():
                                      args.model_name_or_path_finetune,
                                      tokenizer, None)
 
-    gd.debuginfo(prj="ds_chat", info=f"device--2:", device)
-    gd.debuginfo(prj="ds_chat", info=f"ph1 eval tokenizer :", tokenizer)
-    gd.debuginfo(prj="ds_chat", info=f"model_baseline :", model_baseline)
-    gd.debuginfo(prj="ds_chat", info=f"model_fintuned :", model_fintuned)
+    gd.debuginfo(prj="ds_chat", info=f"device--2={device}")
+    gd.debuginfo(prj="ds_chat", info=f"ph1 eval tokenizer={tokenizer}")
+    gd.debuginfo(prj="ds_chat", info=f"model_baseline={model_baseline}")
+    gd.debuginfo(prj="ds_chat", info=f"model_fintuned={model_fintuned}")
 
     # 模型被移动到指定的设备上
     model_baseline.to(device)

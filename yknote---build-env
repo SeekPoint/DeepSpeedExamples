@@ -1,6 +1,4 @@
 
-amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
-amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$
 amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/
 amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/
 amd00@asus00:~/llm_dev/DeepSpeedExamples/applications/DeepSpeed-Chat$ conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/

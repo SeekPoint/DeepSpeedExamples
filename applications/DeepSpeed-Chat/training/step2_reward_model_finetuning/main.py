@@ -8,6 +8,8 @@ import os
 import math
 import sys
 
+pid = os.getpid()
+
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
@@ -471,9 +473,11 @@ def main():
     CONSTANT_WITH_WARMUP：带预热的常数调度器，学习率在一开始的一段时间内线性增加，然后保持不变。
     '''
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
-    if args.local_rank == 0:
-        logf = f'ph2_z{args.zero_stage}_deepspeed.initialize'
-        gd.enable(info=logf)
+    # if args.local_rank == 0:
+    logf = f'ph2_z{args.zero_stage}_deepspeed.initialize'
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
+
     rm_model, optimizer, _, lr_scheduler = deepspeed.initialize(
         model=rm_model, # 模型
         optimizer=optimizer, # 优化器
@@ -485,8 +489,10 @@ def main():
     gd.debuginfo(prj="ds_chat", info=f"rm_model---4 , {rm_model}")
     gd.debuginfo(prj="ds_chat", info=f"optimizer---4 , {optimizer}")
     gd.debuginfo(prj="ds_chat", info=f"lr_scheduler---4 , {lr_scheduler}")
-    if args.local_rank == 0:
-        gd.disable(info=logf)
+
+    #if args.local_rank == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
 
     if args.gradient_checkpointing:
         # 在模型中启用梯度检查点
@@ -589,16 +595,20 @@ def main():
         args.global_rank)
 
     # 在训练集上评估模型的奖励值
-    if args.local_rank == 0:
-        logf = f'ph2_z{args.zero_stage}_evaluation_reward-B'
-        gd.enable(info=logf)
+    #if args.local_rank == 0:
+    logf = f'ph2_z{args.zero_stage}_evaluation_reward_B'
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
+
     reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
+
     print_rank_0(
         f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
         args.global_rank)
-    if args.local_rank == 0:
-        logf = f'ph2_z{args.zero_stage}_deepspeed.initialize'
-        gd.disable(info=logf)
+
+    #if args.local_rank == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
 
     # 模型训练
     for epoch in range(args.num_train_epochs):
@@ -610,20 +620,28 @@ def main():
         # if args.local_rank == 0:
         #     gd.enable(info=logf)
         # 训练模式
+        gd.debuginfo(prj='ds_chat', info=f'Before rm_model.train()++++++++')
         rm_model.train()
+        gd.debuginfo(prj='ds_chat', info=f'After rm_model.train() ++++++++')
+
         mean_loss = 0
         # if args.local_rank == 0:  # ph2-z01234 log录得为空！
         #     gd.disable(info=logf)
 
         for step, batch in enumerate(train_dataloader):
-            logf = f'ph2_z{args.zero_stage}_rm_model.train one batch'
-            if args.local_rank == 0:
-                gd.enable_times(info=logf)
+            logf = f'ph2_z{args.zero_stage}_rm_model_{pid}_epoch{epoch:02}_step{step:04}'
+            #if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
 
+            gd.debuginfo(prj='ds_chat', info=f'1-batch={batch}')
             batch = to_device(batch, device)
-			
+            gd.debuginfo(prj='ds_chat', info=f'2-batch={batch}')
+
+
             # 将批数据输入模型并获取输出
             outputs = rm_model(**batch, use_cache=False)
+            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep1++++++++')
 			
             # 从模型输出中提取损失
             loss = outputs["loss"]
@@ -646,16 +664,25 @@ def main():
             T outputs['rejected_mean_scores']--D: _Size([8])_float16_cuda:1_
             T loss--D: _Size([])_float16_cuda:1_
             '''
+
+            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep2++++++++')
             # 计算损失的梯度
             rm_model.backward(loss)
 
+            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep3++++++++')
+
             # 用计算的梯度更新模型的权重
             rm_model.step()
+            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep4++++++++')
 
             # 计算所有批次的平均损失
             mean_loss += loss.item()
-            if args.local_rank == 0:
-                gd.disable_times(info=logf)
+            gd.debuginfo(prj='ds_chat', info=f'mean_loss={mean_loss}')
+
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
+
 
         print_rank_0(
             f"Epoch {epoch+1}/{args.num_train_epochs} with loss {mean_loss/(step+1)}",
@@ -667,12 +694,16 @@ def main():
             args.global_rank)
 
         # 在每个epoch结束后，模型在验证数据集上进行评估。
-        logf = f'ph2_z{args.zero_stage}_evaluation_reward-A'
-        if args.local_rank == 0:
-            gd.enable(info=logf)
+        logf = f'ph2_z{args.zero_stage}_evaluation_reward_A'
+        #if args.local_rank == 0:
+        # gd.enable(info=logf)
+        gd.emb_start(info=logf)
+
         reward_score, acc = evaluation_reward(rm_model, eval_dataloader)
-        if args.local_rank == 0:
-            gd.disable(info=logf)
+
+        #if args.local_rank == 0:
+        # gd.disable(info=logf)
+        gd.emb_end(info=logf)
 
         print_rank_0(
             f"chosen_last_scores (higher is better) : {reward_score}, acc (higher is better) : {acc}",
@@ -699,20 +730,24 @@ def main():
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
             logf = f'ph2_z{args.zero_stage}_save_zero_three_model'
-            if args.local_rank == 0:
-                gd.enable(info=logf)
+            # if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
+
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(rm_model,
                                   args.global_rank,
                                   args.output_dir,
                                   zero_stage=args.zero_stage)
-            if args.local_rank == 0:
-                gd.disable(info=logf)
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
 
 
 if __name__ == "__main__":
+    gd.prjenable(prj='')
     main()
 
 '''

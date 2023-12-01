@@ -17,6 +17,9 @@ from utils.utils import get_optimizer_grouped_parameters
 from utils.utils import mem_estimate_log_v2
 
 from pydebug import gd, infoTensor
+import os
+
+gcnt = 0
 
 """
 TODOs:
@@ -91,44 +94,56 @@ class DeepSpeedRLHFEngine():
         # 用训练好的SFT模型初始化Actor模型
         # 此处的actor是模型经过DeepSpeed封装后得到的DeepSpeedHybridEngine对象
 
-        logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_init_actor"
+        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+               f'CZ{args.critic_zero_stage}_' \
+               f'ITS{args.inference_tp_size}_' \
+               f'TGP{args.tp_gather_partition_size}_init_actor'
 
-        if args.local_rank == 0:
-            gd.enable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
 
         self.actor = self._init_actor(
             actor_model_name_or_path=actor_model_name_or_path)
 
         gd.debuginfo(prj="ds_chat", info=f"Done: self.actor={self.actor}")
 
-        if args.local_rank == 0:
-            gd.disable_times(info=logf)
-
+        # if args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         # 用训练好的SFT模型初始化SFT模型
         #此处的reference是模型经过DeepSpeed封装后得到的DeepSpeedEngine对
 
-        logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_init_ref"
+        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+               f'CZ{args.critic_zero_stage}_' \
+               f'ITS{args.inference_tp_size}_' \
+               f'TGP{args.tp_gather_partition_size}_init_ref'
 
-        if args.local_rank == 0:
-            gd.enable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
 
-        self.ref = self._init_ref(
-            actor_model_name_or_path=actor_model_name_or_path)
+        self.ref = self._init_ref(actor_model_name_or_path=actor_model_name_or_path)
 
         gd.debuginfo(prj="ds_chat", info=f"Done: self.ref={self.ref}")
 
-        if args.local_rank == 0:
-            gd.disable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         self.actor_ema = None
 
         #如果开启了ema，则初始化并封装ema
         if self.args.enable_ema:
-            logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_init_ema"
+            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                   f'CZ{args.critic_zero_stage}_' \
+                   f'ITS{args.inference_tp_size}_' \
+                   f'TGP{args.tp_gather_partition_size}_init_ema'
 
-            if args.local_rank == 0:
-                gd.enable_times(info=logf)
+            # if args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+            gd.emb_start(info=logf)
 
             #此处的ema是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
             self.actor_ema = self._init_ema(
@@ -136,13 +151,18 @@ class DeepSpeedRLHFEngine():
 
             gd.debuginfo(prj="ds_chat", info=f"Done: self.actor_ema={self.actor_ema}")
 
-            if args.local_rank == 0:
-                gd.disable_times(info=logf)
+            # if args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            gd.emb_end(info=logf)
 
-        logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_init_critic"
+        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+               f'CZ{args.critic_zero_stage}_' \
+               f'ITS{args.inference_tp_size}_' \
+               f'TGP{args.tp_gather_partition_size}_init_critic'
 
-        if args.local_rank == 0:
-            gd.enable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
 
         # 用训练好的RW初始化Critic模型
         # 此处的critic是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
@@ -151,14 +171,18 @@ class DeepSpeedRLHFEngine():
 
         gd.debuginfo(prj="ds_chat", info=f"Done: self.critic={self.critic}")
 
-        if args.local_rank == 0:
-            gd.disable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
+        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+               f'CZ{args.critic_zero_stage}_' \
+               f'ITS{args.inference_tp_size}_' \
+               f'TGP{args.tp_gather_partition_size}_init_reward'
 
-        logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_init_reward"
-
-        if args.local_rank == 0:
-            gd.enable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
 
         # 用训练好的RW初始化reward模型
         # 此处的reward是模型经过DeepSpeed封装后得到的DeepSpeedEngine对象
@@ -167,19 +191,25 @@ class DeepSpeedRLHFEngine():
 
         gd.debuginfo(prj="ds_chat", info=f"Done: self.reward={self.reward}")
 
-        if args.local_rank == 0:
-            gd.disable_times(info=logf)
+        # if args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         if self.args.critic_gradient_checkpointing:
-            logf = f"ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_critic_gradient_checkpointing"
+            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                   f'CZ{args.critic_zero_stage}_' \
+                   f'ITS{args.inference_tp_size}_' \
+                   f'TGP{args.tp_gather_partition_size}_critic_gradient_checkpointing'
 
-            if args.local_rank == 0:
-                gd.enable_times(info=logf)
+            # if args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+            gd.emb_start(info=logf)
 
             self.critic.gradient_checkpointing_enable()
 
-            if args.local_rank == 0:
-                gd.disable_times(info=logf)
+            # if args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            gd.emb_end(info=logf)
 
     # actor模型
     def _init_actor(self, actor_model_name_or_path):
@@ -300,18 +330,27 @@ class DeepSpeedRLHFEngine():
         # 确切地说还是个DeepSpeedHybridEngine实例，集成有HybridEngine的优化
 
         #TODO: move enable_hybrid_engine and pin_parameters to ds_config
-        logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_actor_engine-deepspeed.initialize'
-        gd.enable_times(info=logf)
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}' \
+               f'_actor_engine-deepspeed.initialize'
+
+        # gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
         actor_engine, *_ = deepspeed.initialize(model=actor_model, # 需要训练的模型
                                                 optimizer=optim, # 优化器
                                                 lr_scheduler=lr_scheduler, # 学习率调度器
                                                 config=ds_config # 设置DeepSpeed引擎的配置
                                                 )
+
         gd.debuginfo(prj="ds_chat", info=f"optim_params is:,  {optim_params}")
         gd.debuginfo(prj="ds_chat", info=f"optim is:,  {optim}")
         gd.debuginfo(prj="ds_chat", info=f"lr_scheduler is:,  {lr_scheduler}")
         gd.debuginfo(prj="ds_chat", info=f"actor_engine is:,  {actor_engine}")
-        gd.disable_times(info=logf)
+        # gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         log_init("Actor", stime=stime)
 
@@ -370,12 +409,21 @@ class DeepSpeedRLHFEngine():
 									
         # DeepSpeed初始化
         # 参考模型不需要优化器和学习率调度器，所以在初始化DeepSpeed时只需要传入模型和配置即可。
-        logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_ref_model-deepspeed.initialize'
-        gd.enable_times(info=logf)
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}' \
+               f'_ref_model-deepspeed.initialize'
+
+        # gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
         ref_engine, *_ = deepspeed.initialize(model=ref_model,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ref_engine is:,  {ref_engine}")
-        gd.disable_times(info=logf)
+
+        # gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         log_init("Ref", stime=stime)
         return ref_engine
@@ -427,12 +475,21 @@ class DeepSpeedRLHFEngine():
                 self.args.actor_lora_dim)
             gd.debuginfo(prj="ds_chat", info=f"s3 convert_linear_layer_to_lora actor_model_ema:,  {actor_model_ema}")
 
-        logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_actor_model_ema-deepspeed.initialize'
-        gd.enable_times(info=logf)
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}_' \
+               f'actor_model_ema-deepspeed.initialize'
+
+        # gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
         ema_engine, *_ = deepspeed.initialize(model=actor_model_ema,
                                               config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"ema_engine is:,  {ema_engine}")
-        gd.disable_times(info=logf)
+
+        # gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         log_init("EMA", stime=stime)
 
@@ -525,14 +582,23 @@ class DeepSpeedRLHFEngine():
         )
 
         # DeepSpeed Engine
-        logf = f'ph3_actor_z{self.args.actor_zero_stage}_critic_z{self.args.critic_zero_stage}_critic_engine_deepspeed.initialize'
-        gd.enable_times(info=logf)
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}_' \
+               f'critic_engine_deepspeed.initialize'
+
+        # gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
         critic_engine, *_ = deepspeed.initialize(model=critic_model,
                                                  optimizer=optim,
                                                  lr_scheduler=lr_scheduler,
                                                  config=ds_config)
         gd.debuginfo(prj="ds_chat", info=f"s3 critic_engine:,  {critic_engine}")
-        gd.disable_times(info=logf)
+
+        # gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         log_init("Critic", stime=stime)
         return critic_engine
@@ -582,12 +648,19 @@ class DeepSpeedRLHFEngine():
                          num_gpus_per_node=2,
                          num_nodes=1)
 
-        logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_reward_engine_deepspeed.initialize'
-        gd.enable_times(info=logf)
-        reward_engine, *_ = deepspeed.initialize(model=reward_model,
-                                                 config=ds_config)
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'reward_engine_deepspeed.initialize'
+
+        # gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
+        reward_engine, *_ = deepspeed.initialize(model=reward_model, config=ds_config)
+
         gd.debuginfo(prj="ds_chat", info=f"s3 reward_engine:  {reward_engine}")
-        gd.disable_times(info=logf)
+
+        # gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         log_init("Reward", stime=stime)
         return reward_engine

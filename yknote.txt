@@ -102,3 +102,10 @@ __ph3_actor_z0_critic_z0_reward_engine_deepspeed.initialize__.log
 012差别不大，3差别大
 
 
+__ph2_zX_evaluation_reward-A__.log
+
+
+
+
+
+

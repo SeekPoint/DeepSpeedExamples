@@ -14,6 +14,8 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
 from torch.utils.data.distributed import DistributedSampler
 
+pid = os.getpid()
+
 sys.path.append(
     os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir)))
 from utils.utils import mem_estimate_log
@@ -333,14 +335,16 @@ def main():
         # 初始化分布式训练环境
 
         #if dist.get_rank() == 0: # 还没初始化，不能使用dist！！
-        if args.local_rank == 0:
-            logf = f'ph1_z{args.zero_stage}_deepspeed.init_distributed'
-            gd.enable(info=logf)
+        #if args.local_rank == 0:
+        logf = f'ph1_z{args.zero_stage}_deepspeed.init_distributed'
+        # gd.enable(info=logf)
+        gd.emb_start(info=logf)
         #日志分析，主要就是初始化后端，目前用的是torch的
 
         deepspeed.init_distributed()
-        if dist.get_rank() == 0: # dist初始化好了
-            gd.disable(info=logf)
+        #if dist.get_rank() == 0: # dist初始化好了
+        # gd.disable(info=logf)
+        gd.emb_end(info=logf)
 
     # 获取当前运行设备在分布式训练环境中的全局rank
     args.global_rank = torch.distributed.get_rank()
@@ -418,10 +422,10 @@ def main():
         '''
         # 将模型中指定的线性层转换为LoRA层
         # lora_module_name指定了要转换的模块的名称 , lora_dim指定了LoRA的维度
-        if dist.get_rank() == 0:
-            logf = f'ph1_z{args.zero_stage}_convert_linear_layer_to_lora'
-            gd.enable(info=logf)
-            pass
+        # if dist.get_rank() == 0:
+        logf = f'ph1_z{args.zero_stage}_convert_linear_layer_to_lora'
+        # gd.enable(info=logf)
+        gd.emb_start(info=logf)
 
         model = convert_linear_layer_to_lora(model,
                                              args.lora_module_name,
@@ -429,9 +433,9 @@ def main():
 
         gd.debuginfo(prj="ds_chat", info = f"s1 convert_linear_layer_to_lora={model}")
 
-        if dist.get_rank() == 0:
-            gd.disable(info=logf)
-            pass
+        # if dist.get_rank() == 0:
+        # gd.disable(info=logf)
+        gd.emb_end(info=logf)
 
         if args.zero_stage == 2 or args.zero_stage == 3:
             mem_estimate_log(args=args, exstr='-ph1-1', model = model, num_gpus_per_node=2, num_nodes=1)
@@ -530,17 +534,20 @@ def main():
     # AdamOptimizer : <class 'deepspeed.ops.adam.fused_adam.FusedAdam'>
 
     # 创建优化器
-    if dist.get_rank() == 0:
-        logf = f'ph1_z{args.zero_stage}_AdamOptimizer_init'
-        gd.enable(info=logf)
+    # if dist.get_rank() == 0:
+    logf = f'ph1_z{args.zero_stage}_AdamOptimizer_init'
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
+
     # 日志分析，这里会触发c++的编译op过程！！是否重新编译是nvcc编译器决定的，和ds无关！
     # 触发 FusedAdamBuilder 构建 ->jit_load
     optimizer = AdamOptimizer(optimizer_grouped_parameters,
                               lr=args.learning_rate,
                               betas=(0.9, 0.95))
     gd.debuginfo(prj="ds_chat", info=f"optimizer={optimizer}")
-    if dist.get_rank() == 0:
-        gd.disable(info=logf)
+    # if dist.get_rank() == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
 
     # 计算每个epoch需要进行的更新步数，等于训练数据集大小除以梯度累积步数（对结果向上取整）
     num_update_steps_per_epoch = math.ceil(
@@ -560,13 +567,22 @@ def main():
     # lr_scheduler : <torch.optim.lr_scheduler.LambdaLR object at 0x7f469aea9fd0>
 
     # 第5步：deepspeed初始化，创建模型、优化器、学习率调度器
-    if args.local_rank == 0:
-        logf = f'ph1_z{args.zero_stage}_deepspeed.initialize'
-        gd.enable(info=logf)
+
+    # logf 记录拆分更细 目的在于更加有效的diff对比
+    #if args.local_rank == 0:
+    logf = f'ph1_z{args.zero_stage}_deepspeed.initialize_input'
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
 
     gd.debuginfo(prj="ds_chat", info=f"model in={model}")
     gd.debuginfo(prj="ds_chat", info=f"optimizer in={optimizer}")
-    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler in={lr_scheduler}")
+    # gd.debuginfo(prj="ds_chat", info=f"lr_scheduler in={lr_scheduler}")
+    # lr_scheduler in=<torch.optim.lr_scheduler.LambdaLR object at 0x7ff60407d580>
+    #if args.local_rank == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
+
+    # #触发 deepspeed/__init__.py f# initialize， 在内部进行 分段记录logf
     model, optimizer, tmpdumb, lr_scheduler = deepspeed.initialize(
         model=model,
         optimizer=optimizer,
@@ -574,13 +590,21 @@ def main():
         config=ds_config, # DeepSpeed的配置信息
         lr_scheduler=lr_scheduler, # 学习率调度器
         dist_init_required=True)  # 需要进行分布式训练的初始化
+
+    #if args.local_rank == 0:
+    logf = f'ph1_z{args.zero_stage}_deepspeed.initialize_output'
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
+
     gd.debuginfo(prj="ds_chat", info=f"tmpdumb out deepspeed.initialize ={tmpdumb}")
     gd.debuginfo(prj="ds_chat", info=f"model out={model}")
     gd.debuginfo(prj="ds_chat", info=f"optimizer out={optimizer}")
-    gd.debuginfo(prj="ds_chat", info=f"lr_scheduler out={lr_scheduler}")
+    # gd.debuginfo(prj="ds_chat", info=f"lr_scheduler out={lr_scheduler}")
+    # I# lr_scheduler out=<torch.optim.lr_scheduler.LambdaLR object at 0x7ff60407d580>  和上面in的完全一样！没有改变
 
-    if args.local_rank == 0:
-        gd.disable(info=logf)
+    #if args.local_rank == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
 
     # 如果启用了梯度检查点，那么在模型中也启用梯度检查点。
     if args.gradient_checkpointing:
@@ -635,7 +659,7 @@ def main():
                    其中每个部分的shape均为(bs, max_seq_len)
             """
             # 将batch数据移到对应的设备上。
-            batch = to_device(batch, device)  
+            batch = to_device(batch, device)
 			
             # 在此上下文管理器中，不计算梯度，这样可以节省存储和计算资源。
             with torch.no_grad():  
@@ -704,33 +728,52 @@ def main():
             args.global_rank)
 
         # 将模型设置为训练模式。
+        gd.debuginfo(prj='ds_chat', info=f'Before ================')
         model.train()
+        gd.debuginfo(prj='ds_chat', info=f'After ================')
 
         # 对于训练数据集中的每一个batch。
         for step, batch in enumerate(train_dataloader):
-            logf = f'ph1_z{args.zero_stage}_train one batch'
-            if args.local_rank == 0:
-                gd.enable_times(info=logf)
             # 将batch数据移到对应的设备上。
-            batch = to_device(batch, device)  
+            batch = to_device(batch, device)  # torch函数
+
+            logf = f'ph1_z{args.zero_stage}_forward_epoch{epoch:02}_step{step:04}'
+            # if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
 
             # 将batch数据输入模型，进行前向计算；use_cache 是否使用缓存来加速计算
-            outputs = model(**batch, use_cache=False)  
-			
+            outputs = model(**batch, use_cache=False)  # 触发引擎engine.py=def forward(self
+            gd.debuginfo(prj='ds_chat', info=f'++forward_epoch{epoch:02}_step{step:04}_sep1++++++++')
+
             # 取出模型的输出中的loss。
             loss = outputs.loss
 
-            if args.print_loss:
-                print(f"Epoch: {epoch}, Step: {step}, Rank: {torch.distributed.get_rank()}, loss = {loss}")
-			
+            #if args.print_loss:
+            gd.debuginfo(prj='ds_chat', info=f"+++++Epoch: {epoch}, Step: {step}, "
+                                             f"Rank: {torch.distributed.get_rank()}, "
+                                             f"loss = {loss}")
+
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
+
+            logf = f'ph1_z{args.zero_stage}_backward_epoch{epoch:02}_step{step:04}'
+            # if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
+
             # 调用模型的backward方法进行反向传播，计算损失函数关于模型参数的梯度。
-            model.backward(loss)  
+            model.backward(loss) #触发引擎engine.py的backward=def backward(self
+
+            gd.debuginfo(prj='ds_chat', info=f'+++forward_epoch{epoch:02}_step{step:04}_sep2++++++++')
 
             # 更新模型的参数。
-            model.step()
+            model.step() #触发引擎engine.py的backward=def step(self
 
-            if args.local_rank == 0:
-                gd.disable_times(info=logf)
+            # if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
         # Evaluate perplexity on the validation set.
         # 在每个epoch结束后，在主节点打印开始评估的信息。
@@ -767,18 +810,22 @@ def main():
         # ZeRO-3是一种内存优化策略，可以大大减少模型训练中所需的GPU内存，但同时也意味着模型的各部分在不同的GPU之间分布。
         if args.zero_stage == 3:
             logf = f'ph1_z{args.zero_stage}_save_zero_three_model'
-            if args.local_rank == 0:
-                gd.enable(info=logf)
+            # if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
+
             # For zero stage 3, each gpu only has a part of the model, so we need a special save function
             # 使用特殊的保存函数保存模型。在Zero的第三阶段，每个GPU只有模型的一部分，所以需要特殊的保存函数。
             save_zero_three_model(model,
                                   args.global_rank,
                                   args.output_dir,
                                   zero_stage=args.zero_stage)
-            if args.local_rank == 0:
-                gd.disable(info=logf)
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
 if __name__ == "__main__":
+    gd.prjenable(prj='')
     main()
 
 

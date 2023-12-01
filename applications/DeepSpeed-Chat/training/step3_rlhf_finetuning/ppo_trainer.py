@@ -6,6 +6,8 @@ import torch
 import torch.nn.functional as F
 import sys
 import os
+pid = os.getpid()
+
 import deepspeed
 # ZeroParamStatus : 用于在DeepSpeed的Zero Redundancy Optimizer（零冗余优化器）中跟踪参数状态的工具
 from deepspeed.runtime.zero.partition_parameters import ZeroParamStatus
@@ -247,7 +249,7 @@ class DeepSpeedPPOTrainer():
         with torch.no_grad():
             # 调用actor，输入input_ids和attention_mask进行生成
 			# 生成序列，每个元素都是对应单词的token ID
-            seq = self.actor_model.module.generate(
+            seq = self.actor_model.module.generate(  # 触发 hybrid_engine.generate
                 prompts,
                 attention_mask=mask,
                 max_length=max_min_length,  # 生成的答案序列长度会和问题序列长度一致
@@ -283,24 +285,6 @@ class DeepSpeedPPOTrainer():
 
         gd.debuginfo(prj="ds_chat", info=f"T:ans--2={infoTensor(ans)}")  #only ph3 x1
         gd.debuginfo(prj="ds_chat", info=f"T:valid_ans_len--2={infoTensor(valid_ans_len)}") #only ph3 x1
-        '''
-        T seq--2  : _Size([4, 512])_int64_cuda:0_   
-        T ans--2 : _Size([4, 256])_int64_cuda:0_
-        T valid_ans_len--2 : _Size([4])_int64_cuda:0_
-        '''
-        '''
-        seq--2=tensor([[    2,     2,     2,  ...,  1079,     9,    39],
-                [    2,     2,     2,  ...,    47,  2435,   402],
-                [    2,   236,     7,  ...,   860,   103, 22810],
-                [    2,     2,     2,  ...,  1911,     6,     8]], device='cuda:1')
-        batch_size--2=4
-        prompt_length--2=256
-        ans--2=tensor([[ 370,  197,   28,  ..., 4835,  615,  514],
-                [8976,    6,   14,  ..., 4946,    4, 1437],
-                [  38,  206,   24,  ...,   38,  206,   24],
-                [ 280,   17,   27,  ...,   17,   27,  119]], device='cuda:0')
-        valid_ans_len--2=tensor([256, 256, 256, 256], device='cuda:0')
-        '''
 
         if self.args.print_answers:
             print(
@@ -321,7 +305,7 @@ class DeepSpeedPPOTrainer():
             # else: # 对于长度大于1的答案，将其添加到out_seq列表中。
             
             out_seq.append(seq[i:i + 1])
-	        # 将out_seq列表中的所有答案序列在批处理维度（也就是第0维）上连接起来，形成一个新的张量。
+            # 将out_seq列表中的所有答案序列在批处理维度（也就是第0维）上连接起来，形成一个新的张量。
             # 这个新的张量out_seq就是这个函数的返回值，它包含了所有有效的答案序列。
 
         gd.debuginfo(prj="ds_chat", info=f"len of out_seq--H={len(out_seq)}") #len of out_seq--H
@@ -371,6 +355,16 @@ class DeepSpeedPPOTrainer():
         :param mask: prompt attention mask, (bs, max_prompt_len)
         :return:
         '''
+
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_TGP{self.args.tp_gather_partition_size}_' \
+               f'trainer.generate_experience-self.eval_step={step:04}'
+
+        # if self.args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
         gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
 
         #将actor、reference、critic、reward转换为eval模式
@@ -378,6 +372,10 @@ class DeepSpeedPPOTrainer():
         # 开启eval模式  
 		# 将模型切换到评估模式
         self.eval()
+
+        # if self.args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         '''
         seq.shape: (seq_bs, max_seq_len)
@@ -394,22 +392,46 @@ class DeepSpeedPPOTrainer():
         # 调用model.generate()生成序列，由actor模型生成。
         # 输入instruct prompt，由Actor生成seq，上图中红色步骤（1），seq由instruct和response组成
 		# 生成序列
+
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}_self._generate_sequence_step={step:04}'
+
+        # if self.args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
+
+        gd.debuginfo(prj="ds_chat", info=f"C:{self.__class__.__name__}")
+
         seq = self._generate_sequence(prompts, mask, step)
 
         # gd.debuginfo(prj="ds_chat", info=f"seq-1={seq}")
         gd.debuginfo(prj="ds_chat", info=f"T:seq-1={infoTensor(seq)}") #only ph3 x1
         # T ans-1 : _Size([4, 512])_int64_cuda:1_
-        ''' 
-        seq-1 : tensor([[    2,     2,     2,  ...,    17,    46,     6],
-                [    2,     2,     2,  ..., 33837,    35,   653],
-                [    2,     2,     2,  ...,    13,    63, 21968],
-                [    2,     2,     2,  ...,    17,    27,   119]], device='cuda:0')
-        '''
+
+        # if self.args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
 
         #将actor、critic转换为train模式，因为后续两者仍需要进行训练
         # 恢复训练模型   
 		# 将模型切换回训练模式
+
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}' \
+               f'_generate_experience-self.train_step={step:04}'
+
+        # if self.args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+
         self.train()
+
+        # if self.args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
         
         # 获取填充符的ID
         pad_token_id = self.tokenizer.pad_token_id
@@ -417,17 +439,11 @@ class DeepSpeedPPOTrainer():
         # 创建新的注意力掩码，如果seq中的元素是填充符，那么掩码中的相应位置就是0，否则就是1。 
         attention_mask = seq.not_equal(pad_token_id).long()  #ph3+zero3出错！seq可能为空！
         
-        gd.debuginfo(prj="ds_chat", info=f"pad_token_id-1={pad_token_id}")
+        gd.debuginfo(prj="ds_chat", info=f"pad_token_id-1={pad_token_id}") #pad_token_id-1 : 2
         # gd.debuginfo(prj="ds_chat", info=f"attention_mask-1={attention_mask}")
         gd.debuginfo(prj="ds_chat", info=f"T:attention_mask={infoTensor(attention_mask)}") #only ph3 x1
         #T attention_mask : _Size([4, 512])_int64_cuda:1_
-        '''
-        pad_token_id-1 : 2
-        attention_mask-1 : tensor([[0, 0, 0,  ..., 1, 1, 1],
-                [0, 0, 0,  ..., 1, 1, 1],
-                [0, 0, 0,  ..., 1, 1, 1],
-                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:0')
-        '''
+
 
         '''
         actor model是我们想通过强化学习微调的大模型，但是强化学习过程很容易把模型训练“坏”，
@@ -452,16 +468,47 @@ class DeepSpeedPPOTrainer():
             # 将seq喂入actor中得到action_logits，上图中棕色步骤（2）
 			# 使用当前的actor model对序列进行预测，并得到预测的输出。
             # actor model是一个策略网络，用于指导代理做出行动。
+
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+                   f'CZ{self.args.critic_zero_stage}_' \
+                   f'ITS{self.args.inference_tp_size}_' \
+                   f'TGP{self.args.tp_gather_partition_size}_' \
+                   f'generate_experience-self.actor_model'
+
+            # if self.args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+            gd.emb_start(info=logf)
+
             output = self.actor_model(seq, attention_mask=attention_mask)
+
+            gd.debuginfo(prj="ds_chat", info=f"output={output}")
+
+            # if self.args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            gd.emb_end(info=logf)
 
             # 将seq喂入SFT中得到sft_logits，上图中黑色步骤（5）
 			# 使用ref model对序列进行预测，并得到预测的输出。
             # ref model是训练过程中用来比较的基准，它的参数在训练过程中是不变的。
+
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+                   f'CZ{self.args.critic_zero_stage}_' \
+                   f'ITS{self.args.inference_tp_size}_' \
+                   f'TGP{self.args.tp_gather_partition_size}_' \
+                   f'generate_experience-self.ref_model'
+
+            # if self.args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+
+            gd.emb_start(info=logf)
+
             output_ref = self.ref_model(seq, attention_mask=attention_mask)
 
-            #巨大
-            gd.debuginfo(prj="ds_chat", info=f"output-1={output}")
-            gd.debuginfo(prj="ds_chat", info=f"output_ref-1={output_ref}")
+            gd.debuginfo(prj="ds_chat", info=f"output_ref={output_ref}")
+
+            # if self.args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            gd.emb_end(info=logf)
 
             # 然后利用reward model和ciric model对输出的prompt+answer进行打分
             # （PPO训练时使用的奖励值并不单单是reward model的输出还要考虑kl散度，后文介绍）：
@@ -477,19 +524,30 @@ class DeepSpeedPPOTrainer():
 			# 使用reward model对序列进行评估，得到序列的奖励值。
             # reward model是用于评估每个行动的好坏的模型，它输出的奖励值将用于指导模型的优化。
             # detach()是将计算的结果与当前的计算图分离，防止在后续的计算中影响梯度的计算。
+
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+                   f'CZ{self.args.critic_zero_stage}_' \
+                   f'ITS{self.args.inference_tp_size}_' \
+                   f'TGP{self.args.tp_gather_partition_size}_' \
+                   f'self.reward_model.forward_value'
+
+            # if self.args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+
+            gd.emb_start(info=logf)
+
             reward_score = self.reward_model.forward_value(
                 seq, 
 				attention_mask,
                 prompt_length=self.prompt_length)['chosen_end_scores'].detach()
-				
-            #巨大
-            gd.debuginfo(prj="ds_chat", info=f"reward_score-1: {reward_score}")
+
+            # gd.debuginfo(prj="ds_chat", info=f"reward_score-1: {reward_score}")
             gd.debuginfo(prj="ds_chat", info=f"T:reward_score-1={infoTensor(reward_score)}")
             # #only ph3 x1 T T reward_score-1 : _Size([4])_float16_cuda:0_
-            '''
-            reward_score-1: tensor([ 0.5713,  0.9023, -0.4629,  0.4783], device='cuda:0',
-                   dtype=torch.float16)
-            '''
+
+            # if self.args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            gd.emb_end(info=logf)
 
             # critic model返回的数据维度为(B,L)，L维度上第i个位置代表从i位置到最后的累积奖励
             # 舍去最后一个位置是因为句子“终止符”无意义
@@ -500,47 +558,51 @@ class DeepSpeedPPOTrainer():
 			# 使用critic model对序列进行评估，得到序列的价值估计。
             # critic model是用于评估状态的价值模型，它输出的价值估计将用于指导模型的优化。
             # [:, :-1]是取除了最后一列之外的所有列，这是因为在计算回报时，通常会忽略最后一个状态的价值估计。
+
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+                   f'CZ{self.args.critic_zero_stage}_' \
+                   f'ITS{self.args.inference_tp_size}_' \
+                   f'TGP{self.args.tp_gather_partition_size}_self.critic_model.forward_value'
+
+            # if self.args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+            gd.emb_start(info=logf)
+
             values = self.critic_model.forward_value(
                 seq, attention_mask, return_value_only=True).detach()[:, :-1]
 
-            # gd.debuginfo(prj="ds_chat", info=f"values-1={values}")
-            gd.debuginfo(prj="ds_chat", info=f"T:values-1={infoTensor(values)}")
-            # #T values-1 : _Size([4, 511])_float16_cuda:1_  only ph3 x1
+            # gd.debuginfo(prj="ds_chat", info=f"values={values}")
+            gd.debuginfo(prj="ds_chat", info=f"T:values={infoTensor(values)}")
 
         '''知识补充:
         reward_model 与 critic_model 的异同，查看思维导图。
         '''
+
+        logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+               f'CZ{self.args.critic_zero_stage}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}_generate_experience_ends'
+
+        # if self.args.local_rank == 0:
+        #     gd.enable_times(info=logf)
+        gd.emb_start(info=logf)
 		
-		# logits是actor_model的输出，代表了在每个可能的输出位置，每种可能的词或字符的原始未归一化的分数。
+        # logits是actor_model的输出，代表了在每个可能的输出位置，每种可能的词或字符的原始未归一化的分数。
         # (seq_bs, max_seq_len, vocab_size)
         logits = output.logits
-        # gd.debuginfo(prj="ds_chat", info=f"logits-1={logits}")
+        # gd.debuginfo(prj="ds_chat", info=f"logits={logits}")
 
         # logits_ref是ref_model的输出，代表了在每个可能的输出位置，每种可能的词或字符的原始未归一化的分数。
         # (seq_bs, max_seq_len, vocab_size)
         logits_ref = output_ref.logits
-        # gd.debuginfo(prj="ds_chat", info=f"logits_ref-1={logits_ref}")
+        # gd.debuginfo(prj="ds_chat", info=f"logits_ref={logits_ref}")
 
 
-        gd.debuginfo(prj="ds_chat", info=f"T:logits-1={infoTensor(logits)}")  #only ph3 x1
-        gd.debuginfo(prj="ds_chat", info=f"T:logits_ref-1={infoTensor(logits_ref)}") #only ph3 x1
-        # T logits-1 : _Size([4, 512, 50272])_float16_cuda:1_
-        # T logits_ref-1 : _Size([4, 512, 50272])_float16_cuda:1_
-        '''
-        values-1 : tensor([[-0.4238, -0.4238, -0.4238,  ..., -0.6475, -0.5742, -0.3826],
-                ...
-                [ 0.7188,  0.7188,  0.7188,  ...,  0.5762,  0.3242,  0.1738]],
-               device='cuda:1', dtype=torch.float16)
-        logits-1 : tensor([[[ -7.1914,  -7.1875,   2.5566,  ...,  -7.1758,  -7.1719,  -7.1406],
-                ...
-                 [ -6.6836,  -6.6602,   5.5117,  ...,  -6.5547,  -6.6680,  -6.6484]]],
-               device='cuda:1', dtype=torch.float16)
-        logits_ref-1 : tensor([[[ -7.1914,  -7.1875,   2.5566,  ...,  -7.1758,  -7.1719,  -7.1406],
-                ...
-                 [ -6.6836,  -6.6602,   5.5117,  ...,  -6.5547,  -6.6680,  -6.6484]]],
-               device='cuda:1', dtype=torch.float16)
-        
-        '''
+        gd.debuginfo(prj="ds_chat", info=f"T:logits={infoTensor(logits)}")  #only ph3 x1
+        gd.debuginfo(prj="ds_chat", info=f"T:logits_ref={infoTensor(logits_ref)}") #only ph3 x1
+        # T: logits: _Size([4, 512, 50272])_float16_cuda:1_
+        # T: logits_ref: _Size([4, 512, 50272])_float16_cuda:1_
+
 
         # 返回的dict是“进行PPO所需要使用的一组数据”
         # prompts.shape: (bs, max_prompt_len)
@@ -555,7 +617,7 @@ class DeepSpeedPPOTrainer():
         """gather_log_probs()更具体的细节可见后续详解。"""
         # 获得生成的文本seq、以及对应的概率、状态价值和奖励等信息
         # 获得经验数据
-        return {
+        tmp = {
             'prompts': prompts,
             # 分别得到两个模型在真实单词上的预测概率
             'logprobs': gather_log_probs(logits[:, :-1, :], seq[:, 1:]),
@@ -565,6 +627,21 @@ class DeepSpeedPPOTrainer():
             'input_ids': seq, # 生成的答案序列
             "attention_mask": attention_mask # 掩码，标识出了在答案序列中哪些是有效的token，哪些是填充的token。
         }
+
+        # gd.debuginfo(prj="ds_chat", info=f"return tmp={tmp}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['prompts']:, {infoTensor(tmp['prompts'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['logprobs']:, {infoTensor(tmp['logprobs'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['ref_logprobs']:, {infoTensor(tmp['ref_logprobs'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['value']:, {infoTensor(tmp['value'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['rewards']:, {infoTensor(tmp['rewards'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['input_ids']:, {infoTensor(tmp['input_ids'])}")
+        gd.debuginfo(prj="ds_chat", info=f"T: tmp['attention_mask']:, {infoTensor(tmp['attention_mask'])}")
+
+        # if self.args.local_rank == 0:
+        #     gd.disable_times(info=logf)
+        gd.emb_end(info=logf)
+
+        return tmp
 
     ## action_mask = attention_mask[:, 1:]
     ## reward_score shape = [bs]
@@ -766,7 +843,7 @@ class DeepSpeedPPOTrainer():
         # gd.debuginfo(prj="ds_chat", info=f"values={values}")
         # gd.debuginfo(prj="ds_chat", info=f"attention_mask={attention_mask}")
         # gd.debuginfo(prj="ds_chat", info=f"seq={seq}")
-        # gd.debuginfo(prj="ds_chat", info=f"start={start}")
+        # gd.debuginfo(prj="ds_chat", info=f"start={start}") start=255
         # gd.debuginfo(prj="ds_chat", info=f"action_mask={action_mask}")
 
         gd.debuginfo(prj="ds_chat", info=f"T:prompts: {infoTensor(prompts)}")
@@ -786,38 +863,6 @@ class DeepSpeedPPOTrainer():
         T attention_mask: _Size([4, 512])_int64_cuda:0_
         T seq: _Size([4, 512])_int64_cuda:0_
         T action_mask: _Size([4, 511])_int64_cuda:0_
-        '''
-
-        '''
-        prompts=tensor([[    2,     2,     2,  ..., 50118, 46184,    35],
-                ...
-                [    2,     2,     2,  ..., 50118, 46184,    35]], device='cuda:1')
-        log_probs=tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.2253e-02,
-                 -1.6815e-02, -3.3474e-03],
-                ...
-                [-2.0078e+00, -2.0078e+00, -2.0078e+00,  ..., -1.9516e-02,
-                 -2.6443e-02, -6.1607e-03]], device='cuda:1', dtype=torch.float16)
-        ref_log_probs=tensor([[-5.8633e+00, -5.8633e+00, -5.8633e+00,  ..., -1.3519e-02,
-                 -1.8341e-02, -3.7823e-03],
-                ...
-                [-2.0391e+00, -2.0391e+00, -2.0391e+00,  ..., -2.1149e-02,
-                 -2.8412e-02, -6.6376e-03]], device='cuda:1', dtype=torch.float16)
-        reward_score=tensor([-0.4282,  1.4141, -0.3965,  1.2178], device='cuda:1',
-               dtype=torch.float16)
-        values=tensor([[-0.4321, -0.4321, -0.4321,  ..., -0.4736, -0.4829, -0.3918],
-                ...
-                [ 1.5361,  1.5361,  1.5361,  ...,  1.2910,  1.3447,  1.2559]],
-               device='cuda:1', dtype=torch.float16)
-        attention_mask=tensor([[0, 0, 0,  ..., 1, 1, 1],
-                ...
-                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')
-        seq=tensor([[   2,    2,    2,  ...,   47,   64,   67],
-                ...
-                [   2,    2,    2,  ...,    7, 7142,   24]], device='cuda:1')
-        start=255
-        action_mask=tensor([[0, 0, 0,  ..., 1, 1, 1],
-                ...
-                [0, 0, 0,  ..., 1, 1, 1]], device='cuda:1')
         '''
 
         # 经验数据中的价值估计为“旧”价值估计
@@ -1031,8 +1076,13 @@ class DeepSpeedPPOTrainer():
         self.critic_model.backward(critic_loss)
 
         if self.args.align_overflow:
-            logf = f'ph3_AZ{self.args.actor_zero_stage}_CZ{self.args.critic_zero_stage}_actor_model.optimizer.check_overflow'
-            gd.enable(info=logf)
+            logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
+                   f'CZ{self.args.critic_zero_stage}_' \
+                   f'actor_model.optimizer.check_overflow'
+
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
+
             actor_overflow = self.actor_model.optimizer.check_overflow(
                 external=True)
             critic_overflow = self.critic_model.optimizer.check_overflow(
@@ -1040,7 +1090,8 @@ class DeepSpeedPPOTrainer():
 
             gd.debuginfo(prj="ds_chat", info=f"actor_overflow={actor_overflow}")
             gd.debuginfo(prj="ds_chat", info=f"critic_overflow={critic_overflow}")
-            gd.disable(info=logf)
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
             rank = torch.distributed.get_rank()
             if actor_overflow and not critic_overflow:

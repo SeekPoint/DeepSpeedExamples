@@ -14,6 +14,8 @@ from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_
 from deepspeed.runtime.zero.stage_1_and_2 import estimate_zero2_model_states_mem_needs_all_live
 from pydebug import gd, infoTensor
 
+pid = os.getpid()
+
 # 在rank0也就是master rank打印信息，防止每个机器或GPU都打印消息造成大量重复信息
 def print_rank_0(msg, rank=0):
     '''用于在多机或多进程分布式训练中，控制只有特定的进程(rank=0)才打印信息。
@@ -287,7 +289,8 @@ def moving_average(model, # 原模型
         # 遍历模型的每个参数及其对应的滑动平均参数
         for param, param_ema in zip(model.parameters(),
                                     model_ema.parameters()):
-            gd.debuginfo(prj="ds_chat", info=f'param={param} #### param_ema={param_ema}')
+            gd.debuginfo(prj="ds_chat", info=f'param={infoTensor(param)}')
+            gd.debuginfo(prj="ds_chat", info=f'param_ema={infoTensor(param_ema)}')
             # TODO: use prefiltering for efficiency
             # 如果使用ZeRO-3阶段，找出列表中需要从其他GPU收集的参数。否则，返回空列表。
             params_to_fetch = _z3_params_to_fetch([param, param_ema
@@ -420,12 +423,14 @@ def save_zero_three_model(model_ema, global_rank, save_dir, zero_stage=0):
         del output_state_dict
 
 def mem_estimate_log(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
-    logf = f'estimate_zeroX_model_states_mem_needs_all_live' + exstr
-    if args is not None:
-        if args.local_rank == 0:
-            logf += f'_z{args.zero_stage}'
-            gd.enable(info=logf)
 
+    logf = f'estimate_zeroX_model_states_mem_needs_all_live' + exstr
+
+    if args is not None:
+        # if args.local_rank == 0:
+        #     gd.enable(info=logf)
+        logf += f'_z{args.zero_stage}'
+        gd.emb_start(info=logf)
         gd.debuginfo(prj='ds_chat', info=f"args.zero_stage={args.zero_stage}")
 
         if args.zero_stage == 2:
@@ -435,20 +440,26 @@ def mem_estimate_log(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
             estimate_zero3_model_states_mem_needs_all_live(model,
                                                            num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
 
-        if args.local_rank == 0:
-            gd.disable(info=logf)
+        # if args.local_rank == 0:
+        #     gd.disable(info=logf)
+        gd.emb_end(info=logf)
     else:
-        gd.enable(info=logf)
+        # gd.enable(info=logf)
+        gd.emb_start(info=logf)
+
         estimate_zero2_model_states_mem_needs_all_live(model, num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
         estimate_zero3_model_states_mem_needs_all_live(model, num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
-        gd.disable(info=logf)
+        # gd.disable(info=logf)
+
+        gd.emb_end(info=logf)
 
 def mem_estimate_log_v2(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
     logf = f'estimate_zeroX_model_states_mem_needs_all_live' + exstr
     if args is not None:
         logf += f'_actor_z{args.actor_zero_stage}_critic_z{args.critic_zero_stage}'
-        if args.local_rank == 0:
-            gd.enable(info=logf)
+        # if args.local_rank == 0:
+        #     gd.enable(info=logf)
+        gd.emb_start(info=logf)
 
         gd.debuginfo(prj='ds_chat', info=f"args.actor_zero_stage={args.actor_zero_stage}")
 
@@ -458,10 +469,10 @@ def mem_estimate_log_v2(args, exstr, model, num_gpus_per_node=2, num_nodes=1):
         if args.actor_zero_stage == 3:
             estimate_zero3_model_states_mem_needs_all_live(model,
                                                            num_gpus_per_node=num_gpus_per_node, num_nodes=num_nodes)
-        if args.local_rank == 0:
-            gd.disable(info=logf)
+        # if args.local_rank == 0:
+        #     gd.disable(info=logf)
 
-
+        gd.emb_end(info=logf)
 
 '''
 v_p---1=tensor([-0.1528,  0.1247, -0.0771,  0.0391,  0.0133,  0.0101, -0.1174, -0.1603,

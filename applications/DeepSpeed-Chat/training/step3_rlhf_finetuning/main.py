@@ -23,6 +23,8 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 
+pid = os.getpid()
+
 from torch.utils.tensorboard import SummaryWriter
 
 from transformers import (
@@ -588,12 +590,20 @@ def main():
 
         # Initializes the distributed backend which will take care of sychronizing nodes/GPUs
         # 初始化分布式环境
-        if args.local_rank == 0:
-            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_deepspeed.init_distributed'
-            gd.enable(info=logf)
+        # if args.local_rank == 0:
+        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+               f'CZ{args.critic_zero_stage}_' \
+               f'ITS{args.inference_tp_size}_' \
+               f'TGP{args.tp_gather_partition_size}_' \
+               f'deepspeed.init_distributed'
+        # gd.enable(info=logf)
+        gd.emb_start(info=logf)
+
         deepspeed.init_distributed()
-        if args.local_rank == 0:
-            gd.disable(info=logf)
+
+        # if args.local_rank == 0:
+        # gd.disable(info=logf)
+        gd.emb_end(info=logf)
 
     # 在分布式训练环境中获取当前进程的全局唯一标识符，即全局进程ID。
     # torch.distributed.get_rank()返回的是一个整数，这个整数在整个分布式训练环境中是唯一的，用于表示当前进程。
@@ -657,8 +667,10 @@ def main():
     """
     # 不能嵌套！！！！
     # if args.local_rank == 0:
-    #     logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_DeepSpeedRLHFEngine_init'
+    #     logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_ITS{args.inference_tp_size}_TGP{args.tp_gather_partition_size}_DeepSpeedRLHFEngine_init'
     #     gd.enable(info=logf)
+    #TBD 最新的嵌套 gd.emb_start(info=logf)
+
     # 4.3.1初始化DeepSpeedRLHFEngine：
     # 获得一个DeepSpeedRLHFEngine对象，用于初始化一系列模型，包括Actor、Critic、Reference和Reward。
     rlhf_engine = DeepSpeedRLHFEngine(
@@ -667,6 +679,7 @@ def main():
         tokenizer=tokenizer, # 分词器
         num_total_iters=num_total_iters, # 总的训练迭代次数
         args=args)
+
     # if args.local_rank == 0:
     #     gd.disable(info=logf)
 
@@ -679,16 +692,23 @@ def main():
     # 根据是否启用了无监督训练，选择了不同的PPO训练器类进行实例化。
     # ① 启用无监督 : 针对无监督训练环境（即模型只根据自身生成的数据进行训练，而不依赖人工标注的数据）设计的PPO训练器
     # ② 没有启用无监督 : 一个更通用的PPO训练器
-    logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer_ppo_init'
-    if args.local_rank == 0:
-        gd.enable(info=logf)
+    logf = f'ph3_AZ{args.actor_zero_stage}_' \
+           f'CZ{args.critic_zero_stage}_' \
+           f'ITS{args.inference_tp_size}_' \
+           f'TGP{args.tp_gather_partition_size}_' \
+           f'trainer_ppo_init'
+
+    # if args.local_rank == 0:
+    # gd.enable(info=logf)
+    gd.emb_start(info=logf)
 
     ppo_trainer = DeepSpeedPPOTrainerUnsupervised if unsupervised_training_enabled else DeepSpeedPPOTrainer
 
     trainer = ppo_trainer(rlhf_engine, args)
 
-    if args.local_rank == 0:
-        gd.disable(info=logf)
+    # if args.local_rank == 0:
+    # gd.disable(info=logf)
+    gd.emb_end(info=logf)
 
     # gd.debuginfo(prj="ds_chat", info=f"ppo_trainer={ppo_trainer}")
     # gd.debuginfo(prj="ds_chat", info=f"trainer={trainer}")
@@ -746,17 +766,20 @@ def main():
             # out为经验数据
             # 进行采样，并加入到经验池，详见（3.1）
 
-            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.generate_experience'
-            if args.local_rank == 0:
-                gd.enable_times(info=logf)
+            # 进一步细分！！
+            # logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_ITS{args.inference_tp_size}_TGP{args.tp_gather_partition_size}_trainer.generate_experience'
+            # if args.local_rank == 0:
+            #     gd.enable_times(info=logf)
+            # gd.emb_start(info=logf)
             out = trainer.generate_experience(batch_prompt['prompt'],
                                               batch_prompt['prompt_att_mask'],
                                               step)
-            if args.local_rank == 0:
-                gd.disable_times(info=logf)
-            
-            gd.debuginfo(prj="ds_chat", info=f"out of generate_experience :, {out}")
+            # if args.local_rank == 0:
+            #     gd.disable_times(info=logf)
+            # gd.emb_end(info=logf)
 
+            # 函数内部有单次打印，这里外面是每次打印
+            # # gd.debuginfo(prj="ds_chat", info=f"out of generate_experience :, {out}")
             gd.debuginfo(prj="ds_chat", info=f"T out['prompts']:, {infoTensor(out['prompts'])}")
             gd.debuginfo(prj="ds_chat", info=f"T out['logprobs']:, {infoTensor(out['logprobs'])}")
             gd.debuginfo(prj="ds_chat", info=f"T out['ref_logprobs']:, {infoTensor(out['ref_logprobs'])}")
@@ -800,13 +823,24 @@ def main():
                 average_reward = 0
 
                 if args.actor_gradient_checkpointing:
+
                     gd.debuginfo(prj="ds_chat")
-                    logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_gradient_checkpointing_enable'
-                    if args.local_rank == 0:
-                        gd.enable_times(info=logf)
+
+                    logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                           f'CZ{args.critic_zero_stage}_' \
+                           f'ITS{args.inference_tp_size}_' \
+                           f'TGP{args.tp_gather_partition_size}_gradient_checkpointing_enable_' \
+                           f'epoch{epoch:02}_step{step:04}'
+
+                    # if args.local_rank == 0:
+                    # gd.enable_times(info=logf)
+                    gd.emb_start(info=logf)
+
                     rlhf_engine.actor.gradient_checkpointing_enable()
-                    if args.local_rank == 0:
-                        gd.disable_times(info=logf)
+
+                    # if args.local_rank == 0:
+                    # gd.disable_times(info=logf)
+                    gd.emb_end(info=logf)
 
                 '''
                 3.3.5 PPO训练过程
@@ -825,7 +859,7 @@ def main():
                     
                 '''
                 # 从经验池中进行学习Epoch轮
-                for ppo_ep in range(args.ppo_epochs):
+                for ppi, ppo_ep in enumerate(range(args.ppo_epochs)):
                     gd.debuginfo(prj="ds_chat", info = f"ppo_ep={ppo_ep}")
                     #ppo_epoch循环
                     for i, (exp_data, unsup_data) in enumerate(
@@ -859,13 +893,22 @@ def main():
 
                         #经验数据训练，返回actor_loss和critic_loss
                         # 得到actor和critic loss，详见（3.2）
-                        logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.train_rlhf'
-                        if args.local_rank == 0:
-                            gd.enable_times(info=logf)
+                        logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                               f'CZ{args.critic_zero_stage}_' \
+                               f'ITS{args.inference_tp_size}_' \
+                               f'TGP{args.tp_gather_partition_size}_' \
+                               f'trainer.train_rlhf_' \
+                               f'ppi={ppi:04}_i={i:04}'
+
+                        #if args.local_rank == 0:
+                        # gd.enable(info=logf)
+                        gd.emb_start(info=logf)
+
                         actor_loss, critic_loss = trainer.train_rlhf(exp_data)
                         gd.debuginfo(prj="ds_chat", info=f"actor_loss={actor_loss}+++critic_loss={critic_loss}")
-                        if args.local_rank == 0:
-                            gd.disable_times(info=logf)
+                        # if args.local_rank == 0:
+                        # gd.disable(info=logf)
+                        gd.emb_end(info=logf)
 
                         #累加本ppo_step的指标，后续将除以内层迭代次数计算均值
                         actor_loss_sum += actor_loss.item()
@@ -875,16 +918,23 @@ def main():
                         #无监督数据训练
                         if unsupervised_training_enabled:
                             # 返回无监督损失
-                            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_trainer.train_unsupervised'
-                            if args.local_rank == 0:
-                                gd.enable_times(info=logf)
+                            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                                   f'CZ{args.critic_zero_stage}_' \
+                                   f'ITS{args.inference_tp_size}_' \
+                                   f'TGP{args.tp_gather_partition_size}_' \
+                                   f'trainer.train_unsupervised_' \
+                                   f'ppi={ppi}_i={i}'
+                            #if args.local_rank == 0:
+                            #    gd.enable_times(info=logf)
+                            gd.emb_start(info=logf)
 
                             unsup_loss = trainer.train_unsupervised(unsup_data, args.unsup_coef)
 
                             gd.debuginfo(prj="ds_chat", info=f"unsup_loss={unsup_loss}")
 
-                            if args.local_rank == 0:
-                                gd.disable_times(info=logf)
+                            #if args.local_rank == 0:
+                            # gd.disable_times(info=logf)
+                            gd.emb_end(info=logf)
 
 
                             #累加本ppo_step的无监督损失，后续将除以内层迭代次数计算均值
@@ -896,10 +946,16 @@ def main():
 
                         """是否启用指数移动平均技术"""
                         if args.enable_ema:
-                            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_moving_average'
 
-                            if args.local_rank == 0:
-                                gd.enable_times(info=logf)
+                            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                                   f'CZ{args.critic_zero_stage}_' \
+                                   f'ITS{args.inference_tp_size}_' \
+                                   f'TGP{args.tp_gather_partition_size}_moving_average_' \
+                                   f'ppi={ppi}_i={i}'
+
+                            # if args.local_rank == 0:
+                            # gd.enable_times(info=logf)
+                            gd.emb_start(info=logf)
 
                             gd.debuginfo(prj="ds_chat", info=f"moving_average")
 
@@ -907,8 +963,9 @@ def main():
                                            rlhf_engine.actor_ema,
                                            zero_stage=args.actor_zero_stage)
 
-                            if args.local_rank == 0:
-                                gd.disable_times(info=logf)
+                            # if args.local_rank == 0:
+                            # gd.disable_times(info=logf)
+                            gd.emb_end(info=logf)
 
                     # 打乱数据供off - policy复用
                     # 每一轮结束后打乱经验池
@@ -944,16 +1001,25 @@ def main():
                     writer.flush()
 
             if args.actor_gradient_checkpointing:
-                gd.debuginfo(prj="ds_chat")
-                logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_gradient_checkpointing_disable'
 
-                if args.local_rank == 0:
-                    gd.enable_times(info=logf)
+                gd.debuginfo(prj="ds_chat")
+
+                logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                       f'CZ{args.critic_zero_stage}_' \
+                       f'ITS{args.inference_tp_size}_' \
+                       f'TGP{args.tp_gather_partition_size}_' \
+                       f'gradient_checkpointing_disable_' \
+                       f'ppi={ppi}_i={i}'
+
+                #if args.local_rank == 0:
+                # gd.enable_times(info=logf)
+                gd.emb_start(info=logf)
 
                 rlhf_engine.actor.gradient_checkpointing_disable()
 
-                if args.local_rank == 0:
-                    gd.disable_times(info=logf)
+                # if args.local_rank == 0:
+                # gd.disable_times(info=logf)
+                gd.emb_end(info=logf)
 
     if args.output_dir is not None:
         print_rank_0('saving model ...')
@@ -994,49 +1060,70 @@ def main():
         if args.actor_zero_stage == 3:
             gd.debuginfo(prj="ds_chat")
 
-            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_actor_save_zero_three_model'
+            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                   f'CZ{args.critic_zero_stage}_' \
+                   f'ITS{args.inference_tp_size}_' \
+                   f'TGP{args.tp_gather_partition_size}_' \
+                   f'actor_save_zero_three_model_' \
+                   f'ppi={ppi:04}_i={i:04}'
 
-            if args.local_rank == 0:
-                gd.enable(info=logf)
+            #if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
 
             save_zero_three_model(rlhf_engine.actor,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(args.output_dir, 'actor'),
                                   zero_stage=args.actor_zero_stage)
 
-            if args.local_rank == 0:
-                gd.disable(info=logf)
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
             if args.enable_ema:
                 gd.debuginfo(prj="ds_chat")
 
-                logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_actor_ema_save_zero_three_model'
+                logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                       f'CZ{args.critic_zero_stage}_' \
+                       f'ITS{args.inference_tp_size}_' \
+                       f'TGP{args.tp_gather_partition_size}_' \
+                       f'actor_ema_save_zero_three_model' \
+                       f'ppi={ppi:04}_i={i:04}'
 
-                if args.local_rank == 0:
-                    gd.enable(info=logf)
+                #if args.local_rank == 0:
+                # gd.enable(info=logf)
+                gd.emb_start(info=logf)
 
                 save_zero_three_model(rlhf_engine.actor_ema,
                                       global_rank=args.global_rank,
                                       save_dir=os.path.join(args.output_dir, 'actor_ema'),
                                       zero_stage=args.actor_zero_stage)
-                if args.local_rank == 0:
-                    gd.disable(info=logf)
+                #if args.local_rank == 0:
+                # gd.disable(info=logf)
+                gd.emb_end(info=logf)
 
         if args.critic_zero_stage == 3:
             gd.debuginfo(prj="ds_chat")
 
-            logf = f'ph3_AZ{args.actor_zero_stage}_CZ{args.critic_zero_stage}_critic_save_zero_three_model'
+            logf = f'ph3_AZ{args.actor_zero_stage}_' \
+                   f'CZ{args.critic_zero_stage}_' \
+                   f'ITS{args.inference_tp_size}_' \
+                   f'TGP{args.tp_gather_partition_size}_' \
+                   f'critic_save_zero_three_model' \
+                   f'ppi={ppi:04}_i={i:04}'
 
-            if args.local_rank == 0:
-                gd.enable(info=logf)
+            #if args.local_rank == 0:
+            # gd.enable(info=logf)
+            gd.emb_start(info=logf)
 
             save_zero_three_model(rlhf_engine.critic,
                                   global_rank=args.global_rank,
                                   save_dir=os.path.join(args.output_dir, 'critic'),
                                   zero_stage=args.critic_zero_stage)
 
-            if args.local_rank == 0:
-                gd.disable(info=logf)
+            #if args.local_rank == 0:
+            # gd.disable(info=logf)
+            gd.emb_end(info=logf)
 
     gd.dumpCounter()
 
