@@ -16,7 +16,7 @@ from deepspeed.pipe import PipelineModule
 from deepspeed.utils import RepeatingLoader
 
 from pydebug import gd, infoTensor
-pid = os.getpid()
+# pid = os.getpid()
 def cifar_trainset(local_rank, dl_path='/tmp/cifar10-data'):
     transform = transforms.Compose([
         transforms.Resize(256),

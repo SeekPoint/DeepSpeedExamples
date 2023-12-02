@@ -23,7 +23,7 @@ import torch
 from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.data.distributed import DistributedSampler
 
-pid = os.getpid()
+# pid = os.getpid()
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -1129,4 +1129,12 @@ def main():
 
 
 if __name__ == "__main__":
+    gd.debuginfo(prj='ds_chat', info=f'=================') # 不被计入
+
+    gd.prjenable('ALL')  #打开项目flag
+
+    gd.emb_mode(path=f'/home/amd00/yk_repo/ds/_log_tmps_/', embedded_mode=True)
+
     main()
+
+    gd.emb_mode(embedded_mode=False)

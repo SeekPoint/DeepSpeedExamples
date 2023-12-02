@@ -8,7 +8,7 @@ import os
 import math
 import sys
 
-pid = os.getpid()
+# pid = os.getpid()
 
 import torch
 from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
@@ -747,8 +747,15 @@ def main():
 
 
 if __name__ == "__main__":
-    gd.prjenable(prj='')
+    gd.debuginfo(prj='ds_chat', info=f'=================') # 不被计入
+
+    gd.prjenable('ALL')  #打开项目flag
+
+    gd.emb_mode(path=f'/home/amd00/yk_repo/ds/_log_tmps_/', embedded_mode=True)
+
     main()
+
+    gd.emb_mode(embedded_mode=False)
 
 '''
 ds_config--2 : {

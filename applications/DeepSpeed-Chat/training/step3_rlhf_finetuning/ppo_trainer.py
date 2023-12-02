@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 import sys
 import os
-pid = os.getpid()
+# pid = os.getpid()
 
 import deepspeed
 # ZeroParamStatus : 用于在DeepSpeed的Zero Redundancy Optimizer（零冗余优化器）中跟踪参数状态的工具

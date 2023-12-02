@@ -14,7 +14,7 @@ from deepspeed.runtime.zero.stage3 import estimate_zero3_model_states_mem_needs_
 from deepspeed.runtime.zero.stage_1_and_2 import estimate_zero2_model_states_mem_needs_all_live
 from pydebug import gd, infoTensor
 
-pid = os.getpid()
+# pid = os.getpid()
 
 # 在rank0也就是master rank打印信息，防止每个机器或GPU都打印消息造成大量重复信息
 def print_rank_0(msg, rank=0):
