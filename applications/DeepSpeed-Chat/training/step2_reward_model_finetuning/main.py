@@ -629,7 +629,7 @@ def main():
         #     gd.disable(info=logf)
 
         for step, batch in enumerate(train_dataloader):
-            logf = f'ph2_z{args.zero_stage}_rm_model_{pid}_epoch{epoch:02}_step{step:04}'
+            logf = f'ph2_z{args.zero_stage}_rm_model_epoch{epoch:02}_step{step:04}'
             #if args.local_rank == 0:
             # gd.enable(info=logf)
             gd.emb_start(info=logf)
@@ -641,7 +641,7 @@ def main():
 
             # 将批数据输入模型并获取输出
             outputs = rm_model(**batch, use_cache=False)
-            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep1++++++++')
+            gd.debuginfo(prj='ds_chat', info=f'+++_epoch{epoch:02}_step{step:04}_sep1++++++++')
 			
             # 从模型输出中提取损失
             loss = outputs["loss"]
@@ -665,15 +665,19 @@ def main():
             T loss--D: _Size([])_float16_cuda:1_
             '''
 
-            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep2++++++++')
+            gd.debuginfo(prj='ds_chat', info=f'+++_epoch{epoch:02}_step{step:04}_sep2++++++++')
             # 计算损失的梯度
             rm_model.backward(loss)
 
-            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep3++++++++')
+            gd.debuginfo(prj='ds_chat', info=f'+++_epoch{epoch:02}_step{step:04}_sep3++++++++')
 
             # 用计算的梯度更新模型的权重
             rm_model.step()
-            gd.debuginfo(prj='ds_chat', info=f'+++_{pid}_epoch{epoch:02}_step{step:04}_sep4++++++++')
+            gd.debuginfo(prj='ds_chat', info=f'+++_epoch{epoch:02}_step{step:04}_sep4++++++++')
+
+
+
+
 
             # 计算所有批次的平均损失
             mean_loss += loss.item()
@@ -751,7 +755,7 @@ if __name__ == "__main__":
 
     gd.prjenable('ALL')  #打开项目flag
 
-    gd.emb_mode(path=f'/home/amd00/yk_repo/ds/_log_tmps_/', embedded_mode=True)
+    gd.emb_mode(path=f'/log/_log_tmps_/', embedded_mode=True)
 
     main()
 

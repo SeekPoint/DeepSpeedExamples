@@ -1,0 +1,48 @@
+参考:
+deepspeed多机多卡趟过的那些坑
+https://zhuanlan.zhihu.com/p/668527201
+
+
+========================实际配置====================
+
+重新安装CUDA, 可以试用
+apt clean; apt update; apt purge cuda; apt purge nvidia-*; apt autoremove; apt install cuda
+ubuntu解决没有nvcc命令的错误
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
+export PATH=$PATH:/usr/local/cuda/bin
+export CUDA_HOME=/usr/local/cuda
+
+===========保证各个软件版本尽可能一致
+
+两台机器都用root登录！
+root@mz32-00
+root@mz32-01
+
+vim /etc/hosts
+添加
+192.168.1.11 MZ32-00
+192.168.1.12 MZ32-01
+======能不能用机器名称以外的名称？？？TBD
+
+Both:
+sshkey ssh-keygen -t rsa
+ssh-copy-id root@192.168.1.11
+ssh-copy-id root@192.168.1.12
+注意两台机都要执行，所以一共4次！！！！也就是机器自身也在执行自己的copy
+测试一下,比如： ssh MZ32-00，如果不需要输入密码且连成了，则配置成功（服务器需要使用相同的用户名）
+
+sudo apt-get install pdsh
+export PDSH_RCMD_TYPE=ssh
+
+
+工程下，vim hostfile
+MZ32-00 slots=2
+MZ32-01 slots=2
+
+
+一致性：
+代码一致！
+路径一致，包括代码存放位置本身，访问的数据，保存的log等等，特别注意pydebug!
+代码中不应该有机器名称相关的代码，比如路径中的特定机器名称！
+
+多机多卡可能慢很多！！！

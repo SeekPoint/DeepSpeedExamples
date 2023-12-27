@@ -72,13 +72,13 @@ class PromptRawDataset(object):
             # data_files = {"train":"train-00000-of-00001-2a1df75c6bce91ab.parquet",
             #               "test": "test-00000-of-00001-8c7c51afc6d45980.parquet"}
             #
-            # self.raw_datasets = load_dataset("parquet", data_dir ='~/hf_model/rm-static/data/',
+            # self.raw_datasets = load_dataset("parquet", data_dir ='~/s_data/hf_model/rm-static/data/',
             #                         data_files = data_files)
 
             s_data_files = {"train":"train-small.parquet",
                           "test": "test-small.parquet"}
 
-            self.raw_datasets = load_dataset("parquet", data_dir ='~/hf_model/rm-static/data/',
+            self.raw_datasets = load_dataset("parquet", data_dir ='~/s_data/hf_model/rm-static/data/',
                                     data_files = s_data_files)
             gd.debuginfo(prj="ds_chat", info=f"self.raw_datasets is: {self.raw_datasets}")
 

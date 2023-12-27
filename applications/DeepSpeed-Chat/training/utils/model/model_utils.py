@@ -67,7 +67,8 @@ def create_hf_model(model_class,
     if ds_config is not None and ds_config["zero_optimization"]["stage"] == 3:
         # ZeRO阶段3优化
         dschf = HfDeepSpeedConfig(ds_config)
-        gd.debuginfo(prj="ds_chat", info=f"dschf={dschf}")
+        # gd.debuginfo(prj="ds_chat", info=f"dschf={dschf}")
+        # dschf=<transformers.deepspeed.HfDeepSpeedConfig object at 0x7ff5713af5b0>
     else:
         dschf = None
 

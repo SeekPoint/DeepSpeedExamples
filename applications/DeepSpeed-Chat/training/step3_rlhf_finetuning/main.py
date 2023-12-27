@@ -1008,8 +1008,7 @@ def main():
                        f'CZ{args.critic_zero_stage}_' \
                        f'ITS{args.inference_tp_size}_' \
                        f'TGP{args.tp_gather_partition_size}_' \
-                       f'gradient_checkpointing_disable_' \
-                       f'ppi={ppi}_i={i}'
+                       f'gradient_checkpointing_disable'
 
                 #if args.local_rank == 0:
                 # gd.enable_times(info=logf)
@@ -1133,7 +1132,7 @@ if __name__ == "__main__":
 
     gd.prjenable('ALL')  #打开项目flag
 
-    gd.emb_mode(path=f'/home/amd00/yk_repo/ds/_log_tmps_/', embedded_mode=True)
+    gd.emb_mode(path=f'/log/_log_tmps_/', embedded_mode=True)
 
     main()
 

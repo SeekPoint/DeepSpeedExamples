@@ -480,7 +480,8 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
                     length = prompt_token[key_word].size()[-1]
                     # phase3此处的max_seq_len其实是max_prompt_len，默认只有256
 
-                    gd.debuginfo(prj="ds_chat", info=f"prompt_token[key_word].squeeze(0) is: {prompt_token[key_word].squeeze(0)}")
+                    gd.debuginfo(prj="ds_chat",
+                                 info=f"prompt_token[key_word].squeeze(0)={infoTensor(prompt_token[key_word].squeeze(0))}")
                     if length > max_seq_len:
                         # 如果当前文本token长度比max_prompt_len还长
                         # 那么就截断文本前面的部分，保留后面max_prompt_len长度的部分文本
@@ -497,9 +498,6 @@ def create_dataset_split(current_dataset, raw_dataset, train_phase, tokenizer,
 
                 # 将处理后的提示信息字典加入到提示信息数据集列表prompt_dataset中
                 prompt_dataset.append(prompt_token)
-
-                gd.debuginfo(prj="ds_chat", info=f"prompt_token--ph3: {prompt_token}")
-
                 gd.debuginfo(prj="ds_chat", info=f"T prompt_token['input_ids']--H: {infoTensor(prompt_token['input_ids'])}")
                 gd.debuginfo(prj="ds_chat", info=f"T prompt_token['attention_mask']--H: {infoTensor(prompt_token['attention_mask'])}")
                 '''
@@ -685,7 +683,7 @@ train_fname is /tmp/data_files//traindata_aa981ebbdc26ba0c4e46b123a94edae66e2c05
     # 避免每次运行程序时都重新加载和处理数据集，buf_create_cache = 1 或 0
     buf_create_cache = torch.ByteTensor([not cache_found]).cuda()
 
-    gd.debuginfo(prj="ds_chat", info=f"buf_create_cache is: {buf_create_cache}")
+    gd.debuginfo(prj="ds_chat", info=f"buf_create_cache={infoTensor(buf_create_cache)}")
 	
     # 如果在分布式环境中运行，这将对所有进程执行一个reduce操作，把所有进程的buf_create_cache加在一起。
     torch.distributed.all_reduce(buf_create_cache)
@@ -894,9 +892,6 @@ class DataCollatorRLHF:
         # 原因 : 可能是由于模型架构或者预训练的需要
         batch["prompt"] = batch["prompt"].flip(1)
         batch["prompt_att_mask"] = batch["prompt_att_mask"].flip(1)
-
-        gd.debuginfo(prj="ds_chat", info=f"batch-RLHF: {batch}")
-
 
         gd.debuginfo(prj="ds_chat", info=f"T batch['prompt']--RLHF: {infoTensor(batch['prompt'])}")
         gd.debuginfo(prj="ds_chat", info=f"T batch['prompt_att_mask']--RLHF: {infoTensor(batch['prompt_att_mask'])}")

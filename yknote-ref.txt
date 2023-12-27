@@ -8,8 +8,13 @@ DeepSpeed配置参数 - 快速上手
 https://blog.csdn.net/yanqianglifei/article/details/130141730?spm=1001.2101.3001.6661.1&utm_medium=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130141730-blog-131312099.235%5Ev38%5Epc_relevant_default_base&depth_1-utm_source=distribute.pc_relevant_t0.none-task-blog-2%7Edefault%7ECTRLIST%7ERate-1-130141730-blog-131312099.235%5Ev38%5Epc_relevant_default_base&utm_relevant_index=1
 DeepSpeed-Chat：最强ChatGPT训练框架，一键完成RLHF训练！
 
-
-
+https://wqw547243068.github.io/chatgpt_mimic
+ChatGPT复现之路
+==============================================================
+ChatGPT原理详解+实操(2)----RM(reward model)
+ChatGPT原理详解+实操(1)----SFT(GPT模型精调)
+https://zhuanlan.zhihu.com/p/609795142
+https://zhuanlan.zhihu.com/p/610147705
 
 https://zhuanlan.zhihu.com/p/634851738 
 deepspeed学习教程

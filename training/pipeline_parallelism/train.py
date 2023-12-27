@@ -251,7 +251,7 @@ def train_pipe(args, part='parameters'):
     gd.debuginfo(prj="ds_chat", info=f'engine={engine}')
 
     for step in range(args.steps):
-        logf = f'pipeline_step__{pid}_step{step:4d}'
+        logf = f'pipeline_step{step:04}'
 
         #if args.local_rank == 0:
         # gd.enable(info=logf)

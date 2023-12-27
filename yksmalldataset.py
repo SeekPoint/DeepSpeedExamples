@@ -6,7 +6,7 @@ import pyarrow as pa
 
 # 读取 parquet 文件
 # df = pd.read_parquet(r'C:\hf_model\rm-static\data\test-00000-of-00001-8c7c51afc6d45980.parquet')
-df = pd.read_parquet(r'~/hf_model/rm-static/data/test-00000-of-00001-8c7c51afc6d45980.parquet')
+df = pd.read_parquet(r'~/s_data/hf_model/rm-static/data/test-00000-of-00001-8c7c51afc6d45980.parquet')
 
 # 显示前几行数据
 # print(df.head())
@@ -21,7 +21,7 @@ PS C:\yk_repo\DeepSpeedExamples> python .\yksmalldataset.py
 '''
 
 
-out_file = r'~/hf_model/rm-static/data/test-small.parquet'
+out_file = r'~/s_data/hf_model/rm-static/data/test-small.parquet'
 
 # Create a parquet table from your dataframe
 
@@ -31,9 +31,9 @@ table = pa.Table.from_pandas(df.head(100))
 # Write direct to your parquet file
 pa.parquet.write_table(table, out_file)
 
-out_file = r'~/hf_model/rm-static/data/train-small.parquet'
+out_file = r'~/s_data/hf_model/rm-static/data/train-small.parquet'
 
-df = pd.read_parquet(r'~/hf_model/rm-static/data/train-00000-of-00001-2a1df75c6bce91ab.parquet')
+df = pd.read_parquet(r'~/s_data/hf_model/rm-static/data/train-00000-of-00001-2a1df75c6bce91ab.parquet')
 # Create a parquet table from your dataframe
 
 table = pa.Table.from_pandas(df.head(200))

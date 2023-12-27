@@ -830,7 +830,7 @@ if __name__ == "__main__":
 
     gd.prjenable('ALL')  #打开项目flag
 
-    gd.emb_mode(path=f'/home/amd00/yk_repo/ds/_log_tmps_/', embedded_mode=True)
+    gd.emb_mode(path=f'/log/_log_tmps_/', embedded_mode=True)
 
     main()
 

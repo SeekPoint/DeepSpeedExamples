@@ -358,7 +358,8 @@ class DeepSpeedPPOTrainer():
 
         logf = f'ph3_AZ{self.args.actor_zero_stage}_' \
                f'CZ{self.args.critic_zero_stage}_' \
-               f'ITS{self.args.inference_tp_size}_TGP{self.args.tp_gather_partition_size}_' \
+               f'ITS{self.args.inference_tp_size}_' \
+               f'TGP{self.args.tp_gather_partition_size}_' \
                f'trainer.generate_experience-self.eval_step={step:04}'
 
         # if self.args.local_rank == 0:
@@ -423,7 +424,7 @@ class DeepSpeedPPOTrainer():
                f'ITS{self.args.inference_tp_size}_' \
                f'TGP{self.args.tp_gather_partition_size}' \
                f'_generate_experience-self.train_step={step:04}'
-
+        gd.emb_start(info=logf)
         # if self.args.local_rank == 0:
         #     gd.enable_times(info=logf)
 

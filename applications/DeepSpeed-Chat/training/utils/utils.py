@@ -118,7 +118,7 @@ def save_hf_format(model, tokenizer, args, sub_folder=""):
     # save_dict.keys()是因为我们在遍历过程中会修改字典，直接遍历字典的键在Python中会导致错误。
 	# 遍历字典的所有键，并删除其中包含lora的键
     for key, val in dict(save_dict).items():
-        gd.debuginfo(prj="ds_chat", info=f'save_dict: {key}={val}')
+        gd.debuginfo(prj="ds_chat", info=f'save_dict: {key}={infoTensor(val)}')
 
         # if "lora" in key:：如果键中包含"lora"，那么删除这个键值对。
         # "lora"可能是某种特定的模型组件或参数，这里将其排除在保存的模型权重之外。
