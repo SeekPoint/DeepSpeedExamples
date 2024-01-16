@@ -4,13 +4,16 @@ https://zhuanlan.zhihu.com/p/668527201
 
 
 ========================实际配置====================
-
-重新安装CUDA, 可以试用
-apt clean; apt update; apt purge cuda; apt purge nvidia-*; apt autoremove; apt install cuda
+sudo apt-get install pdsh
+export PDSH_RCMD_TYPE=ssh
 ubuntu解决没有nvcc命令的错误
+
+vim /root/.bashrc 或者 vim ~/.bashrc
+
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda/lib64
 export PATH=$PATH:/usr/local/cuda/bin
 export CUDA_HOME=/usr/local/cuda
+export PDSH_RCMD_TYPE=ssh   #上面的PDSH
 
 ===========保证各个软件版本尽可能一致
 
@@ -23,26 +26,42 @@ vim /etc/hosts
 192.168.1.11 MZ32-00
 192.168.1.12 MZ32-01
 ======能不能用机器名称以外的名称？？？TBD
+===是否必须去掉原有的？？？？
+127.0.0.1 MZ32-00
+127.0.0.1 MZ32-01
+
 
 Both:
-sshkey ssh-keygen -t rsa
+ssh-keygen -t rsa
 ssh-copy-id root@192.168.1.11
 ssh-copy-id root@192.168.1.12
 注意两台机都要执行，所以一共4次！！！！也就是机器自身也在执行自己的copy
-测试一下,比如： ssh MZ32-00，如果不需要输入密码且连成了，则配置成功（服务器需要使用相同的用户名）
 
-sudo apt-get install pdsh
-export PDSH_RCMD_TYPE=ssh
+测试一下,比如： ssh MZ32-00，如果不需要输入密码且连成了，则配置成功（服务器需要使用相同的用户名）
+===同样两两配对测试，一共4次！！！包括ssh登录自己
 
 
 工程下，vim hostfile
 MZ32-00 slots=2
 MZ32-01 slots=2
 
-
 一致性：
 代码一致！
+torch.distributed.barrier()  #多机多卡很可能卡在这里！！！--比如版本pytorch不一致
 路径一致，包括代码存放位置本身，访问的数据，保存的log等等，特别注意pydebug!
 代码中不应该有机器名称相关的代码，比如路径中的特定机器名称！
+/data/hf_model/rm-static  == 两边数据集位置一直
+但是注意： --data_path Dahoas/rm-static ===》而不是具体路径！！！！
 
 多机多卡可能慢很多！！！
+
+两边都创建好 mkdir -p /log/_log_tmps_  ===pydebug要求
+
+ph1-z3
+root@MZ32-00:/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/training/step1_supervised_finetuning#
+deepspeed --hostfile=hostfile main.py --data_path Dahoas/rm-static --data_split 2,4,4 --data_output_path /log/_log_tmps_/actor+opt125m+Z3    --model_name_or_path /data/hf_model/opt-125m    --per_device_train_batch_size 4 --per_device_eval_batch_size 4 --max_seq_len 128 --learning_rate 9.65e-6 --weight_decay 0. --num_train_epochs 2 --disable_dropout --gradient_accumulation_steps 2 --lr_scheduler_type cosine --num_warmup_steps 2 --seed 1234 --deepspeed --gradient_checkpointing --zero_stage 3 --lora_dim 16 --output_dir /log/_log_tmps_/actor+opt125m+Z3 2>&1 | tee /log/_log_tmps_/ph1_training-2node2gpus-Z3.log
+
+和之前的启动命令相比，就是加了 --hostfile=hostfile
+
+
+

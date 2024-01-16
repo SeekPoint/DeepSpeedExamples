@@ -153,3 +153,10 @@ ChatGPT 背后的“功臣”——RLHF 技术详解
 
 https://myblog.blog.csdn.net/article/details/131615263
 DeepSpeed使用体会
+
+
+https://zhuanlan.zhihu.com/p/673359684  ===TBD 实用
+多模态大模型实战-DeepSpeed x MiniGPT4Qwen：戴上DeepSpeed之翼（附DeepSpeed Tutorials）
+
+https://mp.weixin.qq.com/s/mn47BK9IFYwq70ofbyv6FQ
+WeNet x DeepSpeed, 无痛训练~2B大模型

@@ -387,7 +387,7 @@ def main():
     # 在此处添加一个barrier操作，确保所有进程都执行到这一点后再继续执行后续操作。
     # PyTorch分布式训练中的一个同步工具，它确保所有分布式进程都达到了这个阻塞点，
     # 然后再继续执行后面的代码，以避免出现某些进程快于其他进程的情况。
-    torch.distributed.barrier()
+    torch.distributed.barrier()  #多机多卡很可能卡在这里！！！--比如版本pytorch不一致
 
     # 加载预训练模型tokenizer，fast_tokenizer=True表示使用优化过的、速度更快的tokenizer。
     # 加载预训练模型对应的分词器。
@@ -827,6 +827,12 @@ def main():
 if __name__ == "__main__":
 
     gd.debuginfo(prj='ds_chat', info=f'=================') # 不被计入
+    gd.setIgnore(prj='ds', ignore=14)
+    # 33 len('/home/amd00/yk_repo/ds/DeepSpeed/')
+    # 14 len('/ds/DeepSpeed/')
+    gd.setIgnore(prj='ds_chat', ignore=49)
+    # 49 == len('/ds/DeepSpeedExamples/applications/DeepSpeed-Chat')
+    # 69 == len('/home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/')
 
     gd.prjenable('ALL')  #打开项目flag
 

@@ -752,6 +752,12 @@ def main():
 
 if __name__ == "__main__":
     gd.debuginfo(prj='ds_chat', info=f'=================') # 不被计入
+    gd.setIgnore(prj='ds', ignore=14)
+    # 33 len('/home/amd00/yk_repo/ds/DeepSpeed/')
+    # 14 len('/ds/DeepSpeed/')
+    gd.setIgnore(prj='ds_chat', ignore=49)
+    # 49 == len('/ds/DeepSpeedExamples/applications/DeepSpeed-Chat')
+    # 69 == len('/home/amd00/yk_repo/ds/DeepSpeedExamples/applications/DeepSpeed-Chat/')
 
     gd.prjenable('ALL')  #打开项目flag
 
